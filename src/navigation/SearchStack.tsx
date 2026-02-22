@@ -1,0 +1,40 @@
+import React from 'react';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { SearchStackParamList } from '../types/navigation';
+import { SearchScreen } from '../screens/search/SearchScreen';
+import { BrowseByDateScreen } from '../screens/search/BrowseByDateScreen';
+import { BrowsePopularScreen } from '../screens/search/BrowsePopularScreen';
+import { BrowseHighestRatedScreen } from '../screens/search/BrowseHighestRatedScreen';
+import { BrowseFeaturedListsScreen } from '../screens/search/BrowseFeaturedListsScreen';
+import { MatchDetailScreen } from '../screens/matches/MatchDetailScreen';
+import { CreateReviewScreen } from '../screens/review/CreateReviewScreen';
+import { UserProfileScreen } from '../screens/profile/UserProfileScreen';
+import { NewHereScreen } from '../screens/search/NewHereScreen';
+import { FAQScreen } from '../screens/search/FAQScreen';
+import { useTheme } from '../context/ThemeContext';
+
+const Stack = createNativeStackNavigator<SearchStackParamList>();
+
+export function SearchStack() {
+  const { theme } = useTheme();
+
+  return (
+    <Stack.Navigator
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: theme.colors.background },
+      }}
+    >
+      <Stack.Screen name="Search" component={SearchScreen} />
+      <Stack.Screen name="BrowseByDate" component={BrowseByDateScreen} />
+      <Stack.Screen name="BrowsePopular" component={BrowsePopularScreen} />
+      <Stack.Screen name="BrowseHighestRated" component={BrowseHighestRatedScreen} />
+      <Stack.Screen name="BrowseFeaturedLists" component={BrowseFeaturedListsScreen} />
+      <Stack.Screen name="MatchDetail" component={MatchDetailScreen} />
+      <Stack.Screen name="CreateReview" component={CreateReviewScreen} />
+      <Stack.Screen name="UserProfile" component={UserProfileScreen} />
+      <Stack.Screen name="NewHere" component={NewHereScreen} />
+      <Stack.Screen name="FAQ" component={FAQScreen} />
+    </Stack.Navigator>
+  );
+}
