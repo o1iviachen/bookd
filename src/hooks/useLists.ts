@@ -5,6 +5,8 @@ import {
   getListById,
   createList,
   deleteList,
+  addMatchToList,
+  removeMatchFromList,
 } from '../services/firestore/lists';
 
 export function useListsForUser(userId: string) {
@@ -52,6 +54,28 @@ export function useDeleteList() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: deleteList,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['lists'] });
+    },
+  });
+}
+
+export function useAddMatchToList() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (params: { listId: string; matchId: number }) =>
+      addMatchToList(params.listId, params.matchId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['lists'] });
+    },
+  });
+}
+
+export function useRemoveMatchFromList() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (params: { listId: string; matchId: number }) =>
+      removeMatchFromList(params.listId, params.matchId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['lists'] });
     },

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, ScrollView, Pressable, TextInput as RNTextInput } from 'react-native';
+import { View, Text, ScrollView, Pressable, TextInput as RNTextInput, LayoutAnimation, UIManager, Platform, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -8,20 +8,27 @@ import { useTheme } from '../../context/ThemeContext';
 import { useSearchUsers } from '../../hooks/useUser';
 import { useMatchesByDate } from '../../hooks/useMatches';
 import { Avatar } from '../../components/ui/Avatar';
-import { CompactMatchRow } from '../../components/match/CompactMatchRow';
+import { MatchPosterCard } from '../../components/match/MatchPosterCard';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { SearchStackParamList } from '../../types/navigation';
 
 type Nav = NativeStackNavigationProp<SearchStackParamList, 'Search'>;
 type Category = 'matches' | 'teams' | 'players' | 'members' | 'reviews' | 'lists';
 
+const NUM_COLUMNS = 3;
+
 export function SearchScreen() {
   const { theme } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
   const navigation = useNavigation<Nav>();
+  const { width: screenWidth } = useWindowDimensions();
   const [queryStr, setQueryStr] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [activeCategory, setActiveCategory] = useState<Category>('matches');
+
+  const GAP = spacing.sm;
+  const HORIZONTAL_PADDING = spacing.md;
+  const CARD_WIDTH = (screenWidth - HORIZONTAL_PADDING * 2 - GAP * (NUM_COLUMNS - 1)) / NUM_COLUMNS;
 
   const { data: users, isLoading: usersLoading } = useSearchUsers(queryStr);
   const { data: todayMatches } = useMatchesByDate(new Date());
@@ -71,7 +78,8 @@ export function SearchScreen() {
             placeholderTextColor={colors.textSecondary}
             value={queryStr}
             onChangeText={setQueryStr}
-            onFocus={() => setIsSearching(true)}
+            onFocus={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setIsSearching(true); }}
+            onBlur={() => { if (!queryStr) { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setIsSearching(false); } }}
             autoCapitalize="none"
             style={{
               flex: 1,
@@ -82,7 +90,7 @@ export function SearchScreen() {
             }}
           />
           {queryStr.length > 0 && (
-            <Pressable onPress={() => { setQueryStr(''); setIsSearching(false); }}>
+            <Pressable onPress={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setQueryStr(''); setIsSearching(false); }}>
               <Ionicons name="close" size={18} color={colors.textSecondary} />
             </Pressable>
           )}
@@ -183,9 +191,9 @@ export function SearchScreen() {
           </View>
         )}
 
-        {/* Matches results */}
+        {/* Matches results — 4-column poster grid */}
         {isSearching && queryStr.length >= 2 && activeCategory === 'matches' && (
-          <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.md }}>
+          <View style={{ paddingHorizontal: HORIZONTAL_PADDING, paddingTop: spacing.md }}>
             <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: spacing.sm }}>
               Matches ({matchResults.length})
             </Text>
@@ -194,12 +202,14 @@ export function SearchScreen() {
                 No matches found
               </Text>
             ) : (
-              <View style={{ backgroundColor: colors.card, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' }}>
-                {matchResults.map((match, i) => (
-                  <View key={match.id}>
-                    {i > 0 && <View style={{ height: 1, backgroundColor: colors.border, marginHorizontal: spacing.md }} />}
-                    <CompactMatchRow match={match} onPress={() => navigation.navigate('MatchDetail', { matchId: match.id })} />
-                  </View>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: GAP }}>
+                {matchResults.map((match) => (
+                  <MatchPosterCard
+                    key={match.id}
+                    match={match}
+                    onPress={() => navigation.navigate('MatchDetail', { matchId: match.id })}
+                    width={CARD_WIDTH}
+                  />
                 ))}
               </View>
             )}

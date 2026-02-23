@@ -17,7 +17,7 @@ import {
 import { db } from '../../config/firebase';
 import { Review, ReviewMedia } from '../../types/review';
 
-function docToReview(docSnap: any): Review {
+function docToReview(docSnap: any, userVote: 'up' | 'down' | null = null): Review {
   const data = docSnap.data();
   return {
     id: docSnap.id,
@@ -32,8 +32,14 @@ function docToReview(docSnap: any): Review {
     upvotes: data.upvotes || 0,
     downvotes: data.downvotes || 0,
     createdAt: data.createdAt?.toDate() || new Date(),
-    userVote: null,
+    userVote,
   };
+}
+
+async function getUserVote(reviewId: string, userId: string): Promise<'up' | 'down' | null> {
+  const voteSnap = await getDoc(doc(db, 'reviews', reviewId, 'votes', userId));
+  if (!voteSnap.exists()) return null;
+  return voteSnap.data().voteType;
 }
 
 export async function createReview(
@@ -62,42 +68,58 @@ export async function createReview(
   return reviewRef.id;
 }
 
-export async function getReviewsForMatch(matchId: number): Promise<Review[]> {
+export async function getReviewsForMatch(matchId: number, currentUserId?: string): Promise<Review[]> {
   const q = query(
     collection(db, 'reviews'),
     where('matchId', '==', matchId),
-    orderBy('createdAt', 'desc'),
-    limit(50)
   );
   const snapshot = await getDocs(q);
-  return snapshot.docs.map(docToReview);
+  const reviews = await Promise.all(
+    snapshot.docs.map(async (d) => {
+      const vote = currentUserId ? await getUserVote(d.id, currentUserId) : null;
+      return docToReview(d, vote);
+    })
+  );
+  reviews.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  return reviews;
 }
 
-export async function getReviewsForUser(userId: string): Promise<Review[]> {
+export async function getReviewsForUser(userId: string, currentUserId?: string): Promise<Review[]> {
   const q = query(
     collection(db, 'reviews'),
     where('userId', '==', userId),
-    orderBy('createdAt', 'desc'),
-    limit(50)
   );
   const snapshot = await getDocs(q);
-  return snapshot.docs.map(docToReview);
+  const reviews = await Promise.all(
+    snapshot.docs.map(async (d) => {
+      const vote = currentUserId ? await getUserVote(d.id, currentUserId) : null;
+      return docToReview(d, vote);
+    })
+  );
+  reviews.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  return reviews;
 }
 
-export async function getRecentReviews(): Promise<Review[]> {
+export async function getRecentReviews(currentUserId?: string): Promise<Review[]> {
   const q = query(
     collection(db, 'reviews'),
     orderBy('createdAt', 'desc'),
     limit(30)
   );
   const snapshot = await getDocs(q);
-  return snapshot.docs.map(docToReview);
+  return Promise.all(
+    snapshot.docs.map(async (d) => {
+      const vote = currentUserId ? await getUserVote(d.id, currentUserId) : null;
+      return docToReview(d, vote);
+    })
+  );
 }
 
-export async function getReviewById(reviewId: string): Promise<Review | null> {
+export async function getReviewById(reviewId: string, currentUserId?: string): Promise<Review | null> {
   const docSnap = await getDoc(doc(db, 'reviews', reviewId));
   if (!docSnap.exists()) return null;
-  return docToReview(docSnap);
+  const vote = currentUserId ? await getUserVote(docSnap.id, currentUserId) : null;
+  return docToReview(docSnap, vote);
 }
 
 export async function voteOnReview(
@@ -134,6 +156,47 @@ export async function voteOnReview(
   }
 }
 
+export async function updateReview(
+  reviewId: string,
+  data: {
+    rating?: number;
+    text?: string;
+    tags?: string[];
+    media?: ReviewMedia[];
+  }
+): Promise<void> {
+  const reviewRef = doc(db, 'reviews', reviewId);
+  await updateDoc(reviewRef, data);
+}
+
 export async function deleteReview(reviewId: string): Promise<void> {
   await deleteDoc(doc(db, 'reviews', reviewId));
+}
+
+export async function getAvgRatingsForMatches(matchIds: number[]): Promise<Map<number, number>> {
+  const result = new Map<number, number>();
+  if (matchIds.length === 0) return result;
+
+  // Firestore 'in' supports max 30 items per query
+  const batches: number[][] = [];
+  for (let i = 0; i < matchIds.length; i += 30) {
+    batches.push(matchIds.slice(i, i + 30));
+  }
+
+  for (const batch of batches) {
+    const q = query(collection(db, 'reviews'), where('matchId', 'in', batch));
+    const snapshot = await getDocs(q);
+    const grouped = new Map<number, number[]>();
+    snapshot.docs.forEach((d) => {
+      const data = d.data();
+      const ratings = grouped.get(data.matchId) || [];
+      ratings.push(data.rating);
+      grouped.set(data.matchId, ratings);
+    });
+    grouped.forEach((ratings, matchId) => {
+      result.set(matchId, ratings.reduce((a, b) => a + b, 0) / ratings.length);
+    });
+  }
+
+  return result;
 }

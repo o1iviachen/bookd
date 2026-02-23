@@ -46,7 +46,11 @@ export function LeagueSection({
             marginRight: spacing.sm,
           }}
         />
-        {leagueEmblem && <TeamLogo uri={leagueEmblem} size={20} />}
+        {leagueEmblem && (
+          <View style={{ backgroundColor: '#fff', borderRadius: 6, padding: 3 }}>
+            <TeamLogo uri={leagueEmblem} size={20} />
+          </View>
+        )}
         <Text
           style={{
             ...typography.bodyBold,

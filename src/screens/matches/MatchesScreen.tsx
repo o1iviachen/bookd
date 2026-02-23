@@ -8,7 +8,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useUserProfile } from '../../hooks/useUser';
 import { useMatchesByDate } from '../../hooks/useMatches';
-import { groupMatchesByCompetition } from '../../services/footballApi';
+import { groupMatchesByCompetition } from '../../services/matchService';
 import { DatePicker } from '../../components/match/DatePicker';
 import { LeagueSection } from '../../components/match/LeagueSection';
 import { CompactMatchRow } from '../../components/match/CompactMatchRow';

@@ -5,41 +5,47 @@ import {
   getRecentReviews,
   getReviewById,
   createReview,
+  updateReview,
   voteOnReview,
   deleteReview,
+  getAvgRatingsForMatches,
 } from '../services/firestore/reviews';
 import { ReviewMedia } from '../types/review';
 import { useAuth } from '../context/AuthContext';
 
 export function useReviewsForMatch(matchId: number) {
+  const { user } = useAuth();
   return useQuery({
-    queryKey: ['reviews', 'match', matchId],
-    queryFn: () => getReviewsForMatch(matchId),
+    queryKey: ['reviews', 'match', matchId, user?.uid],
+    queryFn: () => getReviewsForMatch(matchId, user?.uid),
     staleTime: 30 * 1000,
   });
 }
 
 export function useReviewsForUser(userId: string) {
+  const { user } = useAuth();
   return useQuery({
-    queryKey: ['reviews', 'user', userId],
-    queryFn: () => getReviewsForUser(userId),
+    queryKey: ['reviews', 'user', userId, user?.uid],
+    queryFn: () => getReviewsForUser(userId, user?.uid),
     staleTime: 30 * 1000,
     enabled: !!userId,
   });
 }
 
 export function useRecentReviews() {
+  const { user } = useAuth();
   return useQuery({
-    queryKey: ['reviews', 'recent'],
-    queryFn: getRecentReviews,
+    queryKey: ['reviews', 'recent', user?.uid],
+    queryFn: () => getRecentReviews(user?.uid),
     staleTime: 30 * 1000,
   });
 }
 
 export function useReview(reviewId: string) {
+  const { user } = useAuth();
   return useQuery({
-    queryKey: ['review', reviewId],
-    queryFn: () => getReviewById(reviewId),
+    queryKey: ['review', reviewId, user?.uid],
+    queryFn: () => getReviewById(reviewId, user?.uid),
     enabled: !!reviewId,
   });
 }
@@ -76,6 +82,26 @@ export function useCreateReview() {
   });
 }
 
+export function useUpdateReview() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (params: {
+      reviewId: string;
+      data: {
+        rating?: number;
+        text?: string;
+        tags?: string[];
+        media?: ReviewMedia[];
+      };
+    }) => updateReview(params.reviewId, params.data),
+    onSuccess: (_, params) => {
+      queryClient.invalidateQueries({ queryKey: ['review', params.reviewId] });
+      queryClient.invalidateQueries({ queryKey: ['reviews'] });
+    },
+  });
+}
+
 export function useVoteOnReview() {
   const queryClient = useQueryClient();
 
@@ -84,7 +110,17 @@ export function useVoteOnReview() {
       voteOnReview(params.reviewId, params.userId, params.voteType),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['reviews'] });
+      queryClient.invalidateQueries({ queryKey: ['review'] });
     },
+  });
+}
+
+export function useAvgRatings(matchIds: number[]) {
+  return useQuery({
+    queryKey: ['avgRatings', matchIds],
+    queryFn: () => getAvgRatingsForMatches(matchIds),
+    staleTime: 60 * 1000,
+    enabled: matchIds.length > 0,
   });
 }
 

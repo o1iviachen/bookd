@@ -149,6 +149,17 @@ export async function unfollowUser(currentUserId: string, targetUserId: string):
   await updateDoc(targetRef, { followers: arrayRemove(currentUserId) });
 }
 
+export async function getEmailByUsername(username: string): Promise<string | null> {
+  const q = query(
+    collection(db, 'users'),
+    where('username', '==', username.toLowerCase()),
+    limit(1)
+  );
+  const snapshot = await getDocs(q);
+  if (snapshot.empty) return null;
+  return snapshot.docs[0].data().email || null;
+}
+
 export async function searchUsers(searchQuery: string): Promise<User[]> {
   const q = query(
     collection(db, 'users'),

@@ -9,9 +9,10 @@ interface LoadingSpinnerProps {
 
 export function LoadingSpinner({ size = 'large', fullScreen = true }: LoadingSpinnerProps) {
   const { theme } = useTheme();
+  const spinnerColor = theme.colors.primary || '#00c030';
 
   if (!fullScreen) {
-    return <ActivityIndicator size={size} color={theme.colors.primary} />;
+    return <ActivityIndicator size={size} color={spinnerColor} />;
   }
 
   return (
@@ -23,7 +24,7 @@ export function LoadingSpinner({ size = 'large', fullScreen = true }: LoadingSpi
         justifyContent: 'center',
       }}
     >
-      <ActivityIndicator size={size} color={theme.colors.primary} />
+      <ActivityIndicator size={size} color={spinnerColor} />
     </View>
   );
 }

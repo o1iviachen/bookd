@@ -1,5 +1,5 @@
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
-import { getMatchesByDate, getMatchById, getMatchesByDateRange } from '../services/footballApi';
+import { getMatchesByDate, getMatchById, getMatchesByDateRange } from '../services/matchService';
 
 export function useMatchesByDate(date: Date) {
   const dateKey = date.toISOString().split('T')[0];

@@ -11,10 +11,11 @@ import { useUserProfile } from '../../hooks/useUser';
 import { useMatchesRange } from '../../hooks/useMatches';
 import { useRecentReviews } from '../../hooks/useReviews';
 import { useRecentLists } from '../../hooks/useLists';
-import { groupMatchesByCompetition } from '../../services/footballApi';
+import { groupMatchesByCompetition } from '../../services/matchService';
 import { MatchPosterCard } from '../../components/match/MatchPosterCard';
 import { LeagueCarousel } from '../../components/feed/LeagueCarousel';
 import { ReviewCard } from '../../components/review/ReviewCard';
+import { StarRating } from '../../components/ui/StarRating';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { FeedStackParamList } from '../../types/navigation';
 
@@ -135,7 +136,7 @@ export function FeedScreen() {
                     showsHorizontalScrollIndicator={false}
                     contentContainerStyle={{ paddingHorizontal: spacing.md, gap: spacing.sm + 4 }}
                     renderItem={({ item }) => (
-                      <MatchPosterCard match={item} onPress={() => navigation.navigate('MatchDetail', { matchId: item.id })} width={120} />
+                      <MatchPosterCard match={item} onPress={() => navigation.navigate('MatchDetail', { matchId: item.id })} />
                     )}
                   />
                 ) : (
@@ -173,15 +174,8 @@ export function FeedScreen() {
                             {item.username}
                           </Text>
                         </View>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: spacing.xs }}>
-                          {Array.from({ length: 5 }).map((_, i) => (
-                            <Ionicons
-                              key={i}
-                              name={i < item.rating ? 'star' : 'star-outline'}
-                              size={12}
-                              color={i < item.rating ? colors.primary : colors.textSecondary}
-                            />
-                          ))}
+                        <View style={{ marginBottom: spacing.xs }}>
+                          <StarRating rating={item.rating} size={12} />
                         </View>
                         {item.text ? (
                           <Text style={{ ...typography.small, color: colors.textSecondary }} numberOfLines={3}>
@@ -227,31 +221,34 @@ export function FeedScreen() {
           )
         )}
 
-        {activeTab === 'Reviews' && (
-          <View style={{ paddingHorizontal: spacing.md }}>
-            <Text style={{ ...typography.h4, color: colors.foreground, marginTop: spacing.md, marginBottom: spacing.md }}>
-              Recent reviews
-            </Text>
-            {reviewsLoading ? (
-              <View style={{ marginTop: spacing.xxl }}><LoadingSpinner fullScreen={false} /></View>
-            ) : !reviews || reviews.length === 0 ? (
-              <View style={{ alignItems: 'center', marginTop: spacing.xxl, paddingHorizontal: spacing.xl }}>
-                <Ionicons name="chatbubbles-outline" size={48} color={colors.textSecondary} />
-                <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.md }}>
-                  No reviews yet. Watch a match and share your thoughts!
-                </Text>
-              </View>
-            ) : (
-              reviews.map((review) => (
-                <ReviewCard
-                  key={review.id}
-                  review={review}
-                  onPress={() => navigation.navigate('ReviewDetail', { reviewId: review.id })}
-                />
-              ))
-            )}
-          </View>
-        )}
+        {activeTab === 'Reviews' && (() => {
+          const friendsOnly = (reviews || []).filter((r) => r.userId !== user?.uid);
+          return (
+            <View style={{ paddingHorizontal: spacing.md }}>
+              <Text style={{ ...typography.h4, color: colors.foreground, marginTop: spacing.md, marginBottom: spacing.md }}>
+                New from friends
+              </Text>
+              {reviewsLoading ? (
+                <View style={{ marginTop: spacing.xxl }}><LoadingSpinner fullScreen={false} /></View>
+              ) : friendsOnly.length === 0 ? (
+                <View style={{ alignItems: 'center', marginTop: spacing.xxl, paddingHorizontal: spacing.xl }}>
+                  <Ionicons name="chatbubbles-outline" size={48} color={colors.textSecondary} />
+                  <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.md }}>
+                    Follow friends to see their reviews here
+                  </Text>
+                </View>
+              ) : (
+                friendsOnly.map((review) => (
+                  <ReviewCard
+                    key={review.id}
+                    review={review}
+                    onPress={() => navigation.navigate('ReviewDetail', { reviewId: review.id })}
+                  />
+                ))
+              )}
+            </View>
+          );
+        })()}
 
         {activeTab === 'Lists' && (
           <View style={{ paddingHorizontal: spacing.md }}>

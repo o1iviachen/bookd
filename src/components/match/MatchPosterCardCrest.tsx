@@ -8,19 +8,20 @@ import { Match } from '../../types/match';
 import { formatMatchDate } from '../../utils/formatDate';
 import { getTeamColor } from '../../utils/teamColors';
 
-interface MatchPosterCardProps {
+interface MatchPosterCardCrestProps {
   match: Match;
   onPress?: () => void;
   width?: number;
 }
 
-export function MatchPosterCard({ match, onPress, width: widthProp }: MatchPosterCardProps) {
+export function MatchPosterCardCrest({ match, onPress, width: widthProp }: MatchPosterCardCrestProps) {
   const { theme } = useTheme();
   const { spacing } = theme;
   const { width: screenWidth } = useWindowDimensions();
 
   const CARD_WIDTH = widthProp || (screenWidth - spacing.md * 3) / 2.5;
   const CARD_HEIGHT = CARD_WIDTH * 1.5;
+  const CREST_SIZE = CARD_WIDTH * 0.32;
 
   const homeColor = getTeamColor(match.homeTeam.id, match.homeTeam.name);
   const awayColor = getTeamColor(match.awayTeam.id, match.awayTeam.name);
@@ -45,46 +46,68 @@ export function MatchPosterCard({ match, onPress, width: widthProp }: MatchPoste
         elevation: 6,
       })}
     >
-      {/* Team kit color gradient background */}
+      {/* Split diagonal gradient: home color top-left, away color bottom-right */}
       <LinearGradient
-        colors={[homeColor, awayColor]}
+        colors={[homeColor, '#14181c', awayColor]}
+        locations={[0, 0.5, 1]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={{ flex: 1 }}
       >
-        {/* Team crests */}
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingBottom: CARD_HEIGHT * 0.12 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: CARD_WIDTH * 0.08 }}>
-            <Image
-              source={{ uri: match.homeTeam.crest }}
-              style={{
-                width: CARD_WIDTH * 0.32,
-                height: CARD_WIDTH * 0.32,
-              }}
-              contentFit="contain"
-              transition={200}
-            />
-            <Image
-              source={{ uri: match.awayTeam.crest }}
-              style={{
-                width: CARD_WIDTH * 0.32,
-                height: CARD_WIDTH * 0.32,
-              }}
-              contentFit="contain"
-              transition={200}
-            />
-          </View>
+        {/* Team crests - side by side in the upper portion */}
+        <View
+          style={{
+            flex: 1,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            paddingHorizontal: spacing.sm,
+            paddingBottom: CARD_HEIGHT * 0.1,
+            gap: CARD_WIDTH * 0.06,
+          }}
+        >
+          {/* Home crest */}
+          <Image
+            source={{ uri: match.homeTeam.crest }}
+            style={{
+              width: CREST_SIZE,
+              height: CREST_SIZE,
+            }}
+            contentFit="contain"
+          />
+
+          {/* VS divider */}
+          <Text
+            style={{
+              fontSize: CARD_WIDTH * 0.08,
+              fontWeight: '800',
+              color: 'rgba(255,255,255,0.3)',
+              letterSpacing: 1,
+            }}
+          >
+            v
+          </Text>
+
+          {/* Away crest */}
+          <Image
+            source={{ uri: match.awayTeam.crest }}
+            style={{
+              width: CREST_SIZE,
+              height: CREST_SIZE,
+            }}
+            contentFit="contain"
+          />
         </View>
 
-        {/* Dark overlay for text readability */}
+        {/* Dark overlay for text readability at bottom */}
         <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.4)', 'rgba(0,0,0,0.9)']}
+          colors={['transparent', 'rgba(0,0,0,0.5)', 'rgba(0,0,0,0.92)']}
           style={{
             position: 'absolute',
             bottom: 0,
             left: 0,
             right: 0,
-            height: '55%',
+            height: '50%',
             justifyContent: 'flex-end',
             padding: spacing.sm + 2,
           }}
@@ -148,25 +171,7 @@ export function MatchPosterCard({ match, onPress, width: widthProp }: MatchPoste
           </Text>
         </LinearGradient>
 
-        {/* Competition emblem — top-left badge */}
-        <View
-          style={{
-            position: 'absolute',
-            top: spacing.sm,
-            left: spacing.sm,
-            backgroundColor: 'rgba(255,255,255,0.85)',
-            borderRadius: 10,
-            padding: 4,
-          }}
-        >
-          <Image
-            source={{ uri: match.competition.emblem }}
-            style={{ width: CARD_WIDTH * 0.14, height: CARD_WIDTH * 0.14 }}
-            contentFit="contain"
-          />
-        </View>
-
-        {/* Upcoming match lock badge */}
+        {/* Upcoming lock badge */}
         {isUpcoming && (
           <View
             style={{
@@ -181,11 +186,28 @@ export function MatchPosterCard({ match, onPress, width: widthProp }: MatchPoste
             <Ionicons name="lock-closed" size={10} color="rgba(255,255,255,0.7)" />
           </View>
         )}
+
+        {/* Tiny competition emblem in top-left corner */}
+        <View
+          style={{
+            position: 'absolute',
+            top: spacing.sm,
+            left: spacing.sm,
+            backgroundColor: 'rgba(255,255,255,0.85)',
+            borderRadius: 4,
+            padding: 2,
+          }}
+        >
+          <Image
+            source={{ uri: match.competition.emblem }}
+            style={{
+              width: CARD_WIDTH * 0.14,
+              height: CARD_WIDTH * 0.14,
+            }}
+            contentFit="contain"
+          />
+        </View>
       </LinearGradient>
     </Pressable>
   );
 }
-
-// Keep the classic version available for reference
-export { MatchPosterCardClassic } from './MatchPosterCardClassic';
-export { MatchPosterCardCrest } from './MatchPosterCardCrest';

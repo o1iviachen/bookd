@@ -128,7 +128,9 @@ export function FollowingScreen() {
                     }}
                   >
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-                      <TeamLogo uri={league.emblem} size={40} />
+                      <View style={{ backgroundColor: '#fff', borderRadius: 8, padding: 4 }}>
+                        <TeamLogo uri={league.emblem} size={32} />
+                      </View>
                       <View>
                         <Text style={{ ...typography.bodyBold, color: colors.foreground }}>
                           {league.name}

@@ -1,29 +1,25 @@
 import React from 'react';
 import { View, Text, Pressable, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
+import { TeamLogo } from './TeamLogo';
 import { Match } from '../../types/match';
 import { formatMatchDate } from '../../utils/formatDate';
-import { getTeamColor } from '../../utils/teamColors';
 
-interface MatchPosterCardProps {
+interface MatchPosterCardClassicProps {
   match: Match;
   onPress?: () => void;
   width?: number;
 }
 
-export function MatchPosterCard({ match, onPress, width: widthProp }: MatchPosterCardProps) {
+export function MatchPosterCardClassic({ match, onPress, width: widthProp }: MatchPosterCardClassicProps) {
   const { theme } = useTheme();
-  const { spacing } = theme;
+  const { colors, spacing } = theme;
   const { width: screenWidth } = useWindowDimensions();
 
   const CARD_WIDTH = widthProp || (screenWidth - spacing.md * 3) / 2.5;
   const CARD_HEIGHT = CARD_WIDTH * 1.5;
-
-  const homeColor = getTeamColor(match.homeTeam.id, match.homeTeam.name);
-  const awayColor = getTeamColor(match.awayTeam.id, match.awayTeam.name);
 
   const isFinished = match.status === 'FINISHED';
   const isLive = match.status === 'IN_PLAY' || match.status === 'PAUSED';
@@ -45,51 +41,33 @@ export function MatchPosterCard({ match, onPress, width: widthProp }: MatchPoste
         elevation: 6,
       })}
     >
-      {/* Team kit color gradient background */}
-      <LinearGradient
-        colors={[homeColor, awayColor]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={{ flex: 1 }}
-      >
-        {/* Team crests */}
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingBottom: CARD_HEIGHT * 0.12 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: CARD_WIDTH * 0.08 }}>
-            <Image
-              source={{ uri: match.homeTeam.crest }}
-              style={{
-                width: CARD_WIDTH * 0.32,
-                height: CARD_WIDTH * 0.32,
-              }}
-              contentFit="contain"
-              transition={200}
-            />
-            <Image
-              source={{ uri: match.awayTeam.crest }}
-              style={{
-                width: CARD_WIDTH * 0.32,
-                height: CARD_WIDTH * 0.32,
-              }}
-              contentFit="contain"
-              transition={200}
-            />
-          </View>
+      <View style={{ flex: 1, backgroundColor: '#1a1f25' }}>
+        <View
+          style={{
+            flex: 1,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: spacing.lg,
+            paddingTop: spacing.md,
+          }}
+        >
+          <TeamLogo uri={match.homeTeam.crest} size={CARD_WIDTH * 0.28} />
+          <TeamLogo uri={match.awayTeam.crest} size={CARD_WIDTH * 0.28} />
         </View>
 
-        {/* Dark overlay for text readability */}
         <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.4)', 'rgba(0,0,0,0.9)']}
+          colors={['transparent', 'rgba(0,0,0,0.3)', 'rgba(0,0,0,0.85)']}
           style={{
             position: 'absolute',
             bottom: 0,
             left: 0,
             right: 0,
-            height: '55%',
+            height: '65%',
             justifyContent: 'flex-end',
             padding: spacing.sm + 2,
           }}
         >
-          {/* Score */}
           {(isFinished || isLive) ? (
             <Text
               style={{
@@ -104,7 +82,6 @@ export function MatchPosterCard({ match, onPress, width: widthProp }: MatchPoste
             </Text>
           ) : null}
 
-          {/* LIVE badge */}
           {isLive && (
             <View
               style={{
@@ -120,7 +97,6 @@ export function MatchPosterCard({ match, onPress, width: widthProp }: MatchPoste
             </View>
           )}
 
-          {/* Team names */}
           <Text
             style={{
               fontSize: 10,
@@ -134,7 +110,6 @@ export function MatchPosterCard({ match, onPress, width: widthProp }: MatchPoste
             {match.homeTeam.shortName} v {match.awayTeam.shortName}
           </Text>
 
-          {/* Competition + date */}
           <Text
             style={{
               fontSize: 9,
@@ -148,25 +123,6 @@ export function MatchPosterCard({ match, onPress, width: widthProp }: MatchPoste
           </Text>
         </LinearGradient>
 
-        {/* Competition emblem — top-left badge */}
-        <View
-          style={{
-            position: 'absolute',
-            top: spacing.sm,
-            left: spacing.sm,
-            backgroundColor: 'rgba(255,255,255,0.85)',
-            borderRadius: 10,
-            padding: 4,
-          }}
-        >
-          <Image
-            source={{ uri: match.competition.emblem }}
-            style={{ width: CARD_WIDTH * 0.14, height: CARD_WIDTH * 0.14 }}
-            contentFit="contain"
-          />
-        </View>
-
-        {/* Upcoming match lock badge */}
         {isUpcoming && (
           <View
             style={{
@@ -181,11 +137,7 @@ export function MatchPosterCard({ match, onPress, width: widthProp }: MatchPoste
             <Ionicons name="lock-closed" size={10} color="rgba(255,255,255,0.7)" />
           </View>
         )}
-      </LinearGradient>
+      </View>
     </Pressable>
   );
 }
-
-// Keep the classic version available for reference
-export { MatchPosterCardClassic } from './MatchPosterCardClassic';
-export { MatchPosterCardCrest } from './MatchPosterCardCrest';

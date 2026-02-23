@@ -5,14 +5,16 @@ import { useTheme } from '../../context/ThemeContext';
 
 interface VoteButtonsProps {
   upvotes: number;
-  downvotes: number;
   userVote: 'up' | 'down' | null;
-  onVote: (type: 'up' | 'down') => void;
+  onVote: (type: 'up') => void;
+  commentCount?: number;
+  onComment?: () => void;
 }
 
-export function VoteButtons({ upvotes, downvotes, userVote, onVote }: VoteButtonsProps) {
+export function VoteButtons({ upvotes, userVote, onVote, commentCount = 0, onComment }: VoteButtonsProps) {
   const { theme } = useTheme();
   const { colors, spacing, typography } = theme;
+  const isLiked = userVote === 'up';
 
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.lg }}>
@@ -21,36 +23,29 @@ export function VoteButtons({ upvotes, downvotes, userVote, onVote }: VoteButton
         style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
       >
         <Ionicons
-          name={userVote === 'up' ? 'thumbs-up' : 'thumbs-up-outline'}
+          name={isLiked ? 'heart' : 'heart-outline'}
           size={16}
-          color={userVote === 'up' ? colors.primary : colors.textSecondary}
+          color={isLiked ? '#ef4444' : colors.textSecondary}
         />
         {upvotes > 0 && (
-          <Text style={{ ...typography.caption, color: userVote === 'up' ? colors.primary : colors.textSecondary }}>
+          <Text style={{ ...typography.caption, color: isLiked ? '#ef4444' : colors.textSecondary }}>
             {upvotes}
           </Text>
         )}
       </Pressable>
 
       <Pressable
-        onPress={() => onVote('down')}
+        onPress={onComment}
+        disabled={!onComment}
         style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
       >
-        <Ionicons
-          name={userVote === 'down' ? 'thumbs-down' : 'thumbs-down-outline'}
-          size={16}
-          color={userVote === 'down' ? colors.error : colors.textSecondary}
-        />
-        {downvotes > 0 && (
-          <Text style={{ ...typography.caption, color: userVote === 'down' ? colors.error : colors.textSecondary }}>
-            {downvotes}
+        <Ionicons name="chatbubble-outline" size={16} color={colors.textSecondary} />
+        {commentCount > 0 && (
+          <Text style={{ ...typography.caption, color: colors.textSecondary }}>
+            {commentCount}
           </Text>
         )}
       </Pressable>
-
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-        <Ionicons name="chatbubble-outline" size={16} color={colors.textSecondary} />
-      </View>
 
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
         <Ionicons name="share-outline" size={16} color={colors.textSecondary} />

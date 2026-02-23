@@ -78,7 +78,9 @@ export function FavouriteLeaguesScreen() {
                   })}
                 >
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-                    <TeamLogo uri={league.emblem} size={32} />
+                    <View style={{ backgroundColor: '#fff', borderRadius: 8, padding: 4 }}>
+                      <TeamLogo uri={league.emblem} size={28} />
+                    </View>
                     <View>
                       <Text style={{ ...typography.body, color: colors.foreground }}>{league.name}</Text>
                       <Text style={{ ...typography.small, color: colors.textSecondary }}>{league.country}</Text>

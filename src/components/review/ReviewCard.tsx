@@ -22,12 +22,12 @@ export function ReviewCard({ review, onPress }: ReviewCardProps) {
   const { user } = useAuth();
   const voteMutation = useVoteOnReview();
 
-  const handleVote = (type: 'up' | 'down') => {
+  const handleLike = () => {
     if (!user) return;
     voteMutation.mutate({
       reviewId: review.id,
       userId: user.uid,
-      voteType: type,
+      voteType: 'up',
     });
   };
 
@@ -123,9 +123,8 @@ export function ReviewCard({ review, onPress }: ReviewCardProps) {
       {/* Action buttons */}
       <VoteButtons
         upvotes={review.upvotes}
-        downvotes={review.downvotes}
         userVote={review.userVote}
-        onVote={handleVote}
+        onVote={handleLike}
       />
     </Pressable>
   );

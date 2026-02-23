@@ -1,19 +1,24 @@
-import React from 'react';
-import { View, Text, ScrollView, Pressable, Linking } from 'react-native';
+import React, { useCallback } from 'react';
+import { View, Text, ScrollView, Pressable, Linking, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
+import { useQueries } from '@tanstack/react-query';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useUserProfile } from '../../hooks/useUser';
 import { useReviewsForUser } from '../../hooks/useReviews';
 import { useListsForUser } from '../../hooks/useLists';
+import { getMatchById } from '../../services/matchService';
 import { Avatar } from '../../components/ui/Avatar';
 import { TeamLogo } from '../../components/match/TeamLogo';
+import { MatchPosterCard } from '../../components/match/MatchPosterCard';
+import { StarRating } from '../../components/ui/StarRating';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { ProfileStackParamList } from '../../types/navigation';
 import { POPULAR_TEAMS } from '../../utils/constants';
+import { Match } from '../../types/match';
 
 type Nav = NativeStackNavigationProp<ProfileStackParamList, 'Profile'>;
 
@@ -22,9 +27,57 @@ export function ProfileScreen() {
   const { colors, spacing, typography, borderRadius } = theme;
   const navigation = useNavigation<Nav>();
   const { user } = useAuth();
+  const { width: screenWidth } = useWindowDimensions();
   const { data: profile, isLoading } = useUserProfile(user?.uid || '');
   const { data: reviews } = useReviewsForUser(user?.uid || '');
   const { data: lists } = useListsForUser(user?.uid || '');
+
+  const favoriteMatchIds = profile?.favoriteMatchIds || [];
+  const favoriteMatchQueries = useQueries({
+    queries: favoriteMatchIds.map((id) => ({
+      queryKey: ['match', id],
+      queryFn: () => getMatchById(id),
+      staleTime: 5 * 60 * 1000,
+      enabled: favoriteMatchIds.length > 0,
+    })),
+  });
+  const favoriteMatches = favoriteMatchQueries
+    .filter((q) => q.data != null)
+    .map((q) => q.data as Match);
+
+  // Recent activity: fetch match data for the user's most recent reviews
+  const recentReviews = (reviews || []).slice(0, 4);
+  const recentMatchIds = [...new Set(recentReviews.map((r) => r.matchId))];
+  const recentMatchQueries = useQueries({
+    queries: recentMatchIds.map((id) => ({
+      queryKey: ['match', id],
+      queryFn: () => getMatchById(id),
+      staleTime: 5 * 60 * 1000,
+      enabled: recentMatchIds.length > 0,
+    })),
+  });
+  const recentMatchMap = new Map<number, Match>();
+  recentMatchQueries.forEach((q) => {
+    if (q.data) recentMatchMap.set(q.data.id, q.data);
+  });
+
+  const GAP = spacing.sm;
+  const HORIZONTAL_PADDING = spacing.md;
+  const NUM_COLUMNS = 3;
+  const CARD_WIDTH = (screenWidth - HORIZONTAL_PADDING * 2 - GAP * (NUM_COLUMNS - 1)) / NUM_COLUMNS;
+
+  // Navigate based on how many reviews the user has for a match
+  const handleMatchPress = useCallback((matchId: number) => {
+    const allUserReviews = reviews || [];
+    const userReviewsForMatch = allUserReviews.filter((r) => r.matchId === matchId);
+    if (userReviewsForMatch.length === 1) {
+      navigation.navigate('ReviewDetail', { reviewId: userReviewsForMatch[0].id });
+    } else if (userReviewsForMatch.length > 1) {
+      navigation.navigate('MatchDetail', { matchId });
+    } else {
+      navigation.navigate('MatchDetail', { matchId });
+    }
+  }, [reviews, navigation]);
 
   if (isLoading) return <LoadingSpinner />;
 
@@ -39,8 +92,8 @@ export function ProfileScreen() {
     { label: 'Diary', count: reviews?.length || 0, icon: 'book-outline' },
     { label: 'Reviews', count: reviews?.length || 0, icon: 'chatbubble-outline' },
     { label: 'Lists', count: lists?.length || 0, icon: 'list-outline' },
-    { label: 'Likes', count: 0, icon: 'heart-outline' },
-    { label: 'Tags', count: 0, icon: 'pricetag-outline' },
+    { label: 'Likes', count: profile?.likedMatchIds?.length || 0, icon: 'heart-outline' },
+    { label: 'Tags', count: new Set((reviews || []).flatMap((r) => r.tags)).size, icon: 'pricetag-outline' },
   ];
 
   return (
@@ -113,44 +166,118 @@ export function ProfileScreen() {
           </View>
         )}
 
-        {/* Recent Activity */}
-        {reviews && reviews.length > 0 && (
-          <View style={{ marginTop: spacing.lg, paddingHorizontal: spacing.md, paddingVertical: spacing.md, backgroundColor: `${colors.accent}30`, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.border }}>
-            <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: spacing.sm }}>
-              Recent Activity
-            </Text>
-            <View style={{ flexDirection: 'row', gap: 6 }}>
-              {reviews.slice(0, 4).map((review) => (
-                <View
-                  key={review.id}
-                  style={{
-                    flex: 1,
-                    aspectRatio: 2 / 3,
-                    backgroundColor: colors.card,
-                    borderRadius: borderRadius.sm,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                    justifyContent: 'flex-end',
-                    padding: 6,
-                    overflow: 'hidden',
-                  }}
-                >
-                  <Text style={{ fontSize: 9, fontWeight: '600', color: colors.foreground }} numberOfLines={2}>
-                    {review.matchLabel || `Match #${review.matchId}`}
-                  </Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 2 }}>
-                    {Array.from({ length: 5 }).map((_, i) => (
-                      <Ionicons
-                        key={i}
-                        name={i < review.rating ? 'star' : 'star-outline'}
-                        size={8}
-                        color={i < review.rating ? colors.primary : colors.textSecondary}
-                      />
-                    ))}
-                  </View>
-                </View>
+        {/* Favourite Matches */}
+        <View style={{ marginTop: spacing.lg, paddingHorizontal: HORIZONTAL_PADDING, paddingVertical: spacing.md, backgroundColor: `${colors.accent}30`, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.border }}>
+          <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: spacing.sm }}>
+            Favourite Matches
+          </Text>
+          {favoriteMatchIds.length > 0 && favoriteMatchQueries.some((q) => q.isLoading) ? (
+            <View style={{ paddingVertical: spacing.lg, alignItems: 'center' }}>
+              <LoadingSpinner fullScreen={false} />
+            </View>
+          ) : favoriteMatches.length > 0 ? (
+            <View style={{ flexDirection: 'row', gap: GAP }}>
+              {favoriteMatches.map((match) => (
+                <MatchPosterCard
+                  key={match.id}
+                  match={match}
+                  onPress={() => handleMatchPress(match.id)}
+                  width={CARD_WIDTH}
+                />
               ))}
             </View>
+          ) : (
+            <Pressable
+              onPress={() => navigation.navigate('FavouriteMatches')}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: spacing.sm,
+                paddingVertical: spacing.lg,
+                borderRadius: 4,
+                borderWidth: 2,
+                borderStyle: 'dashed',
+                borderColor: colors.border,
+              }}
+            >
+              <Ionicons name="add" size={22} color={colors.textSecondary} />
+              <Text style={{ ...typography.caption, color: colors.textSecondary }}>
+                Add your favourite matches
+              </Text>
+            </Pressable>
+          )}
+        </View>
+
+        {/* Recent Activity */}
+        {recentReviews.length > 0 && (
+          <View style={{ paddingHorizontal: HORIZONTAL_PADDING, paddingVertical: spacing.md, backgroundColor: `${colors.accent}30`, borderBottomWidth: 1, borderColor: colors.border }}>
+            <Pressable onPress={() => navigation.navigate('Diary')} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm }}>
+              <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1 }}>
+                Recent Activity
+              </Text>
+              <Ionicons name="chevron-forward" size={14} color={colors.textSecondary} />
+            </Pressable>
+            {recentMatchQueries.some((q) => q.isLoading) && recentMatchMap.size === 0 ? (
+              <View style={{ paddingVertical: spacing.lg, alignItems: 'center' }}>
+                <LoadingSpinner fullScreen={false} />
+              </View>
+            ) : (
+            <View style={{ flexDirection: 'row', gap: GAP }}>
+              {recentReviews.map((review) => {
+                const match = recentMatchMap.get(review.matchId);
+                const isLiked = profile?.likedMatchIds?.includes(review.matchId) || false;
+                const hasText = review.text.trim().length > 0;
+                return match ? (
+                  <View key={review.id} style={{ width: CARD_WIDTH }}>
+                    <MatchPosterCard
+                      match={match}
+                      onPress={() => navigation.navigate('ReviewDetail', { reviewId: review.id })}
+                      width={CARD_WIDTH}
+                    />
+                    {/* Rating, heart, review indicator — left aligned */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 4 }}>
+                      <StarRating rating={review.rating} size={10} />
+                      {isLiked && (
+                        <Ionicons name="heart" size={10} color="#ef4444" style={{ marginLeft: 2 }} />
+                      )}
+                      {hasText && (
+                        <Ionicons name="reorder-three" size={12} color={colors.textSecondary} style={{ marginLeft: 1 }} />
+                      )}
+                    </View>
+                  </View>
+                ) : (
+                  <Pressable
+                    key={review.id}
+                    onPress={() => navigation.navigate('ReviewDetail', { reviewId: review.id })}
+                    style={{
+                      width: CARD_WIDTH,
+                      height: CARD_WIDTH * 1.5,
+                      backgroundColor: colors.card,
+                      borderRadius: 4,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      justifyContent: 'flex-end',
+                      padding: 6,
+                    }}
+                  >
+                    <Text style={{ fontSize: 9, fontWeight: '600', color: colors.foreground }} numberOfLines={2}>
+                      {review.matchLabel || `Match #${review.matchId}`}
+                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 2 }}>
+                      <StarRating rating={review.rating} size={8} />
+                      {isLiked && (
+                        <Ionicons name="heart" size={8} color="#ef4444" style={{ marginLeft: 1 }} />
+                      )}
+                      {hasText && (
+                        <Ionicons name="reorder-three" size={10} color={colors.textSecondary} style={{ marginLeft: 1 }} />
+                      )}
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+            )}
           </View>
         )}
 
@@ -161,7 +288,12 @@ export function ProfileScreen() {
               <Pressable
                 key={link.label}
                 onPress={() => {
-                  if (link.label === 'Lists') navigation.navigate('CreateList');
+                  if (link.label === 'Games') navigation.navigate('Games');
+                  else if (link.label === 'Diary') navigation.navigate('Diary');
+                  else if (link.label === 'Reviews') navigation.navigate('Reviews');
+                  else if (link.label === 'Lists') navigation.navigate('MyLists');
+                  else if (link.label === 'Likes') navigation.navigate('Likes');
+                  else if (link.label === 'Tags') navigation.navigate('Tags');
                 }}
                 style={({ pressed }) => ({
                   flexDirection: 'row',

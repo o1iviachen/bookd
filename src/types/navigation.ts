@@ -14,7 +14,7 @@ export type OnboardingStackParamList = {
 export type FeedStackParamList = {
   Feed: undefined;
   MatchDetail: { matchId: number };
-  CreateReview: { matchId: number };
+  CreateReview: { matchId: number; reviewId?: string };
   ReviewDetail: { reviewId: string };
   UserProfile: { userId: string };
 };
@@ -22,14 +22,14 @@ export type FeedStackParamList = {
 export type MatchesStackParamList = {
   Matches: undefined;
   MatchDetail: { matchId: number };
-  CreateReview: { matchId: number };
+  CreateReview: { matchId: number; reviewId?: string };
   ReviewDetail: { reviewId: string };
 };
 
 export type SearchStackParamList = {
   Search: undefined;
   MatchDetail: { matchId: number };
-  CreateReview: { matchId: number };
+  CreateReview: { matchId: number; reviewId?: string };
   UserProfile: { userId: string };
   BrowseByDate: undefined;
   BrowsePopular: undefined;
@@ -49,11 +49,19 @@ export type ProfileStackParamList = {
   Settings: undefined;
   FavouriteTeams: undefined;
   FavouriteMatches: undefined;
+  Diary: undefined;
+  Games: undefined;
+  Reviews: undefined;
+  Likes: undefined;
+  MyLists: undefined;
+  Tags: undefined;
+  TagMatches: { tag: string };
   UserProfile: { userId: string };
   ListDetail: { listId: string };
   CreateList: undefined;
   MatchDetail: { matchId: number };
-  CreateReview: { matchId: number };
+  CreateReview: { matchId: number; reviewId?: string };
+  ReviewDetail: { reviewId: string };
 };
 
 export type MainTabsParamList = {
