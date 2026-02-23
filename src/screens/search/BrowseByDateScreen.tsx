@@ -16,7 +16,7 @@ type Nav = NativeStackNavigationProp<SearchStackParamList, 'BrowseByDate'>;
 const NUM_COLUMNS = 3;
 
 export function BrowseByDateScreen() {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const { colors, spacing, typography } = theme;
   const navigation = useNavigation<Nav>();
   const { width: screenWidth } = useWindowDimensions();
@@ -78,7 +78,7 @@ export function BrowseByDateScreen() {
           </Text>
         </View>
       ) : (
-        <FlatList
+        <FlatList indicatorStyle={isDark ? 'white' : 'default'}
           data={filteredMatches}
           numColumns={NUM_COLUMNS}
           keyExtractor={(item) => item.id.toString()}

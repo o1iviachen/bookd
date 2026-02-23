@@ -96,19 +96,20 @@ export async function toggleWatchedMatch(userId: string, matchId: number): Promi
 }
 
 export async function toggleLikedMatch(userId: string, matchId: number): Promise<boolean> {
+  const numericId = Number(matchId);
   const userRef = doc(db, 'users', userId);
   const snap = await getDoc(userRef);
   const liked: number[] = snap.data()?.likedMatchIds || [];
-  const isLiked = liked.includes(matchId);
+  const isLiked = liked.some((id) => Number(id) === numericId);
   if (!isLiked) {
     // Liking also marks as watched
     await updateDoc(userRef, {
-      likedMatchIds: arrayUnion(matchId),
-      watchedMatchIds: arrayUnion(matchId),
+      likedMatchIds: arrayUnion(numericId),
+      watchedMatchIds: arrayUnion(numericId),
     });
   } else {
     await updateDoc(userRef, {
-      likedMatchIds: arrayRemove(matchId),
+      likedMatchIds: arrayRemove(numericId),
     });
   }
   return !isLiked;
@@ -135,11 +136,26 @@ export async function removeCustomTag(userId: string, tag: string): Promise<void
   });
 }
 
-export async function followUser(currentUserId: string, targetUserId: string): Promise<void> {
+export async function followUser(
+  currentUserId: string,
+  targetUserId: string,
+  senderInfo?: { username: string; avatar: string | null }
+): Promise<void> {
   const currentRef = doc(db, 'users', currentUserId);
   const targetRef = doc(db, 'users', targetUserId);
   await updateDoc(currentRef, { following: arrayUnion(targetUserId) });
   await updateDoc(targetRef, { followers: arrayUnion(currentUserId) });
+
+  if (senderInfo) {
+    const { createNotification } = await import('./notifications');
+    await createNotification({
+      recipientId: targetUserId,
+      senderId: currentUserId,
+      senderUsername: senderInfo.username,
+      senderAvatar: senderInfo.avatar,
+      type: 'follow',
+    });
+  }
 }
 
 export async function unfollowUser(currentUserId: string, targetUserId: string): Promise<void> {

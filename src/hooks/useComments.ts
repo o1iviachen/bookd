@@ -42,8 +42,8 @@ export function useCreateComment() {
 export function useToggleCommentLike() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (params: { commentId: string; userId: string; reviewId: string }) =>
-      toggleCommentLike(params.commentId, params.userId),
+    mutationFn: (params: { commentId: string; userId: string; reviewId: string; senderInfo?: { username: string; avatar: string | null } }) =>
+      toggleCommentLike(params.commentId, params.userId, params.senderInfo),
     onSuccess: (_, params) => {
       queryClient.invalidateQueries({ queryKey: ['comments', params.reviewId] });
     },
@@ -53,7 +53,7 @@ export function useToggleCommentLike() {
 export function useDeleteComment() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: deleteComment,
+    mutationFn: (commentId: string) => deleteComment(commentId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['comments'] });
     },

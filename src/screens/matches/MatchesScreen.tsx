@@ -26,7 +26,7 @@ const LEAGUE_RANK: Record<string, number> = {
 };
 
 export function MatchesScreen() {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
   const navigation = useNavigation<Nav>();
   const { user } = useAuth();
@@ -124,11 +124,11 @@ export function MatchesScreen() {
         <DatePicker selectedDate={selectedDate} onDateChange={setSelectedDate} />
       </View>
 
-      <ScrollView
+      <ScrollView indicatorStyle={isDark ? 'white' : 'default'}
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: 100, paddingTop: spacing.sm }}
         refreshControl={
-          <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.primary} colors={[colors.primary]} />
+          <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.foreground} colors={[colors.foreground]} />
         }
       >
         {isLoading ? (

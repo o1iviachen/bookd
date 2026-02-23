@@ -35,7 +35,7 @@ const sections = [
 ];
 
 export function NewHereScreen() {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
   const navigation = useNavigation<Nav>();
 
@@ -66,7 +66,7 @@ export function NewHereScreen() {
         <View style={{ width: 60 }} />
       </View>
 
-      <ScrollView
+      <ScrollView indicatorStyle={isDark ? 'white' : 'default'}
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: 40 }}
       >

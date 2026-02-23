@@ -13,7 +13,7 @@ const MAX_TEAMS = 2;
 
 export function OnboardingTeamsScreen() {
   const navigation = useNavigation<any>();
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
   const { user, completeOnboarding } = useAuth();
 
@@ -92,7 +92,7 @@ export function OnboardingTeamsScreen() {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={{ paddingBottom: 120 }}>
+      <ScrollView indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: 120 }}>
         {leagues.map((league) => (
           <View key={league} style={{ marginTop: spacing.md, paddingHorizontal: spacing.md }}>
             <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: spacing.sm, marginLeft: spacing.xs }}>

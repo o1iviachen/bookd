@@ -16,7 +16,7 @@ const MAX_FAVOURITES = 4;
 
 export function OnboardingMatchesScreen() {
   const navigation = useNavigation<any>();
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
   const { user, completeOnboarding } = useAuth();
 
@@ -92,7 +92,7 @@ export function OnboardingMatchesScreen() {
         </Text>
       </View>
 
-      <ScrollView contentContainerStyle={{ paddingBottom: 120, paddingTop: spacing.sm }}>
+      <ScrollView indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: 120, paddingTop: spacing.sm }}>
         {/* Selected matches */}
         {selectedMatches.length > 0 && (
           <View style={{ paddingHorizontal: spacing.md, marginBottom: spacing.lg }}>
@@ -188,7 +188,7 @@ export function OnboardingMatchesScreen() {
             </View>
           </View>
 
-          <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
+          <ScrollView indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: 100 }}>
             {matchesLoading ? (
               <View style={{ marginTop: spacing.xxl }}><LoadingSpinner fullScreen={false} /></View>
             ) : pickerMatches.length === 0 ? (

@@ -1,48 +1,52 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, Pressable, KeyboardAvoidingView, Platform, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
-import { useAuth } from '../../context/AuthContext';
-import { useUserProfile } from '../../hooks/useUser';
-import { useCreateList } from '../../hooks/useLists';
+import { useList, useUpdateList } from '../../hooks/useLists';
 import { TextInput } from '../../components/ui/TextInput';
 import { Button } from '../../components/ui/Button';
-import { ProfileStackParamList } from '../../types/navigation';
+import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 
-type Props = NativeStackScreenProps<ProfileStackParamList, 'CreateList'>;
-
-export function CreateListScreen({ navigation }: Props) {
+export function EditListScreen({ route, navigation }: any) {
   const { theme } = useTheme();
   const { colors, spacing, typography } = theme;
-  const { user } = useAuth();
-  const { data: profile } = useUserProfile(user?.uid || '');
-  const createList = useCreateList();
+  const { listId } = route.params;
+  const { data: list, isLoading } = useList(listId);
+  const updateList = useUpdateList();
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [ranked, setRanked] = useState(false);
 
-  const handleCreate = () => {
+  useEffect(() => {
+    if (list) {
+      setName(list.name);
+      setDescription(list.description);
+      setRanked(list.ranked);
+    }
+  }, [list]);
+
+  if (isLoading || !list) return <LoadingSpinner />;
+
+  const handleSave = () => {
     if (!name.trim()) {
       Alert.alert('Name Required', 'Please enter a list name.');
       return;
     }
-    if (!user || !profile) return;
 
-    createList.mutate(
+    updateList.mutate(
       {
-        userId: user.uid,
-        username: profile.username,
-        name: name.trim(),
-        description: description.trim(),
-        matchIds: [],
-        ranked,
+        listId,
+        data: {
+          name: name.trim(),
+          description: description.trim(),
+          ranked,
+        },
       },
       {
-        onSuccess: (listId) => navigation.replace('ListDetail', { listId }),
-        onError: () => Alert.alert('Error', 'Failed to create list. Try again.'),
+        onSuccess: () => navigation.goBack(),
+        onError: () => Alert.alert('Error', 'Failed to update list. Try again.'),
       }
     );
   };
@@ -55,7 +59,7 @@ export function CreateListScreen({ navigation }: Props) {
             <Ionicons name="close" size={24} color={colors.foreground} />
           </Pressable>
           <Text style={{ ...typography.h4, color: colors.foreground, flex: 1, textAlign: 'center' }}>
-            New List
+            Edit List
           </Text>
           <View style={{ width: 24 }} />
         </View>
@@ -96,9 +100,9 @@ export function CreateListScreen({ navigation }: Props) {
           </Pressable>
 
           <Button
-            title="Create List"
-            onPress={handleCreate}
-            loading={createList.isPending}
+            title="Save Changes"
+            onPress={handleSave}
+            loading={updateList.isPending}
             disabled={!name.trim()}
             size="lg"
             style={{ marginTop: spacing.sm }}

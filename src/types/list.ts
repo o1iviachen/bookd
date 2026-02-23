@@ -5,6 +5,7 @@ export interface MatchList {
   name: string;
   description: string;
   matchIds: number[];
+  ranked: boolean;
   likes: number;
   createdAt: Date;
   coverImage: string | null;

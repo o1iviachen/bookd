@@ -16,6 +16,7 @@ export interface Review {
   upvotes: number;
   downvotes: number;
   createdAt: Date;
+  editedAt: Date | null;
   userVote: 'up' | 'down' | null;
   matchLabel?: string;
 }

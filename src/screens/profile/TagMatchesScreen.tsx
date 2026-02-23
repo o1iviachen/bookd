@@ -37,7 +37,7 @@ interface TagMatchEntry {
 
 export function TagMatchesScreen({ route, navigation }: any) {
   const { tag } = route.params as { tag: string };
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const { colors, spacing, typography } = theme;
   const { user } = useAuth();
   const { width: screenWidth } = useWindowDimensions();
@@ -200,7 +200,7 @@ export function TagMatchesScreen({ route, navigation }: any) {
           </Text>
         </View>
       ) : (
-        <FlatList
+        <FlatList indicatorStyle={isDark ? 'white' : 'default'}
           data={filtered}
           keyExtractor={(item) => String(item.matchId)}
           numColumns={NUM_COLUMNS}

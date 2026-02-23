@@ -19,7 +19,7 @@ const MAX_FAVOURITES = 3;
 const NUM_COLUMNS = 3;
 
 export function FavouriteMatchesScreen() {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
   const navigation = useNavigation();
   const { user } = useAuth();
@@ -113,7 +113,7 @@ export function FavouriteMatchesScreen() {
         </Pressable>
       </View>
 
-      <ScrollView contentContainerStyle={{ paddingBottom: 40, paddingTop: spacing.md }}>
+      <ScrollView indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: 40, paddingTop: spacing.md }}>
         <Text style={{ ...typography.caption, color: colors.textSecondary, paddingHorizontal: spacing.md, marginBottom: spacing.md }}>
           Select up to {MAX_FAVOURITES} favourite matches. These will appear on your profile.
         </Text>
@@ -157,8 +157,8 @@ export function FavouriteMatchesScreen() {
                   gap: spacing.xs,
                 }}
               >
-                <Ionicons name="add" size={28} color={colors.textSecondary} />
-                <Text style={{ ...typography.small, color: colors.textSecondary, textAlign: 'center' }}>
+                <Ionicons name="add" size={22} color={colors.textSecondary} />
+                <Text style={{ ...typography.caption, color: colors.textSecondary, fontSize: 9 }}>
                   {selected.length}/{MAX_FAVOURITES}
                 </Text>
               </Pressable>
@@ -221,7 +221,7 @@ export function FavouriteMatchesScreen() {
               <Text style={{ ...typography.body, color: colors.textSecondary }}>No matches found</Text>
             </View>
           ) : (
-            <FlatList
+            <FlatList indicatorStyle={isDark ? 'white' : 'default'}
               style={{ flex: 1 }}
               data={pickerMatches}
               numColumns={NUM_COLUMNS}

@@ -85,7 +85,7 @@ const faqs: FAQItem[] = [
 ];
 
 export function FAQScreen() {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
   const navigation = useNavigation();
 
@@ -170,7 +170,7 @@ export function FAQScreen() {
         </View>
       </View>
 
-      <ScrollView
+      <ScrollView indicatorStyle={isDark ? 'white' : 'default'}
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: 40, paddingHorizontal: spacing.md, paddingTop: spacing.lg }}
       >

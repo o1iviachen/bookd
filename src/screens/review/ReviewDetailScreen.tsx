@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useRef } from 'react';
 import { View, Text, ScrollView, Pressable, TextInput, KeyboardAvoidingView, Platform, Alert, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { useReview, useVoteOnReview, useDeleteReview } from '../../hooks/useReviews';
 import { useMatch } from '../../hooks/useMatches';
-import { useCommentsForReview, useCreateComment, useToggleCommentLike } from '../../hooks/useComments';
+import { useCommentsForReview, useCreateComment, useToggleCommentLike, useDeleteComment } from '../../hooks/useComments';
 import { useUserProfile } from '../../hooks/useUser';
 import { Avatar } from '../../components/ui/Avatar';
 import { StarRating } from '../../components/ui/StarRating';
@@ -17,7 +17,7 @@ import { formatRelativeTime, formatMatchDate } from '../../utils/formatDate';
 import { Comment } from '../../services/firestore/comments';
 
 export function ReviewDetailScreen({ route, navigation }: any) {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
   const { reviewId } = route.params;
   const { user } = useAuth();
@@ -28,38 +28,34 @@ export function ReviewDetailScreen({ route, navigation }: any) {
   const createComment = useCreateComment();
   const toggleLike = useToggleCommentLike();
   const deleteReview = useDeleteReview();
+  const deleteCommentMutation = useDeleteComment();
   const [commentText, setCommentText] = useState('');
   const [replyingTo, setReplyingTo] = useState<{ id: string; username: string } | null>(null);
   const [showMenu, setShowMenu] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
   const inputRef = useRef<TextInput>(null);
 
-  // Build thread tree
-  const { topLevel, repliesMap, totalCount } = useMemo(() => {
-    if (!comments) return { topLevel: [] as Comment[], repliesMap: new Map<string, Comment[]>(), totalCount: 0 };
-    const top: Comment[] = [];
-    const map = new Map<string, Comment[]>();
-    for (const c of comments) {
-      if (!c.parentId) {
-        top.push(c);
-      } else {
-        const list = map.get(c.parentId) || [];
-        list.push(c);
-        map.set(c.parentId, list);
-      }
-    }
-    return { topLevel: top, repliesMap: map, totalCount: comments.length };
-  }, [comments]);
+  const sortedComments = comments
+    ? [...comments].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+    : [];
+
+  const totalCount = sortedComments.length;
 
   if (isLoading || !review) return <LoadingSpinner />;
 
   const handleLikeReview = () => {
     if (!user) return;
-    voteMutation.mutate({ reviewId: review.id, userId: user.uid, voteType: 'up' });
+    voteMutation.mutate({
+      reviewId: review.id,
+      userId: user.uid,
+      voteType: 'up',
+      senderInfo: { username: profile?.username || 'Someone', avatar: profile?.avatar || null },
+    });
   };
 
-  const handleReply = (commentId: string, username: string) => {
-    setReplyingTo({ id: commentId, username });
+  const handleReply = (_commentId: string, username: string) => {
+    setReplyingTo({ id: _commentId, username });
+    setCommentText(`@${username} `);
     inputRef.current?.focus();
   };
 
@@ -80,12 +76,33 @@ export function ReviewDetailScreen({ route, navigation }: any) {
     } catch {}
   };
 
+  const handleDeleteComment = (commentId: string) => {
+    Alert.alert(
+      'Delete Comment',
+      'Are you sure you want to delete this comment?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => deleteCommentMutation.mutate(commentId),
+        },
+      ]
+    );
+  };
+
   const handleLikeComment = (commentId: string) => {
     if (!user) return;
-    toggleLike.mutate({ commentId, userId: user.uid, reviewId: review.id });
+    toggleLike.mutate({
+      commentId,
+      userId: user.uid,
+      reviewId: review.id,
+      senderInfo: { username: profile?.username || 'Someone', avatar: profile?.avatar || null },
+    });
   };
 
   const isLiked = review.userVote === 'up';
+  const isMatchLiked = profile?.likedMatchIds?.some((id) => String(id) === String(review.matchId)) || false;
   const isOwnReview = user?.uid === review.userId;
 
   const handleEdit = () => {
@@ -200,7 +217,7 @@ export function ReviewDetailScreen({ route, navigation }: any) {
           </Pressable>
         </Modal>
 
-        <ScrollView
+        <ScrollView indicatorStyle={isDark ? 'white' : 'default'}
           ref={scrollRef}
           contentContainerStyle={{ paddingBottom: spacing.md }}
           keyboardShouldPersistTaps="handled"
@@ -212,16 +229,25 @@ export function ReviewDetailScreen({ route, navigation }: any) {
           <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.md }}>
             {/* User + timestamp */}
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md }}>
+              <Pressable
+                onPress={() => navigation.navigate('UserProfile', { userId: review.userId })}
+                style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}
+              >
               <Avatar uri={review.userAvatar} name={review.username} size={44} />
               <View style={{ marginLeft: spacing.sm, flex: 1 }}>
                 <Text style={{ ...typography.bodyBold, color: colors.foreground }}>{review.username}</Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: 2 }}>
                   <StarRating rating={review.rating} size={16} />
+                  {isMatchLiked && (
+                    <Ionicons name="heart" size={12} color="#ef4444" />
+                  )}
                   <Text style={{ ...typography.caption, color: colors.textSecondary }}>
                     {formatRelativeTime(review.createdAt)}
+                    {review.editedAt ? ' (edited)' : ''}
                   </Text>
                 </View>
               </View>
+              </Pressable>
             </View>
 
             {/* Review text */}
@@ -326,21 +352,47 @@ export function ReviewDetailScreen({ route, navigation }: any) {
               </Text>
             </View>
           ) : (
-            topLevel.map((comment) => (
-              <CommentThread
-                key={comment.id}
-                comment={comment}
-                replies={repliesMap.get(comment.id) || []}
-                repliesMap={repliesMap}
-                depth={0}
-                userId={user?.uid || null}
-                onLike={handleLikeComment}
-                onReply={handleReply}
-                colors={colors}
-                spacing={spacing}
-                typography={typography}
-              />
-            ))
+            (() => {
+              const topLevel = sortedComments.filter((c) => !c.parentId);
+              const replies = sortedComments.filter((c) => !!c.parentId);
+              const replyMap = new Map<string, Comment[]>();
+              for (const r of replies) {
+                const arr = replyMap.get(r.parentId!) || [];
+                arr.push(r);
+                replyMap.set(r.parentId!, arr);
+              }
+              return topLevel.map((comment) => (
+                <View key={comment.id}>
+                  <CommentRow
+                    comment={comment}
+                    userId={user?.uid || null}
+                    onLike={handleLikeComment}
+                    onReply={handleReply}
+                    onDelete={handleDeleteComment}
+                    colors={colors}
+                    spacing={spacing}
+                    typography={typography}
+                    isReply={false}
+                    navigation={navigation}
+                  />
+                  {(replyMap.get(comment.id) || []).map((reply) => (
+                    <CommentRow
+                      key={reply.id}
+                      comment={reply}
+                      userId={user?.uid || null}
+                      onLike={handleLikeComment}
+                      onReply={handleReply}
+                      onDelete={handleDeleteComment}
+                      colors={colors}
+                      spacing={spacing}
+                      typography={typography}
+                      isReply={true}
+                      navigation={navigation}
+                    />
+                  ))}
+                </View>
+              ));
+            })()
           )}
         </ScrollView>
 
@@ -403,128 +455,122 @@ export function ReviewDetailScreen({ route, navigation }: any) {
   );
 }
 
-/* ─── Threaded comment component ─── */
+/* ─── Comment row (Instagram-style with reply indentation) ─── */
 
-const MAX_DEPTH = 3;
-
-function CommentThread({
+function CommentRow({
   comment,
-  replies,
-  repliesMap,
-  depth,
   userId,
   onLike,
   onReply,
+  onDelete,
   colors,
   spacing,
   typography,
+  isReply,
+  navigation,
 }: {
   comment: Comment;
-  replies: Comment[];
-  repliesMap: Map<string, Comment[]>;
-  depth: number;
   userId: string | null;
   onLike: (id: string) => void;
   onReply: (id: string, username: string) => void;
+  onDelete: (id: string) => void;
   colors: any;
   spacing: any;
   typography: any;
+  isReply: boolean;
+  navigation: any;
 }) {
   const isLiked = userId ? comment.likedBy.includes(userId) : false;
-  const indent = Math.min(depth, MAX_DEPTH) * 24;
+  const isOwn = userId === comment.userId;
+  const avatarSize = isReply ? 24 : 32;
 
   return (
-    <View>
-      <View
-        style={{
-          flexDirection: 'row',
-          paddingLeft: spacing.md + indent,
-          paddingRight: spacing.md,
-          paddingVertical: spacing.sm,
-        }}
-      >
-        {/* Thread line */}
-        {depth > 0 && (
-          <View
-            style={{
-              position: 'absolute',
-              left: spacing.md + indent - 12,
-              top: 0,
-              bottom: 0,
-              width: 2,
-              backgroundColor: colors.border,
-              borderRadius: 1,
-            }}
-          />
-        )}
-
-        <Avatar uri={comment.userAvatar} name={comment.username} size={depth > 0 ? 26 : 32} />
-        <View style={{ marginLeft: spacing.sm, flex: 1 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
-            <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 13 }}>
+    <View
+      style={{
+        flexDirection: 'row',
+        paddingHorizontal: spacing.md,
+        paddingVertical: spacing.sm,
+        paddingLeft: isReply ? spacing.md + 32 + spacing.sm : spacing.md,
+      }}
+    >
+      <Pressable onPress={() => navigation.navigate('UserProfile', { userId: comment.userId })}>
+        <Avatar uri={comment.userAvatar} name={comment.username} size={avatarSize} />
+      </Pressable>
+      <View style={{ marginLeft: spacing.sm, flex: 1 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+          <Pressable onPress={() => navigation.navigate('UserProfile', { userId: comment.userId })}>
+            <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: isReply ? 12 : 13 }}>
               {comment.username}
             </Text>
-            <Text style={{ ...typography.small, color: colors.textSecondary }}>
-              {formatRelativeTime(comment.createdAt)}
-            </Text>
-          </View>
-          <Text style={{ ...typography.body, color: colors.foreground, marginTop: 2, lineHeight: 20, fontSize: depth > 0 ? 14 : 15 }}>
-            {comment.text}
+          </Pressable>
+          <Text style={{ ...typography.small, color: colors.textSecondary }}>
+            {formatRelativeTime(comment.createdAt)}
           </Text>
+        </View>
+        <CommentText text={comment.text} colors={colors} typography={typography} fontSize={isReply ? 14 : 15} />
 
-          {/* Like + Reply actions */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: 6 }}>
+        {/* Like + Reply + Delete actions */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: 6 }}>
+          <Pressable
+            onPress={() => onLike(comment.id)}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}
+          >
+            <Ionicons
+              name={isLiked ? 'heart' : 'heart-outline'}
+              size={14}
+              color={isLiked ? '#ef4444' : colors.textSecondary}
+            />
+            {comment.likes > 0 && (
+              <Text style={{ fontSize: 11, color: isLiked ? '#ef4444' : colors.textSecondary }}>
+                {comment.likes}
+              </Text>
+            )}
+          </Pressable>
+
+          <Pressable
+            onPress={() => onReply(comment.id, comment.username)}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}
+          >
+            <Ionicons name="chatbubble-outline" size={13} color={colors.textSecondary} />
+            <Text style={{ fontSize: 11, color: colors.textSecondary }}>Reply</Text>
+          </Pressable>
+
+          {isOwn && (
             <Pressable
-              onPress={() => onLike(comment.id)}
+              onPress={() => onDelete(comment.id)}
               style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}
             >
-              <Ionicons
-                name={isLiked ? 'heart' : 'heart-outline'}
-                size={14}
-                color={isLiked ? '#ef4444' : colors.textSecondary}
-              />
-              {comment.likes > 0 && (
-                <Text style={{ fontSize: 11, color: isLiked ? '#ef4444' : colors.textSecondary }}>
-                  {comment.likes}
-                </Text>
-              )}
+              <Ionicons name="trash-outline" size={13} color={colors.textSecondary} />
+              <Text style={{ fontSize: 11, color: colors.textSecondary }}>Delete</Text>
             </Pressable>
-
-            <Pressable
-              onPress={() => onReply(comment.id, comment.username)}
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}
-            >
-              <Ionicons name="chatbubble-outline" size={13} color={colors.textSecondary} />
-              <Text style={{ fontSize: 11, color: colors.textSecondary }}>Reply</Text>
-            </Pressable>
-          </View>
+          )}
         </View>
       </View>
-
-      {/* Nested replies */}
-      {replies.map((reply) => (
-        <CommentThread
-          key={reply.id}
-          comment={reply}
-          replies={repliesMap.get(reply.id) || []}
-          repliesMap={repliesMap}
-          depth={depth + 1}
-          userId={userId}
-          onLike={onLike}
-          onReply={onReply}
-          colors={colors}
-          spacing={spacing}
-          typography={typography}
-        />
-      ))}
     </View>
+  );
+}
+
+/* ─── Comment text with @mention highlighting ─── */
+
+function CommentText({ text, colors, typography, fontSize = 15 }: { text: string; colors: any; typography: any; fontSize?: number }) {
+  const parts = text.split(/(@\w+)/g);
+  return (
+    <Text style={{ ...typography.body, color: colors.foreground, marginTop: 2, lineHeight: 20, fontSize }}>
+      {parts.map((part, i) =>
+        part.startsWith('@') ? (
+          <Text key={i} style={{ color: colors.primary, fontWeight: '600' }}>{part}</Text>
+        ) : (
+          <Text key={i}>{part}</Text>
+        )
+      )}
+    </Text>
   );
 }
 
 /* ─── Match card ─── */
 
 function MatchCard({ matchId, navigation }: { matchId: number; navigation: any }) {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
   const { data: match } = useMatch(matchId);
 

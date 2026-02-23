@@ -15,7 +15,7 @@ type Props = NativeStackScreenProps<AuthStackParamList, 'Login'>;
 const { height } = Dimensions.get('window');
 
 export function LoginScreen({ navigation }: Props) {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const { signIn } = useAuth();
   const { colors, spacing, typography } = theme;
 
@@ -55,7 +55,7 @@ export function LoginScreen({ navigation }: Props) {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={{ flex: 1, backgroundColor: colors.background }}
     >
-      <ScrollView
+      <ScrollView indicatorStyle={isDark ? 'white' : 'default'}
         ref={scrollRef}
         bounces={false}
         contentContainerStyle={{ flexGrow: 1 }}

@@ -28,50 +28,19 @@ export function StarRating({
         const starNumber = i + 1;
         const isFilled = starNumber <= rating;
         const isHalf = !isFilled && starNumber - 0.5 <= rating;
-
-        const icon = isFilled
-          ? 'star'
-          : isHalf
-          ? 'star-half'
-          : 'star-outline';
+        const icon = isFilled ? 'star' : isHalf ? 'star-half' : 'star-outline';
+        const color = isFilled || isHalf ? filledColor : emptyColor;
 
         if (interactive && onRate) {
           return (
-            <View key={i} style={{ width: size, height: size }}>
-              {/* The visible star icon */}
-              <Ionicons
-                name={icon}
-                size={size}
-                color={isFilled || isHalf ? filledColor : emptyColor}
-              />
-              {/* Invisible tap zones layered on top */}
-              <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, flexDirection: 'row' }}>
-                <Pressable
-                  onPress={() => {
-                    const halfVal = starNumber - 0.5;
-                    onRate(rating === halfVal ? 0 : halfVal);
-                  }}
-                  style={{ flex: 1 }}
-                />
-                <Pressable
-                  onPress={() => {
-                    onRate(rating === starNumber ? 0 : starNumber);
-                  }}
-                  style={{ flex: 1 }}
-                />
-              </View>
-            </View>
+            <Pressable key={i} onPress={() => onRate(rating === starNumber ? 0 : starNumber)}>
+              <Ionicons name={icon} size={size} color={color} />
+            </Pressable>
           );
         }
 
         return (
-          <View key={i}>
-            <Ionicons
-              name={icon}
-              size={size}
-              color={isFilled || isHalf ? filledColor : emptyColor}
-            />
-          </View>
+          <Ionicons key={i} name={icon} size={size} color={color} />
         );
       })}
     </View>

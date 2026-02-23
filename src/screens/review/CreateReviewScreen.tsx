@@ -23,7 +23,7 @@ interface LocalMedia {
 }
 
 export function CreateReviewScreen({ route, navigation }: any) {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
   const { user } = useAuth();
   const { matchId, reviewId } = route.params;
@@ -38,10 +38,10 @@ export function CreateReviewScreen({ route, navigation }: any) {
   const toggleWatched = useToggleWatched();
   const toggleLiked = useToggleLiked();
 
-  const isLiked = profile?.likedMatchIds?.includes(matchId) || false;
+  const isLiked = profile?.likedMatchIds?.some((id) => String(id) === String(matchId)) || false;
 
   const [rating, setRating] = useState(0);
-  const isWatched = profile?.watchedMatchIds?.includes(matchId) || rating > 0;
+  const isWatched = profile?.watchedMatchIds?.some((id) => String(id) === String(matchId)) || rating > 0;
   const [text, setText] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [newTagInput, setNewTagInput] = useState('');
@@ -190,7 +190,7 @@ export function CreateReviewScreen({ route, navigation }: any) {
           <View style={{ width: 24 }} />
         </View>
 
-        <ScrollView contentContainerStyle={{ padding: spacing.md, paddingBottom: 100 }}>
+        <ScrollView indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ padding: spacing.md, paddingBottom: 100 }}>
           {/* Match info */}
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, marginBottom: spacing.lg }}>
             <TeamLogo uri={match.homeTeam.crest} size={28} />

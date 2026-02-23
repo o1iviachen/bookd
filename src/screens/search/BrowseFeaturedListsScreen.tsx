@@ -8,7 +8,7 @@ import { useRecentLists } from '../../hooks/useLists';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 
 export function BrowseFeaturedListsScreen() {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
   const navigation = useNavigation();
   const { data: lists, isLoading } = useRecentLists();
@@ -24,7 +24,7 @@ export function BrowseFeaturedListsScreen() {
         <View style={{ width: 60 }} />
       </View>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 100, paddingHorizontal: spacing.md, paddingTop: spacing.md }}>
+      <ScrollView indicatorStyle={isDark ? 'white' : 'default'} style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 100, paddingHorizontal: spacing.md, paddingTop: spacing.md }}>
         {isLoading ? (
           <View style={{ marginTop: spacing.xxl }}><LoadingSpinner fullScreen={false} /></View>
         ) : !lists || lists.length === 0 ? (

@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { View, Text, ScrollView, Pressable, Share } from 'react-native';
+import React, { useState, useMemo, useRef } from 'react';
+import { View, Text, Pressable, Share, Modal, Animated } from 'react-native';
 import { Select } from '../../components/ui/Select';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -10,12 +10,12 @@ import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useMatch } from '../../hooks/useMatches';
 import { useReviewsForMatch } from '../../hooks/useReviews';
+import { useCommentsForReview } from '../../hooks/useComments';
 import { useUserProfile } from '../../hooks/useUser';
+import { useListsForMatch } from '../../hooks/useLists';
 import { TeamLogo } from '../../components/match/TeamLogo';
 import { ReviewCard } from '../../components/review/ReviewCard';
-import { StarRating } from '../../components/ui/StarRating';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
-import { Button } from '../../components/ui/Button';
 import { AddToListModal } from '../../components/list/AddToListModal';
 import { formatFullDate, formatMatchTime } from '../../utils/formatDate';
 import { getStadiumImageUrl } from '../../utils/stadiumImages';
@@ -26,15 +26,18 @@ type Props = NativeStackScreenProps<MatchesStackParamList, 'MatchDetail'>;
 const FALLBACK_STADIUM = 'https://upload.wikimedia.org/wikipedia/commons/thumb/d/d2/London_Wembley.jpg/1280px-London_Wembley.jpg';
 
 export function MatchDetailScreen({ route, navigation }: Props) {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
   const { user } = useAuth();
   const { matchId } = route.params;
   const [showListModal, setShowListModal] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  const scrollY = useRef(new Animated.Value(0)).current;
 
   const { data: match, isLoading } = useMatch(matchId);
   const { data: reviews } = useReviewsForMatch(matchId);
   const { data: profile } = useUserProfile(user?.uid || '');
+  const { data: matchLists } = useListsForMatch(matchId);
 
   if (isLoading || !match) {
     return <LoadingSpinner />;
@@ -66,34 +69,67 @@ export function MatchDetailScreen({ route, navigation }: Props) {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
+      <Animated.ScrollView
+        indicatorStyle={isDark ? 'white' : 'default'}
+        contentContainerStyle={{ paddingBottom: 100 }}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: true }
+        )}
+        scrollEventThrottle={16}
+      >
         {/* Hero area with stadium background */}
-        <View style={{ height: 320, backgroundColor: '#1a1f25' }}>
-          {/* Stadium background image */}
-          <Image
-            source={{ uri: stadiumUrl || FALLBACK_STADIUM }}
+        <View style={{ height: 320, backgroundColor: '#1a1f25', overflow: 'visible' }}>
+          {/* Stretchy stadium image — expands when pulling down */}
+          <Animated.View
             style={{
               position: 'absolute',
               top: 0,
               left: 0,
               right: 0,
-              bottom: 0,
+              height: 320,
+              transform: [
+                {
+                  translateY: scrollY.interpolate({
+                    inputRange: [-320, 0],
+                    outputRange: [-160, 0],
+                    extrapolateRight: 'clamp',
+                  }),
+                },
+                {
+                  scale: scrollY.interpolate({
+                    inputRange: [-320, 0],
+                    outputRange: [2, 1],
+                    extrapolateRight: 'clamp',
+                  }),
+                },
+              ],
             }}
-            contentFit="cover"
-            transition={300}
-          />
-          {/* Dark overlay for readability */}
-          <LinearGradient
-            colors={['rgba(0,0,0,0.3)', 'rgba(0,0,0,0.5)']}
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-            }}
-          />
+          >
+            <Image
+              source={{ uri: stadiumUrl || FALLBACK_STADIUM }}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+              }}
+              contentFit="cover"
+              transition={300}
+            />
+            <LinearGradient
+              colors={['rgba(0,0,0,0.3)', 'rgba(0,0,0,0.5)']}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+              }}
+            />
+          </Animated.View>
 
           {/* Back button overlay */}
           <Pressable
@@ -109,6 +145,22 @@ export function MatchDetailScreen({ route, navigation }: Props) {
             }}
           >
             <Ionicons name="arrow-back" size={20} color="#fff" />
+          </Pressable>
+
+          {/* Three-dot menu button */}
+          <Pressable
+            onPress={() => setShowMenu(true)}
+            style={{
+              position: 'absolute',
+              top: spacing.md,
+              right: spacing.md,
+              zIndex: 10,
+              backgroundColor: 'rgba(0,0,0,0.5)',
+              borderRadius: borderRadius.full,
+              padding: spacing.sm,
+            }}
+          >
+            <Ionicons name="ellipsis-horizontal" size={20} color="#fff" />
           </Pressable>
 
           {/* Team crests in hero */}
@@ -203,11 +255,19 @@ export function MatchDetailScreen({ route, navigation }: Props) {
               <Text style={{ fontSize: 24, fontWeight: '700', color: colors.foreground }}>{reviews.length}</Text>
               <Text style={{ fontSize: 11, color: colors.textSecondary }}>Reviews</Text>
             </View>
-            <View style={{ flex: 1, backgroundColor: '#3b82f6', borderRadius: borderRadius.md, padding: spacing.md, alignItems: 'center' }}>
-              <Text style={{ fontSize: 24, fontWeight: '700', color: '#fff' }}>{avgRating.toFixed(1)}</Text>
-              <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.8)' }}>Avg Rating</Text>
-            </View>
+            <Pressable
+              onPress={() => navigation.navigate('MatchLists', { matchId })}
+              style={{ flex: 1, backgroundColor: '#3b82f6', borderRadius: borderRadius.md, padding: spacing.md, alignItems: 'center' }}
+            >
+              <Text style={{ fontSize: 24, fontWeight: '700', color: '#fff' }}>{matchLists?.length || 0}</Text>
+              <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.8)' }}>Lists</Text>
+            </Pressable>
           </View>
+        )}
+
+        {/* Rating distribution bar chart */}
+        {isFinished && reviews && reviews.length > 0 && (
+          <RatingBarChart reviews={reviews} colors={colors} spacing={spacing} typography={typography} borderRadius={borderRadius} avgRating={avgRating} />
         )}
 
         {/* Locked state for non-finished matches */}
@@ -258,31 +318,67 @@ export function MatchDetailScreen({ route, navigation }: Props) {
           </Pressable>
         )}
 
-        {/* Action icons row: Add to List + Share */}
-        <View style={{ flexDirection: 'row', justifyContent: 'center', gap: spacing.lg, paddingVertical: spacing.sm, marginTop: spacing.xs }}>
-          <Pressable
-            onPress={() => setShowListModal(true)}
-            hitSlop={8}
-            style={{ alignItems: 'center', gap: 2 }}
-          >
-            <Ionicons name="list-outline" size={22} color={colors.textSecondary} />
-            <Text style={{ fontSize: 10, color: colors.textSecondary }}>List</Text>
-          </Pressable>
-          <Pressable
-            onPress={handleShare}
-            hitSlop={8}
-            style={{ alignItems: 'center', gap: 2 }}
-          >
-            <Ionicons name="share-outline" size={22} color={colors.textSecondary} />
-            <Text style={{ fontSize: 10, color: colors.textSecondary }}>Share</Text>
-          </Pressable>
-        </View>
 
         {/* Reviews section — only show for finished matches */}
         {isFinished && (
-          <ReviewsSection reviews={reviews || []} userId={user?.uid} profile={profile} colors={colors} spacing={spacing} typography={typography} borderRadius={borderRadius} />
+          <ReviewsSection reviews={reviews || []} userId={user?.uid} profile={profile} colors={colors} spacing={spacing} typography={typography} borderRadius={borderRadius} navigation={navigation} />
         )}
-      </ScrollView>
+      </Animated.ScrollView>
+
+      {/* Three-dot menu */}
+      <Modal visible={showMenu} transparent animationType="fade" onRequestClose={() => setShowMenu(false)}>
+        <Pressable
+          onPress={() => setShowMenu(false)}
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: spacing.xl }}
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={{
+              width: '100%',
+              maxWidth: 280,
+              backgroundColor: colors.card,
+              borderRadius: borderRadius.lg,
+              overflow: 'hidden',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 8 },
+              shadowOpacity: 0.3,
+              shadowRadius: 16,
+              elevation: 12,
+            }}
+          >
+            <Pressable
+              onPress={() => { setShowMenu(false); setShowListModal(true); }}
+              style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: spacing.sm,
+                paddingHorizontal: spacing.md,
+                paddingVertical: spacing.md,
+                backgroundColor: pressed ? colors.muted : 'transparent',
+                borderBottomWidth: 1,
+                borderBottomColor: colors.border,
+              })}
+            >
+              <Ionicons name="list-outline" size={20} color={colors.foreground} />
+              <Text style={{ ...typography.body, color: colors.foreground }}>Add to list</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => { setShowMenu(false); handleShare(); }}
+              style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: spacing.sm,
+                paddingHorizontal: spacing.md,
+                paddingVertical: spacing.md,
+                backgroundColor: pressed ? colors.muted : 'transparent',
+              })}
+            >
+              <Ionicons name="share-outline" size={20} color={colors.foreground} />
+              <Text style={{ ...typography.body, color: colors.foreground }}>Share</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* Add to List Modal */}
       <AddToListModal
@@ -294,10 +390,96 @@ export function MatchDetailScreen({ route, navigation }: Props) {
   );
 }
 
+/* ─── Rating distribution bar chart ─── */
+
+function RatingBarChart({ reviews, colors, spacing, typography, borderRadius, avgRating }: any) {
+  const [activeBar, setActiveBar] = useState<number | null>(null);
+
+  // 10 buckets: 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0
+  const HALF_STARS = [0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5];
+  const counts = new Array(10).fill(0);
+  let ratedCount = 0;
+  for (const r of reviews) {
+    if (r.rating > 0) {
+      // Snap to nearest half star
+      const snapped = Math.round(r.rating * 2) / 2;
+      const idx = HALF_STARS.indexOf(snapped);
+      if (idx >= 0) counts[idx]++;
+      ratedCount++;
+    }
+  }
+  const maxCount = Math.max(...counts, 1);
+
+  return (
+    <View style={{ marginHorizontal: spacing.md, marginTop: spacing.md, backgroundColor: colors.card, borderRadius: borderRadius.lg, padding: spacing.md, borderWidth: 1, borderColor: colors.border }}>
+      {/* Header — swaps to held bar's stats */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md }}>
+        <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 15 }}>Ratings</Text>
+        {activeBar !== null && counts[activeBar] > 0 ? (
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={{ fontSize: 16, lineHeight: 28, fontWeight: '700', color: colors.primary, letterSpacing: -0.5 }}>
+              {'★'.repeat(Math.floor(HALF_STARS[activeBar]))}{HALF_STARS[activeBar] % 1 !== 0 ? '½' : ''}
+            </Text>
+            <Text style={{ fontSize: 11, color: colors.textSecondary }}>{counts[activeBar]} {counts[activeBar] === 1 ? 'rating' : 'ratings'}</Text>
+          </View>
+        ) : (
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={{ fontSize: 22, lineHeight: 28, fontWeight: '700', color: colors.foreground }}>{avgRating.toFixed(1)}</Text>
+            <Text style={{ fontSize: 11, color: colors.textSecondary }}>{ratedCount} {ratedCount === 1 ? 'rating' : 'ratings'}</Text>
+          </View>
+        )}
+      </View>
+
+      {/* Bars */}
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', height: 48, gap: 2 }}>
+        {counts.map((count, i) => {
+          const heightPct = count > 0 ? (count / maxCount) * 100 : 4;
+          const isActive = activeBar === i;
+          return (
+            <Pressable
+              key={i}
+              onPressIn={() => setActiveBar(i)}
+              onPressOut={() => setActiveBar(null)}
+              style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}
+            >
+              <View
+                style={{
+                  width: '100%',
+                  height: `${heightPct}%`,
+                  backgroundColor: isActive ? colors.primary : count > 0 ? colors.muted : `${colors.muted}60`,
+                  borderRadius: 2,
+                  minHeight: 3,
+                }}
+              />
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {/* Star labels — show only whole numbers */}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 }}>
+        {HALF_STARS.map((val, i) => (
+          <View key={i} style={{ flex: 1, alignItems: 'center' }}>
+            {val % 1 === 0 ? (
+              <Text style={{ fontSize: 9, color: colors.textSecondary }}>{val}</Text>
+            ) : null}
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 type ReviewFilter = 'everyone' | 'friends' | 'you';
 type ReviewSort = 'recent' | 'popular' | 'highest' | 'lowest';
 
-function ReviewsSection({ reviews, userId, profile, colors, spacing, typography, borderRadius }: any) {
+function ReviewCardWithComments({ review, onPress }: { review: any; onPress: () => void }) {
+  const { data: comments } = useCommentsForReview(review.id);
+  const commentCount = comments?.length || 0;
+  return <ReviewCard review={review} onPress={onPress} commentCount={commentCount} />;
+}
+
+function ReviewsSection({ reviews, userId, profile, colors, spacing, typography, borderRadius, navigation }: any) {
   const [filter, setFilter] = useState<ReviewFilter>('everyone');
   const [sort, setSort] = useState<ReviewSort>('popular');
 
@@ -383,7 +565,11 @@ function ReviewsSection({ reviews, userId, profile, colors, spacing, typography,
         </View>
       ) : (
         filteredReviews.map((review: any) => (
-          <ReviewCard key={review.id} review={review} />
+          <ReviewCardWithComments
+            key={review.id}
+            review={review}
+            onPress={() => navigation.navigate('ReviewDetail', { reviewId: review.id })}
+          />
         ))
       )}
     </View>

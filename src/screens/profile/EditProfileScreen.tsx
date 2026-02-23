@@ -19,7 +19,7 @@ import { useQueryClient } from '@tanstack/react-query';
 type Props = NativeStackScreenProps<ProfileStackParamList, 'EditProfile'>;
 
 export function EditProfileScreen({ navigation }: Props) {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const { colors, spacing, typography } = theme;
   const { user } = useAuth();
   const { data: profile, isLoading } = useUserProfile(user?.uid || '');
@@ -106,7 +106,7 @@ export function EditProfileScreen({ navigation }: Props) {
           <View style={{ width: 24 }} />
         </View>
 
-        <ScrollView contentContainerStyle={{ padding: spacing.md, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+        <ScrollView indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ padding: spacing.md, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
           {/* Avatar picker */}
           <Pressable onPress={handlePickAvatar} style={{ alignSelf: 'center', marginBottom: spacing.lg }}>
             <Avatar uri={avatarUri} name={displayName || 'User'} size={96} />

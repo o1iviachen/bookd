@@ -12,7 +12,7 @@ import { FOLLOWABLE_LEAGUES } from '../../utils/constants';
 import { useQueryClient } from '@tanstack/react-query';
 
 export function FavouriteLeaguesScreen() {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
   const navigation = useNavigation();
   const { user } = useAuth();
@@ -57,7 +57,7 @@ export function FavouriteLeaguesScreen() {
         Matches from selected leagues will appear on your feed.
       </Text>
 
-      <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
+      <ScrollView indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: 100 }}>
         <View style={{ paddingHorizontal: spacing.md }}>
           <View style={{ backgroundColor: colors.card, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' }}>
             {FOLLOWABLE_LEAGUES.map((league, i) => {

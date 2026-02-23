@@ -13,6 +13,7 @@ import {
   arrayRemove,
 } from 'firebase/firestore';
 import { db } from '../../config/firebase';
+import { createNotification } from './notifications';
 
 export interface Comment {
   id: string;
@@ -62,6 +63,22 @@ export async function createComment(
     likedBy: [],
     createdAt: serverTimestamp(),
   });
+
+  // Notify review author
+  const reviewSnap = await getDoc(doc(db, 'reviews', reviewId));
+  const reviewUserId = reviewSnap.data()?.userId;
+  if (reviewUserId) {
+    await createNotification({
+      recipientId: reviewUserId,
+      senderId: userId,
+      senderUsername: username,
+      senderAvatar: userAvatar,
+      type: 'comment',
+      reviewId,
+      commentId: ref.id,
+    });
+  }
+
   return ref.id;
 }
 
@@ -76,22 +93,39 @@ export async function getCommentsForReview(reviewId: string): Promise<Comment[]>
   return comments;
 }
 
-export async function toggleCommentLike(commentId: string, userId: string): Promise<void> {
+export async function toggleCommentLike(
+  commentId: string,
+  userId: string,
+  senderInfo?: { username: string; avatar: string | null }
+): Promise<void> {
   const ref = doc(db, 'comments', commentId);
   const snap = await getDoc(ref);
   if (!snap.exists()) return;
 
-  const likedBy: string[] = snap.data().likedBy || [];
+  const data = snap.data();
+  const likedBy: string[] = data.likedBy || [];
   if (likedBy.includes(userId)) {
     await updateDoc(ref, {
       likedBy: arrayRemove(userId),
-      likes: Math.max((snap.data().likes || 1) - 1, 0),
+      likes: Math.max((data.likes || 1) - 1, 0),
     });
   } else {
     await updateDoc(ref, {
       likedBy: arrayUnion(userId),
-      likes: (snap.data().likes || 0) + 1,
+      likes: (data.likes || 0) + 1,
     });
+
+    if (senderInfo && data.userId) {
+      await createNotification({
+        recipientId: data.userId,
+        senderId: userId,
+        senderUsername: senderInfo.username,
+        senderAvatar: senderInfo.avatar,
+        type: 'comment_like',
+        reviewId: data.reviewId || null,
+        commentId,
+      });
+    }
   }
 }
 

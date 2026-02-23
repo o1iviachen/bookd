@@ -5,6 +5,7 @@ import { ProfileScreen } from '../screens/profile/ProfileScreen';
 import { EditProfileScreen } from '../screens/profile/EditProfileScreen';
 import { SettingsScreen } from '../screens/profile/SettingsScreen';
 import { FavouriteTeamsScreen } from '../screens/profile/FavouriteTeamsScreen';
+import { FavouriteLeaguesScreen } from '../screens/profile/FavouriteLeaguesScreen';
 import { FavouriteMatchesScreen } from '../screens/profile/FavouriteMatchesScreen';
 import { DiaryScreen } from '../screens/profile/DiaryScreen';
 import { GamesScreen } from '../screens/profile/GamesScreen';
@@ -13,9 +14,13 @@ import { LikesScreen } from '../screens/profile/LikesScreen';
 import { MyListsScreen } from '../screens/profile/MyListsScreen';
 import { TagsScreen } from '../screens/profile/TagsScreen';
 import { TagMatchesScreen } from '../screens/profile/TagMatchesScreen';
+import { FollowListScreen } from '../screens/profile/FollowListScreen';
+import { FollowedTeamsScreen } from '../screens/profile/FollowedTeamsScreen';
+import { FollowedLeaguesScreen } from '../screens/profile/FollowedLeaguesScreen';
 import { UserProfileScreen } from '../screens/profile/UserProfileScreen';
 import { ListDetailScreen } from '../screens/list/ListDetailScreen';
 import { CreateListScreen } from '../screens/list/CreateListScreen';
+import { EditListScreen } from '../screens/list/EditListScreen';
 import { MatchDetailScreen } from '../screens/matches/MatchDetailScreen';
 import { CreateReviewScreen } from '../screens/review/CreateReviewScreen';
 import { ReviewDetailScreen } from '../screens/review/ReviewDetailScreen';
@@ -37,6 +42,7 @@ export function ProfileStack() {
       <Stack.Screen name="EditProfile" component={EditProfileScreen} />
       <Stack.Screen name="Settings" component={SettingsScreen} />
       <Stack.Screen name="FavouriteTeams" component={FavouriteTeamsScreen} />
+      <Stack.Screen name="FavouriteLeagues" component={FavouriteLeaguesScreen} />
       <Stack.Screen name="FavouriteMatches" component={FavouriteMatchesScreen} />
       <Stack.Screen name="Diary" component={DiaryScreen} />
       <Stack.Screen name="Games" component={GamesScreen} />
@@ -45,9 +51,13 @@ export function ProfileStack() {
       <Stack.Screen name="MyLists" component={MyListsScreen} />
       <Stack.Screen name="Tags" component={TagsScreen} />
       <Stack.Screen name="TagMatches" component={TagMatchesScreen} />
+      <Stack.Screen name="FollowList" component={FollowListScreen} />
+      <Stack.Screen name="FollowedTeams" component={FollowedTeamsScreen} />
+      <Stack.Screen name="FollowedLeagues" component={FollowedLeaguesScreen} />
       <Stack.Screen name="UserProfile" component={UserProfileScreen} />
       <Stack.Screen name="ListDetail" component={ListDetailScreen} />
       <Stack.Screen name="CreateList" component={CreateListScreen} />
+      <Stack.Screen name="EditList" component={EditListScreen} />
       <Stack.Screen name="MatchDetail" component={MatchDetailScreen} />
       <Stack.Screen name="CreateReview" component={CreateReviewScreen} />
       <Stack.Screen name="ReviewDetail" component={ReviewDetailScreen} />

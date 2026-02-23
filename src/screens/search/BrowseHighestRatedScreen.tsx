@@ -17,7 +17,7 @@ type Nav = NativeStackNavigationProp<SearchStackParamList, 'BrowseHighestRated'>
 const NUM_COLUMNS = 3;
 
 export function BrowseHighestRatedScreen() {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const { colors, spacing, typography } = theme;
   const navigation = useNavigation<Nav>();
   const { width: screenWidth } = useWindowDimensions();
@@ -95,7 +95,7 @@ export function BrowseHighestRatedScreen() {
           </Text>
         </View>
       ) : (
-        <FlatList
+        <FlatList indicatorStyle={isDark ? 'white' : 'default'}
           data={highestRatedMatches}
           numColumns={NUM_COLUMNS}
           keyExtractor={(item) => item.id.toString()}

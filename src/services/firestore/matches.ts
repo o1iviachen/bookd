@@ -80,6 +80,20 @@ export async function getCachedMatchesByIds(matchIds: number[]): Promise<Map<num
   return result;
 }
 
+export async function getCachedMatchesByDate(dateStr: string): Promise<Match[]> {
+  // dateStr format: "2025-01-15"
+  // kickoff is stored as ISO string, so we query for strings starting with dateStr
+  const startOfDay = `${dateStr}T00:00:00Z`;
+  const endOfDay = `${dateStr}T23:59:59Z`;
+  const q = query(
+    collection(db, MATCHES_COLLECTION),
+    where('kickoff', '>=', startOfDay),
+    where('kickoff', '<=', endOfDay)
+  );
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map((d) => docToMatch(d.data()));
+}
+
 export async function setCachedMatches(matches: Match[]): Promise<void> {
   if (matches.length === 0) return;
 

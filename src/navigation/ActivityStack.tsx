@@ -1,17 +1,18 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { MatchesStackParamList } from '../types/navigation';
-import { MatchesScreen } from '../screens/matches/MatchesScreen';
+import { ActivityStackParamList } from '../types/navigation';
+import { NotificationsScreen } from '../screens/notifications/NotificationsScreen';
+import { UserProfileScreen } from '../screens/profile/UserProfileScreen';
+import { ReviewDetailScreen } from '../screens/review/ReviewDetailScreen';
+import { FollowListScreen } from '../screens/profile/FollowListScreen';
 import { MatchDetailScreen } from '../screens/matches/MatchDetailScreen';
 import { MatchListsScreen } from '../screens/matches/MatchListsScreen';
-import { CreateReviewScreen } from '../screens/review/CreateReviewScreen';
-import { ReviewDetailScreen } from '../screens/review/ReviewDetailScreen';
 import { ListDetailScreen } from '../screens/list/ListDetailScreen';
 import { useTheme } from '../context/ThemeContext';
 
-const Stack = createNativeStackNavigator<MatchesStackParamList>();
+const Stack = createNativeStackNavigator<ActivityStackParamList>();
 
-export function MatchesStack() {
+export function ActivityStack() {
   const { theme } = useTheme();
 
   return (
@@ -21,12 +22,13 @@ export function MatchesStack() {
         contentStyle: { backgroundColor: theme.colors.background },
       }}
     >
-      <Stack.Screen name="Matches" component={MatchesScreen} />
+      <Stack.Screen name="Activity" component={NotificationsScreen} />
+      <Stack.Screen name="UserProfile" component={UserProfileScreen as any} />
+      <Stack.Screen name="ReviewDetail" component={ReviewDetailScreen} />
+      <Stack.Screen name="FollowList" component={FollowListScreen} />
       <Stack.Screen name="MatchDetail" component={MatchDetailScreen} />
       <Stack.Screen name="MatchLists" component={MatchListsScreen} />
       <Stack.Screen name="ListDetail" component={ListDetailScreen as any} />
-      <Stack.Screen name="CreateReview" component={CreateReviewScreen} />
-      <Stack.Screen name="ReviewDetail" component={ReviewDetailScreen} />
     </Stack.Navigator>
   );
 }

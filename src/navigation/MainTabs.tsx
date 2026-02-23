@@ -1,12 +1,13 @@
 import React from 'react';
 import { Platform } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+
 import { Ionicons } from '@expo/vector-icons';
 import { MainTabsParamList } from '../types/navigation';
 import { FeedStack } from './FeedStack';
 import { MatchesStack } from './MatchesStack';
 import { SearchStack } from './SearchStack';
-import { FollowingStack } from './FollowingStack';
+import { ActivityStack } from './ActivityStack';
 import { ProfileStack } from './ProfileStack';
 import { useTheme } from '../context/ThemeContext';
 
@@ -16,7 +17,7 @@ const TAB_ICONS: Record<keyof MainTabsParamList, { active: keyof typeof Ionicons
   FeedTab: { active: 'home', inactive: 'home-outline' },
   MatchesTab: { active: 'calendar', inactive: 'calendar-outline' },
   SearchTab: { active: 'search', inactive: 'search-outline' },
-  FollowingTab: { active: 'heart', inactive: 'heart-outline' },
+  ActivityTab: { active: 'heart', inactive: 'heart-outline' },
   ProfileTab: { active: 'person', inactive: 'person-outline' },
 };
 
@@ -24,7 +25,7 @@ const TAB_LABELS: Record<keyof MainTabsParamList, string> = {
   FeedTab: 'Feed',
   MatchesTab: 'Matches',
   SearchTab: 'Search',
-  FollowingTab: 'Following',
+  ActivityTab: 'Activity',
   ProfileTab: 'Profile',
 };
 
@@ -49,9 +50,9 @@ export function MainTabs() {
         tabBarLabel: TAB_LABELS[route.name],
         tabBarLabelStyle: {
           fontSize: 10,
-          fontWeight: '500',
+          fontWeight: '500' as const,
         },
-        tabBarIcon: ({ focused, color, size }) => {
+        tabBarIcon: ({ focused, color }) => {
           const icons = TAB_ICONS[route.name];
           return (
             <Ionicons
@@ -66,7 +67,7 @@ export function MainTabs() {
       <Tab.Screen name="FeedTab" component={FeedStack} />
       <Tab.Screen name="MatchesTab" component={MatchesStack} />
       <Tab.Screen name="SearchTab" component={SearchStack} />
-      <Tab.Screen name="FollowingTab" component={FollowingStack} />
+      <Tab.Screen name="ActivityTab" component={ActivityStack} />
       <Tab.Screen name="ProfileTab" component={ProfileStack} />
     </Tab.Navigator>
   );

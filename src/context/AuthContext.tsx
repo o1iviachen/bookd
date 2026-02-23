@@ -19,15 +19,7 @@ interface AuthContextValue {
   signOut: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextValue>({
-  user: null,
-  loading: true,
-  needsOnboarding: false,
-  completeOnboarding: () => {},
-  signIn: async () => {},
-  signUp: async () => {},
-  signOut: async () => {},
-});
+const AuthContext = createContext<AuthContextValue>(null as any);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -54,9 +46,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signUp = async (email: string, password: string, username: string) => {
+    setNeedsOnboarding(true);
     const firebaseUser = await authService.signUp(email, password);
     await createUserProfile(firebaseUser.uid, email, username);
-    setNeedsOnboarding(true);
   };
 
   const signOut = async () => {

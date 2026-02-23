@@ -14,14 +14,19 @@ export type OnboardingStackParamList = {
 export type FeedStackParamList = {
   Feed: undefined;
   MatchDetail: { matchId: number };
+  MatchLists: { matchId: number };
+  ListDetail: { listId: string };
   CreateReview: { matchId: number; reviewId?: string };
   ReviewDetail: { reviewId: string };
   UserProfile: { userId: string };
+  FollowList: { userIds: string[]; title: string };
 };
 
 export type MatchesStackParamList = {
   Matches: undefined;
   MatchDetail: { matchId: number };
+  MatchLists: { matchId: number };
+  ListDetail: { listId: string };
   CreateReview: { matchId: number; reviewId?: string };
   ReviewDetail: { reviewId: string };
 };
@@ -29,8 +34,12 @@ export type MatchesStackParamList = {
 export type SearchStackParamList = {
   Search: undefined;
   MatchDetail: { matchId: number };
+  MatchLists: { matchId: number };
+  ListDetail: { listId: string };
   CreateReview: { matchId: number; reviewId?: string };
   UserProfile: { userId: string };
+  FollowList: { userIds: string[]; title: string };
+  ReviewDetail: { reviewId: string };
   BrowseByDate: undefined;
   BrowsePopular: undefined;
   BrowseHighestRated: undefined;
@@ -39,8 +48,14 @@ export type SearchStackParamList = {
   FAQ: undefined;
 };
 
-export type FollowingStackParamList = {
-  Following: undefined;
+export type ActivityStackParamList = {
+  Activity: undefined;
+  UserProfile: { userId: string };
+  ReviewDetail: { reviewId: string };
+  FollowList: { userIds: string[]; title: string };
+  MatchDetail: { matchId: number };
+  MatchLists: { matchId: number };
+  ListDetail: { listId: string };
 };
 
 export type ProfileStackParamList = {
@@ -48,7 +63,10 @@ export type ProfileStackParamList = {
   EditProfile: undefined;
   Settings: undefined;
   FavouriteTeams: undefined;
+  FavouriteLeagues: undefined;
   FavouriteMatches: undefined;
+  FollowedTeams: undefined;
+  FollowedLeagues: undefined;
   Diary: undefined;
   Games: undefined;
   Reviews: undefined;
@@ -56,9 +74,11 @@ export type ProfileStackParamList = {
   MyLists: undefined;
   Tags: undefined;
   TagMatches: { tag: string };
+  FollowList: { userIds: string[]; title: string };
   UserProfile: { userId: string };
   ListDetail: { listId: string };
   CreateList: undefined;
+  EditList: { listId: string };
   MatchDetail: { matchId: number };
   CreateReview: { matchId: number; reviewId?: string };
   ReviewDetail: { reviewId: string };
@@ -68,7 +88,7 @@ export type MainTabsParamList = {
   FeedTab: NavigatorScreenParams<FeedStackParamList>;
   MatchesTab: NavigatorScreenParams<MatchesStackParamList>;
   SearchTab: NavigatorScreenParams<SearchStackParamList>;
-  FollowingTab: NavigatorScreenParams<FollowingStackParamList>;
+  ActivityTab: NavigatorScreenParams<ActivityStackParamList>;
   ProfileTab: NavigatorScreenParams<ProfileStackParamList>;
 };
 

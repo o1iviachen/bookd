@@ -1,6 +1,7 @@
 import * as footballApi from './footballApi';
-import { getCachedMatch, getCachedMatchesByIds, setCachedMatch, setCachedMatches } from './firestore/matches';
+import { getCachedMatch, getCachedMatchesByIds, getCachedMatchesByDate, setCachedMatch, setCachedMatches } from './firestore/matches';
 import { Match } from '../types/match';
+import { startOfDay } from 'date-fns';
 
 /**
  * Cache-aware wrapper around footballApi.
@@ -24,13 +25,30 @@ export async function getMatchById(id: number): Promise<Match> {
 }
 
 export async function getMatchesByDate(date: Date): Promise<Match[]> {
-  // Always hit API for date browsing (live data)
-  const matches = await footballApi.getMatchesByDate(date);
+  const isPastDate = startOfDay(date) < startOfDay(new Date());
+  const dateStr = date.toISOString().split('T')[0];
 
-  // Cache all results in background
-  setCachedMatches(matches).catch(() => {});
+  // For past dates, try Firestore cache first to avoid burning API quota
+  if (isPastDate) {
+    try {
+      const cached = await getCachedMatchesByDate(dateStr);
+      if (cached.length > 0) return cached;
+    } catch {}
+  }
 
-  return matches;
+  // Hit API for today/future dates, or if cache was empty for past dates
+  try {
+    const matches = await footballApi.getMatchesByDate(date);
+    setCachedMatches(matches).catch(() => {});
+    return matches;
+  } catch (err) {
+    // On API failure (rate limit, network), fall back to cache
+    try {
+      const cached = await getCachedMatchesByDate(dateStr);
+      if (cached.length > 0) return cached;
+    } catch {}
+    throw err;
+  }
 }
 
 export async function getMatchesByDateRange(from: Date, to: Date): Promise<Match[]> {

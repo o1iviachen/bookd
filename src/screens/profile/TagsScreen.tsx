@@ -13,7 +13,7 @@ interface TagEntry {
 }
 
 export function TagsScreen({ navigation }: any) {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
   const { user } = useAuth();
   const { data: reviews, isLoading } = useReviewsForUser(user?.uid || '');
@@ -57,7 +57,7 @@ export function TagsScreen({ navigation }: any) {
           </Text>
         </View>
       ) : (
-        <FlatList
+        <FlatList indicatorStyle={isDark ? 'white' : 'default'}
           data={tags}
           keyExtractor={(item) => item.tag}
           contentContainerStyle={{ paddingHorizontal: spacing.md, paddingVertical: spacing.sm }}

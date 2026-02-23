@@ -44,6 +44,13 @@ export function SettingsScreen() {
       ],
     },
     {
+      title: 'Following',
+      items: [
+        { label: 'Teams', icon: 'shield-outline', onPress: () => navigation.navigate('FollowedTeams' as never) },
+        { label: 'Leagues', icon: 'trophy-outline', onPress: () => navigation.navigate('FollowedLeagues' as never) },
+      ],
+    },
+    {
       title: 'Account',
       items: [
         { label: 'Edit Profile', icon: 'person-outline', onPress: () => navigation.navigate('EditProfile' as never) },
@@ -72,7 +79,7 @@ export function SettingsScreen() {
         <View style={{ width: 60 }} />
       </View>
 
-      <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: 40 }}>
         {sections.map((section) => (
           <View key={section.title} style={{ marginTop: spacing.lg, paddingHorizontal: spacing.md }}>
             <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: spacing.sm, marginLeft: spacing.xs }}>

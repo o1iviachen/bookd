@@ -17,7 +17,7 @@ type Nav = NativeStackNavigationProp<SearchStackParamList, 'BrowsePopular'>;
 const NUM_COLUMNS = 3;
 
 export function BrowsePopularScreen() {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const { colors, spacing, typography } = theme;
   const navigation = useNavigation<Nav>();
   const { width: screenWidth } = useWindowDimensions();
@@ -91,7 +91,7 @@ export function BrowsePopularScreen() {
           </Text>
         </View>
       ) : (
-        <FlatList
+        <FlatList indicatorStyle={isDark ? 'white' : 'default'}
           data={popularMatches}
           numColumns={NUM_COLUMNS}
           keyExtractor={(item) => item.id.toString()}

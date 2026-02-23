@@ -20,7 +20,6 @@ interface SelectProps {
   value: string;
   onValueChange: (value: string) => void;
   options: SelectOption[];
-  placeholder?: string;
   disabled?: boolean;
   title?: string;
 }
@@ -30,7 +29,6 @@ export function Select({
   value,
   onValueChange,
   options,
-  placeholder = 'Select...',
   disabled = false,
   title,
 }: SelectProps) {
@@ -40,7 +38,7 @@ export function Select({
   const { height: screenHeight } = useWindowDimensions();
 
   const selectedOption = options.find((o) => o.value === value);
-  const displayText = selectedOption?.label || placeholder;
+  const displayText = selectedOption?.label || 'Select...';
 
   const maxPopupHeight = Math.min(options.length * 48 + 56, screenHeight * 0.5);
 

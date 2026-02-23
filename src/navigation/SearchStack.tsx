@@ -7,8 +7,12 @@ import { BrowsePopularScreen } from '../screens/search/BrowsePopularScreen';
 import { BrowseHighestRatedScreen } from '../screens/search/BrowseHighestRatedScreen';
 import { BrowseFeaturedListsScreen } from '../screens/search/BrowseFeaturedListsScreen';
 import { MatchDetailScreen } from '../screens/matches/MatchDetailScreen';
+import { MatchListsScreen } from '../screens/matches/MatchListsScreen';
 import { CreateReviewScreen } from '../screens/review/CreateReviewScreen';
+import { ListDetailScreen } from '../screens/list/ListDetailScreen';
 import { UserProfileScreen } from '../screens/profile/UserProfileScreen';
+import { FollowListScreen } from '../screens/profile/FollowListScreen';
+import { ReviewDetailScreen } from '../screens/review/ReviewDetailScreen';
 import { NewHereScreen } from '../screens/search/NewHereScreen';
 import { FAQScreen } from '../screens/search/FAQScreen';
 import { useTheme } from '../context/ThemeContext';
@@ -31,8 +35,12 @@ export function SearchStack() {
       <Stack.Screen name="BrowseHighestRated" component={BrowseHighestRatedScreen} />
       <Stack.Screen name="BrowseFeaturedLists" component={BrowseFeaturedListsScreen} />
       <Stack.Screen name="MatchDetail" component={MatchDetailScreen} />
+      <Stack.Screen name="MatchLists" component={MatchListsScreen} />
+      <Stack.Screen name="ListDetail" component={ListDetailScreen as any} />
       <Stack.Screen name="CreateReview" component={CreateReviewScreen} />
       <Stack.Screen name="UserProfile" component={UserProfileScreen} />
+      <Stack.Screen name="FollowList" component={FollowListScreen} />
+      <Stack.Screen name="ReviewDetail" component={ReviewDetailScreen} />
       <Stack.Screen name="NewHere" component={NewHereScreen} />
       <Stack.Screen name="FAQ" component={FAQScreen} />
     </Stack.Navigator>

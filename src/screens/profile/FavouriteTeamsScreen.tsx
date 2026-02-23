@@ -14,7 +14,7 @@ import { useQueryClient } from '@tanstack/react-query';
 const MAX_TEAMS = 2;
 
 export function FavouriteTeamsScreen() {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
   const navigation = useNavigation();
   const { user } = useAuth();
@@ -96,7 +96,7 @@ export function FavouriteTeamsScreen() {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
+      <ScrollView indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: 100 }}>
         {leagues.length === 0 ? (
           <View style={{ alignItems: 'center', marginTop: spacing.xxl * 2 }}>
             <Text style={{ ...typography.body, color: colors.textSecondary }}>No teams found</Text>

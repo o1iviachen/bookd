@@ -32,6 +32,7 @@ function docToReview(docSnap: any, userVote: 'up' | 'down' | null = null): Revie
     upvotes: data.upvotes || 0,
     downvotes: data.downvotes || 0,
     createdAt: data.createdAt?.toDate() || new Date(),
+    editedAt: data.editedAt?.toDate() || null,
     userVote,
   };
 }
@@ -125,11 +126,14 @@ export async function getReviewById(reviewId: string, currentUserId?: string): P
 export async function voteOnReview(
   reviewId: string,
   userId: string,
-  voteType: 'up' | 'down'
+  voteType: 'up' | 'down',
+  senderInfo?: { username: string; avatar: string | null }
 ): Promise<void> {
   const voteRef = doc(db, 'reviews', reviewId, 'votes', userId);
   const reviewRef = doc(db, 'reviews', reviewId);
   const voteSnap = await getDoc(voteRef);
+
+  let shouldNotify = false;
 
   if (voteSnap.exists()) {
     const existingVote = voteSnap.data().voteType;
@@ -146,6 +150,7 @@ export async function voteOnReview(
         [existingVote === 'up' ? 'upvotes' : 'downvotes']: increment(-1),
         [voteType === 'up' ? 'upvotes' : 'downvotes']: increment(1),
       });
+      if (voteType === 'up') shouldNotify = true;
     }
   } else {
     // New vote
@@ -153,6 +158,23 @@ export async function voteOnReview(
     await updateDoc(reviewRef, {
       [voteType === 'up' ? 'upvotes' : 'downvotes']: increment(1),
     });
+    if (voteType === 'up') shouldNotify = true;
+  }
+
+  if (shouldNotify && senderInfo) {
+    const reviewSnap = await getDoc(reviewRef);
+    const reviewUserId = reviewSnap.data()?.userId;
+    if (reviewUserId) {
+      const { createNotification } = await import('./notifications');
+      await createNotification({
+        recipientId: reviewUserId,
+        senderId: userId,
+        senderUsername: senderInfo.username,
+        senderAvatar: senderInfo.avatar,
+        type: 'review_like',
+        reviewId,
+      });
+    }
   }
 }
 
@@ -166,7 +188,7 @@ export async function updateReview(
   }
 ): Promise<void> {
   const reviewRef = doc(db, 'reviews', reviewId);
-  await updateDoc(reviewRef, data);
+  await updateDoc(reviewRef, { ...data, editedAt: serverTimestamp() });
 }
 
 export async function deleteReview(reviewId: string): Promise<void> {

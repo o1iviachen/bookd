@@ -36,7 +36,7 @@ interface ReviewEntry {
 }
 
 export function ReviewsScreen({ navigation }: any) {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
   const { user } = useAuth();
   const { data: reviews, isLoading } = useReviewsForUser(user?.uid || '');
@@ -181,7 +181,7 @@ export function ReviewsScreen({ navigation }: any) {
           </Text>
         </View>
       ) : (
-        <FlatList
+        <FlatList indicatorStyle={isDark ? 'white' : 'default'}
           data={filtered}
           keyExtractor={(item) => item.review.id}
           contentContainerStyle={{ paddingHorizontal: spacing.md, paddingBottom: 60 }}

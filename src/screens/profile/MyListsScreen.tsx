@@ -5,12 +5,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useListsForUser } from '../../hooks/useLists';
+import { ListPreviewCard } from '../../components/list/ListPreviewCard';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
-import { formatRelativeTime } from '../../utils/formatDate';
 import { MatchList } from '../../types/list';
 
 export function MyListsScreen({ navigation }: any) {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
   const { user } = useAuth();
   const { data: lists, isLoading } = useListsForUser(user?.uid || '');
@@ -18,28 +18,12 @@ export function MyListsScreen({ navigation }: any) {
   if (isLoading) return <LoadingSpinner />;
 
   const renderItem = ({ item }: { item: MatchList }) => (
-    <Pressable
-      onPress={() => navigation.navigate('ListDetail', { listId: item.id })}
-      style={({ pressed }) => ({
-        paddingVertical: spacing.md,
-        paddingHorizontal: spacing.md,
-        backgroundColor: pressed ? colors.accent : 'transparent',
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border,
-      })}
-    >
-      <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 16 }} numberOfLines={1}>
-        {item.name}
-      </Text>
-      {item.description ? (
-        <Text style={{ ...typography.body, color: colors.textSecondary, marginTop: 2 }} numberOfLines={1}>
-          {item.description}
-        </Text>
-      ) : null}
-      <Text style={{ ...typography.small, color: colors.textSecondary, marginTop: 4 }}>
-        {item.matchIds.length} {item.matchIds.length === 1 ? 'match' : 'matches'} · {formatRelativeTime(item.createdAt)}
-      </Text>
-    </Pressable>
+    <View style={{ paddingHorizontal: spacing.md }}>
+      <ListPreviewCard
+        list={item}
+        onPress={() => navigation.navigate('ListDetail', { listId: item.id })}
+      />
+    </View>
   );
 
   return (
@@ -80,7 +64,7 @@ export function MyListsScreen({ navigation }: any) {
           </Pressable>
         </View>
       ) : (
-        <FlatList
+        <FlatList indicatorStyle={isDark ? 'white' : 'default'}
           data={lists}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}

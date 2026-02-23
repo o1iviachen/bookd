@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { View, Text, ScrollView, Pressable, TextInput as RNTextInput, LayoutAnimation, UIManager, Platform, useWindowDimensions } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, ScrollView, Pressable, TextInput as RNTextInput, LayoutAnimation, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -18,7 +18,7 @@ type Category = 'matches' | 'teams' | 'players' | 'members' | 'reviews' | 'lists
 const NUM_COLUMNS = 3;
 
 export function SearchScreen() {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
   const navigation = useNavigation<Nav>();
   const { width: screenWidth } = useWindowDimensions();
@@ -33,7 +33,7 @@ export function SearchScreen() {
   const { data: users, isLoading: usersLoading } = useSearchUsers(queryStr);
   const { data: todayMatches } = useMatchesByDate(new Date());
 
-  const matchResults = useMemo(() => {
+  const matchResults = (() => {
     if (!queryStr || queryStr.length < 2 || !todayMatches) return [];
     const q = queryStr.toLowerCase();
     return todayMatches.filter(
@@ -44,7 +44,7 @@ export function SearchScreen() {
         m.awayTeam.shortName.toLowerCase().includes(q) ||
         m.competition.name.toLowerCase().includes(q)
     );
-  }, [queryStr, todayMatches]);
+  })();
 
   const categories: { key: Category; label: string }[] = [
     { key: 'matches', label: 'Matches' },
@@ -127,7 +127,7 @@ export function SearchScreen() {
         )}
       </View>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 100 }}>
+      <ScrollView indicatorStyle={isDark ? 'white' : 'default'} style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 100 }}>
         {/* Default browse view */}
         {!isSearching && (
           <View style={{ paddingVertical: spacing.lg, paddingHorizontal: spacing.md }}>

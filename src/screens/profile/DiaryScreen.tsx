@@ -16,7 +16,7 @@ import { Review } from '../../types/review';
 import { Match } from '../../types/match';
 
 export function DiaryScreen({ navigation }: any) {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
   const { user } = useAuth();
   const { data: reviews, isLoading } = useReviewsForUser(user?.uid || '');
@@ -110,6 +110,7 @@ export function DiaryScreen({ navigation }: any) {
         </View>
       ) : (
         <SectionList
+          indicatorStyle={isDark ? 'white' : 'default'}
           sections={sections}
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ paddingBottom: spacing.xxl }}

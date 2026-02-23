@@ -27,6 +27,7 @@ function docToList(docSnap: any): MatchList {
     name: data.name,
     description: data.description || '',
     matchIds: data.matchIds || [],
+    ranked: data.ranked ?? false,
     likes: data.likes || 0,
     createdAt: data.createdAt?.toDate() || new Date(),
     coverImage: data.coverImage || null,
@@ -38,7 +39,8 @@ export async function createList(
   username: string,
   name: string,
   description: string,
-  matchIds: number[]
+  matchIds: number[],
+  ranked: boolean = false
 ): Promise<string> {
   const ref = await addDoc(collection(db, 'lists'), {
     userId,
@@ -46,6 +48,7 @@ export async function createList(
     name,
     description,
     matchIds,
+    ranked,
     likes: 0,
     createdAt: serverTimestamp(),
     coverImage: null,
@@ -57,11 +60,11 @@ export async function getListsForUser(userId: string): Promise<MatchList[]> {
   const q = query(
     collection(db, 'lists'),
     where('userId', '==', userId),
-    orderBy('createdAt', 'desc'),
-    limit(50)
   );
   const snapshot = await getDocs(q);
-  return snapshot.docs.map(docToList);
+  const lists = snapshot.docs.map(docToList);
+  lists.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  return lists;
 }
 
 export async function getRecentLists(): Promise<MatchList[]> {
@@ -88,8 +91,28 @@ export async function removeMatchFromList(listId: string, matchId: number): Prom
   await updateDoc(doc(db, 'lists', listId), { matchIds: arrayRemove(matchId) });
 }
 
+export async function getListsContainingMatch(matchId: number): Promise<MatchList[]> {
+  const q = query(
+    collection(db, 'lists'),
+    where('matchIds', 'array-contains', matchId)
+  );
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map(docToList);
+}
+
 export async function likeList(listId: string): Promise<void> {
   await updateDoc(doc(db, 'lists', listId), { likes: increment(1) });
+}
+
+export async function updateList(
+  listId: string,
+  data: { name?: string; description?: string; ranked?: boolean }
+): Promise<void> {
+  await updateDoc(doc(db, 'lists', listId), data);
+}
+
+export async function updateMatchOrder(listId: string, matchIds: number[]): Promise<void> {
+  await updateDoc(doc(db, 'lists', listId), { matchIds });
 }
 
 export async function deleteList(listId: string): Promise<void> {

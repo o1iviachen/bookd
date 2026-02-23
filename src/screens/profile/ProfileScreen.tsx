@@ -23,7 +23,7 @@ import { Match } from '../../types/match';
 type Nav = NativeStackNavigationProp<ProfileStackParamList, 'Profile'>;
 
 export function ProfileScreen() {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
   const navigation = useNavigation<Nav>();
   const { user } = useAuth();
@@ -109,7 +109,7 @@ export function ProfileScreen() {
         </Pressable>
       </View>
 
-      <ScrollView contentContainerStyle={{ paddingBottom: 60 }}>
+      <ScrollView indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: spacing.md }}>
         {/* Avatar + name */}
         <View style={{ alignItems: 'center', paddingTop: spacing.lg, paddingHorizontal: spacing.md }}>
           <Avatar uri={profile?.avatar || null} name={profile?.displayName || 'User'} size={96} />
@@ -166,8 +166,20 @@ export function ProfileScreen() {
           </View>
         )}
 
+        {/* Stats row — Instagram-style */}
+        <View style={{ flexDirection: 'row', justifyContent: 'center', gap: spacing.xxl, marginTop: spacing.sm, paddingVertical: spacing.sm }}>
+          <Pressable onPress={() => navigation.navigate('FollowList', { userIds: profile?.following || [], title: 'Following' })} style={{ alignItems: 'center' }}>
+            <Text style={{ ...typography.h4, color: colors.foreground }}>{profile?.following?.length || 0}</Text>
+            <Text style={{ ...typography.small, color: colors.textSecondary }}>Following</Text>
+          </Pressable>
+          <Pressable onPress={() => navigation.navigate('FollowList', { userIds: profile?.followers || [], title: 'Followers' })} style={{ alignItems: 'center' }}>
+            <Text style={{ ...typography.h4, color: colors.foreground }}>{profile?.followers?.length || 0}</Text>
+            <Text style={{ ...typography.small, color: colors.textSecondary }}>Followers</Text>
+          </Pressable>
+        </View>
+
         {/* Favourite Matches */}
-        <View style={{ marginTop: spacing.lg, paddingHorizontal: HORIZONTAL_PADDING, paddingVertical: spacing.md, backgroundColor: `${colors.accent}30`, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.border }}>
+        <View style={{ marginTop: spacing.md, paddingHorizontal: HORIZONTAL_PADDING, paddingVertical: spacing.md, backgroundColor: `${colors.accent}30`, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.border }}>
           <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: spacing.sm }}>
             Favourite Matches
           </Text>
@@ -190,20 +202,20 @@ export function ProfileScreen() {
             <Pressable
               onPress={() => navigation.navigate('FavouriteMatches')}
               style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: spacing.sm,
-                paddingVertical: spacing.lg,
+                width: CARD_WIDTH,
+                height: CARD_WIDTH * 1.5,
                 borderRadius: 4,
                 borderWidth: 2,
                 borderStyle: 'dashed',
                 borderColor: colors.border,
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: spacing.xs,
               }}
             >
               <Ionicons name="add" size={22} color={colors.textSecondary} />
-              <Text style={{ ...typography.caption, color: colors.textSecondary }}>
-                Add your favourite matches
+              <Text style={{ ...typography.caption, color: colors.textSecondary, fontSize: 9 }}>
+                Add favourites
               </Text>
             </Pressable>
           )}
@@ -226,7 +238,7 @@ export function ProfileScreen() {
             <View style={{ flexDirection: 'row', gap: GAP }}>
               {recentReviews.map((review) => {
                 const match = recentMatchMap.get(review.matchId);
-                const isLiked = profile?.likedMatchIds?.includes(review.matchId) || false;
+                const isLiked = profile?.likedMatchIds?.some((id) => String(id) === String(review.matchId)) || false;
                 const hasText = review.text.trim().length > 0;
                 return match ? (
                   <View key={review.id} style={{ width: CARD_WIDTH }}>
@@ -236,13 +248,13 @@ export function ProfileScreen() {
                       width={CARD_WIDTH}
                     />
                     {/* Rating, heart, review indicator — left aligned */}
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 4 }}>
-                      <StarRating rating={review.rating} size={10} />
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 5 }}>
+                      <StarRating rating={review.rating} size={9} />
                       {isLiked && (
-                        <Ionicons name="heart" size={10} color="#ef4444" style={{ marginLeft: 2 }} />
+                        <Ionicons name="heart" size={9} color="#ef4444" />
                       )}
                       {hasText && (
-                        <Ionicons name="reorder-three" size={12} color={colors.textSecondary} style={{ marginLeft: 1 }} />
+                        <Ionicons name="reorder-three" size={10} color={colors.textSecondary} />
                       )}
                     </View>
                   </View>
@@ -315,6 +327,7 @@ export function ProfileScreen() {
             ))}
           </View>
         </View>
+
       </ScrollView>
     </SafeAreaView>
   );

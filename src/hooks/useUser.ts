@@ -15,8 +15,8 @@ export function useUserProfile(userId: string) {
 export function useFollowUser() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (params: { currentUserId: string; targetUserId: string }) =>
-      followUser(params.currentUserId, params.targetUserId),
+    mutationFn: (params: { currentUserId: string; targetUserId: string; senderInfo?: { username: string; avatar: string | null } }) =>
+      followUser(params.currentUserId, params.targetUserId, params.senderInfo),
     onSuccess: (_, params) => {
       queryClient.invalidateQueries({ queryKey: ['user', params.currentUserId] });
       queryClient.invalidateQueries({ queryKey: ['user', params.targetUserId] });
@@ -61,7 +61,32 @@ export function useToggleLiked() {
   return useMutation({
     mutationFn: (params: { userId: string; matchId: number }) =>
       toggleLikedMatch(params.userId, params.matchId),
-    onSuccess: (_, params) => {
+    onMutate: async (params) => {
+      const queryKey = ['user', params.userId];
+      await queryClient.cancelQueries({ queryKey });
+      const previous = queryClient.getQueryData(queryKey);
+      queryClient.setQueryData(queryKey, (old: any) => {
+        if (!old) return old;
+        const liked: number[] = old.likedMatchIds || [];
+        const isLiked = liked.some((id: number) => Number(id) === Number(params.matchId));
+        return {
+          ...old,
+          likedMatchIds: isLiked
+            ? liked.filter((id: number) => Number(id) !== Number(params.matchId))
+            : [...liked, Number(params.matchId)],
+          watchedMatchIds: isLiked
+            ? old.watchedMatchIds
+            : [...new Set([...(old.watchedMatchIds || []), Number(params.matchId)])],
+        };
+      });
+      return { previous, queryKey };
+    },
+    onError: (_err, _params, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(context.queryKey, context.previous);
+      }
+    },
+    onSettled: (_, __, params) => {
       queryClient.invalidateQueries({ queryKey: ['user', params.userId] });
     },
   });

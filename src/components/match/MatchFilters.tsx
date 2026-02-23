@@ -90,7 +90,7 @@ export function MatchFilters({
     <View
       style={{
         paddingHorizontal: spacing.md,
-        paddingVertical: spacing.sm + 2,
+        paddingVertical: spacing.md,
         borderBottomWidth: 1,
         borderBottomColor: colors.border,
       }}

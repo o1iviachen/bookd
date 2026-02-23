@@ -106,8 +106,8 @@ export function useVoteOnReview() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (params: { reviewId: string; userId: string; voteType: 'up' | 'down' }) =>
-      voteOnReview(params.reviewId, params.userId, params.voteType),
+    mutationFn: (params: { reviewId: string; userId: string; voteType: 'up' | 'down'; senderInfo?: { username: string; avatar: string | null } }) =>
+      voteOnReview(params.reviewId, params.userId, params.voteType, params.senderInfo),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['reviews'] });
       queryClient.invalidateQueries({ queryKey: ['review'] });

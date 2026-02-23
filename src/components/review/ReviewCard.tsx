@@ -14,9 +14,10 @@ import { formatRelativeTime } from '../../utils/formatDate';
 interface ReviewCardProps {
   review: Review;
   onPress?: () => void;
+  commentCount?: number;
 }
 
-export function ReviewCard({ review, onPress }: ReviewCardProps) {
+export function ReviewCard({ review, onPress, commentCount }: ReviewCardProps) {
   const { theme } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
   const { user } = useAuth();
@@ -52,6 +53,7 @@ export function ReviewCard({ review, onPress }: ReviewCardProps) {
             <StarRating rating={review.rating} size={12} />
             <Text style={{ ...typography.small, color: colors.textSecondary }}>
               {formatRelativeTime(review.createdAt)}
+              {review.editedAt ? ' (edited)' : ''}
             </Text>
           </View>
         </View>
@@ -121,11 +123,19 @@ export function ReviewCard({ review, onPress }: ReviewCardProps) {
       )}
 
       {/* Action buttons */}
-      <VoteButtons
-        upvotes={review.upvotes}
-        userVote={review.userVote}
-        onVote={handleLike}
-      />
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.lg }}>
+        <VoteButtons
+          upvotes={review.upvotes}
+          userVote={review.userVote}
+          onVote={handleLike}
+        />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <Ionicons name="chatbubble-outline" size={16} color={colors.textSecondary} />
+          {(commentCount ?? 0) > 0 && (
+            <Text style={{ ...typography.caption, color: colors.textSecondary }}>{commentCount}</Text>
+          )}
+        </View>
+      </View>
     </Pressable>
   );
 }

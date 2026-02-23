@@ -1,105 +1,291 @@
-import React from 'react';
-import { View, Text, ScrollView, Pressable } from 'react-native';
+import React, { useCallback } from 'react';
+import { View, Text, ScrollView, Pressable, Linking, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
+import { useQueries } from '@tanstack/react-query';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useUserProfile, useFollowUser, useUnfollowUser } from '../../hooks/useUser';
 import { useReviewsForUser } from '../../hooks/useReviews';
+import { useListsForUser } from '../../hooks/useLists';
+import { getMatchById } from '../../services/matchService';
 import { Avatar } from '../../components/ui/Avatar';
-import { ReviewCard } from '../../components/review/ReviewCard';
+import { TeamLogo } from '../../components/match/TeamLogo';
+import { MatchPosterCard } from '../../components/match/MatchPosterCard';
+import { StarRating } from '../../components/ui/StarRating';
 import { Button } from '../../components/ui/Button';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
-import { SearchStackParamList } from '../../types/navigation';
+import { POPULAR_TEAMS } from '../../utils/constants';
+import { Match } from '../../types/match';
 
-type Props = NativeStackScreenProps<SearchStackParamList, 'UserProfile'>;
-
-export function UserProfileScreen({ route, navigation }: Props) {
-  const { theme } = useTheme();
-  const { colors, spacing, typography } = theme;
+export function UserProfileScreen({ route, navigation }: any) {
+  const { theme, isDark } = useTheme();
+  const { colors, spacing, typography, borderRadius } = theme;
   const { userId } = route.params;
   const { user: currentUser } = useAuth();
+  const { width: screenWidth } = useWindowDimensions();
   const { data: profile, isLoading } = useUserProfile(userId);
   const { data: currentProfile } = useUserProfile(currentUser?.uid || '');
   const { data: reviews } = useReviewsForUser(userId);
+  const { data: lists } = useListsForUser(userId);
   const followMutation = useFollowUser();
   const unfollowMutation = useUnfollowUser();
 
   const isFollowing = currentProfile?.following.includes(userId) || false;
   const isOwnProfile = currentUser?.uid === userId;
 
+  // Favourite matches
+  const favoriteMatchIds = profile?.favoriteMatchIds || [];
+  const favoriteMatchQueries = useQueries({
+    queries: favoriteMatchIds.map((id: number) => ({
+      queryKey: ['match', id],
+      queryFn: () => getMatchById(id),
+      staleTime: 5 * 60 * 1000,
+      enabled: favoriteMatchIds.length > 0,
+    })),
+  });
+  const favoriteMatches = favoriteMatchQueries
+    .filter((q) => q.data != null)
+    .map((q) => q.data as Match);
+
+  // Recent activity
+  const recentReviews = (reviews || []).slice(0, 4);
+  const recentMatchIds = [...new Set(recentReviews.map((r) => r.matchId))];
+  const recentMatchQueries = useQueries({
+    queries: recentMatchIds.map((id) => ({
+      queryKey: ['match', id],
+      queryFn: () => getMatchById(id),
+      staleTime: 5 * 60 * 1000,
+      enabled: recentMatchIds.length > 0,
+    })),
+  });
+  const recentMatchMap = new Map<number, Match>();
+  recentMatchQueries.forEach((q) => {
+    if (q.data) recentMatchMap.set(q.data.id, q.data);
+  });
+
+  const GAP = spacing.sm;
+  const HORIZONTAL_PADDING = spacing.md;
+  const NUM_COLUMNS = 3;
+  const CARD_WIDTH = (screenWidth - HORIZONTAL_PADDING * 2 - GAP * (NUM_COLUMNS - 1)) / NUM_COLUMNS;
+
+  const handleMatchPress = useCallback((matchId: number) => {
+    const allUserReviews = reviews || [];
+    const userReviewsForMatch = allUserReviews.filter((r) => r.matchId === matchId);
+    if (userReviewsForMatch.length === 1) {
+      navigation.navigate('ReviewDetail', { reviewId: userReviewsForMatch[0].id });
+    } else {
+      navigation.navigate('MatchDetail', { matchId });
+    }
+  }, [reviews, navigation]);
+
   const handleFollowToggle = () => {
     if (!currentUser) return;
     if (isFollowing) {
       unfollowMutation.mutate({ currentUserId: currentUser.uid, targetUserId: userId });
     } else {
-      followMutation.mutate({ currentUserId: currentUser.uid, targetUserId: userId });
+      followMutation.mutate({
+        currentUserId: currentUser.uid,
+        targetUserId: userId,
+        senderInfo: { username: currentProfile?.username || 'Someone', avatar: currentProfile?.avatar || null },
+      });
     }
   };
 
   if (isLoading || !profile) return <LoadingSpinner />;
 
-  return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', padding: spacing.md }}>
-          <Pressable onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={24} color={colors.foreground} />
-          </Pressable>
-          <Text style={{ ...typography.h4, color: colors.foreground, flex: 1, textAlign: 'center' }}>
-            {profile.username}
-          </Text>
-          <View style={{ width: 24 }} />
-        </View>
+  // Team crests
+  const followedTeamCrests = (profile?.followedTeamIds || []).map((id: string) => {
+    const team = POPULAR_TEAMS.find((t) => t.id === id);
+    return team ? { name: team.name, crest: team.crest } : null;
+  }).filter(Boolean) as { name: string; crest: string }[];
 
-        <View style={{ alignItems: 'center', paddingHorizontal: spacing.md }}>
-          <Avatar uri={profile.avatar} name={profile.displayName} size={80} />
+  const navLinks: { label: string; count: number | string; icon: keyof typeof Ionicons.glyphMap }[] = [
+    { label: 'Games', count: `${reviews?.length || 0} this year`, icon: 'football-outline' },
+    { label: 'Diary', count: reviews?.length || 0, icon: 'book-outline' },
+    { label: 'Reviews', count: reviews?.length || 0, icon: 'chatbubble-outline' },
+    { label: 'Lists', count: lists?.length || 0, icon: 'list-outline' },
+    { label: 'Likes', count: profile?.likedMatchIds?.length || 0, icon: 'heart-outline' },
+    { label: 'Tags', count: new Set((reviews || []).flatMap((r) => r.tags)).size, icon: 'pricetag-outline' },
+  ];
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
+      {/* Header */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+        <Pressable onPress={() => navigation.goBack()} hitSlop={8}>
+          <Ionicons name="arrow-back" size={22} color={colors.foreground} />
+        </Pressable>
+        <Text style={{ ...typography.bodyBold, color: colors.foreground, flex: 1, textAlign: 'center', fontSize: 17 }}>
+          {profile.username}
+        </Text>
+        <View style={{ width: 22 }} />
+      </View>
+
+      <ScrollView indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: 60 }}>
+        {/* Avatar + name */}
+        <View style={{ alignItems: 'center', paddingTop: spacing.lg, paddingHorizontal: spacing.md }}>
+          <Avatar uri={profile.avatar} name={profile.displayName} size={96} />
           <Text style={{ ...typography.h3, color: colors.foreground, marginTop: spacing.sm }}>
             {profile.displayName}
           </Text>
-          <Text style={{ ...typography.caption, color: colors.textSecondary }}>@{profile.username}</Text>
-          {profile.bio ? (
-            <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.sm }}>
-              {profile.bio}
-            </Text>
-          ) : null}
-          {!isOwnProfile && (
+          <Text style={{ ...typography.caption, color: colors.textSecondary }}>
+            @{profile.username}
+          </Text>
+        </View>
+
+        {/* Favourite team badges */}
+        {followedTeamCrests.length > 0 && (
+          <View style={{ flexDirection: 'row', justifyContent: 'center', gap: spacing.sm, marginTop: spacing.sm }}>
+            {followedTeamCrests.map((club) => (
+              <TeamLogo key={club.name} uri={club.crest} size={28} />
+            ))}
+          </View>
+        )}
+
+        {/* Bio */}
+        {profile.bio ? (
+          <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.sm, paddingHorizontal: spacing.xl }}>
+            {profile.bio}
+          </Text>
+        ) : null}
+
+        {/* Location & Website */}
+        {(profile.location || profile.website) && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: spacing.xs, gap: spacing.sm, maxWidth: 280, alignSelf: 'center' }}>
+            {profile.location ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                <Ionicons name="location-outline" size={14} color={colors.textSecondary} />
+                <Text style={{ fontSize: 14, color: colors.textSecondary }}>{profile.location}</Text>
+              </View>
+            ) : null}
+            {profile.location && profile.website ? (
+              <Text style={{ fontSize: 14, color: colors.textSecondary }}>·</Text>
+            ) : null}
+            {profile.website ? (
+              <Pressable
+                onPress={() => {
+                  const url = profile.website.startsWith('http') ? profile.website : `https://${profile.website}`;
+                  Linking.openURL(url);
+                }}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1, minWidth: 0 }}
+              >
+                <Ionicons name="link-outline" size={14} color={colors.primary} style={{ flexShrink: 0 }} />
+                <Text numberOfLines={1} style={{ fontSize: 14, color: colors.primary, flexShrink: 1 }}>
+                  {profile.website.replace(/^https?:\/\//, '').replace(/\/$/, '')}
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
+        )}
+
+        {/* Follow button */}
+        {!isOwnProfile && (
+          <View style={{ alignItems: 'center', marginTop: spacing.md }}>
             <Button
               title={isFollowing ? 'Following' : 'Follow'}
               onPress={handleFollowToggle}
               variant={isFollowing ? 'outline' : 'primary'}
               size="sm"
               loading={followMutation.isPending || unfollowMutation.isPending}
-              style={{ marginTop: spacing.md }}
             />
-          )}
+          </View>
+        )}
+
+        {/* Stats row — Instagram-style */}
+        <View style={{ flexDirection: 'row', justifyContent: 'center', gap: spacing.xxl, marginTop: spacing.sm, paddingVertical: spacing.sm }}>
+          <Pressable onPress={() => navigation.navigate('FollowList', { userIds: profile.following || [], title: 'Following' })} style={{ alignItems: 'center' }}>
+            <Text style={{ ...typography.h4, color: colors.foreground }}>{profile.following?.length || 0}</Text>
+            <Text style={{ ...typography.small, color: colors.textSecondary }}>Following</Text>
+          </Pressable>
+          <Pressable onPress={() => navigation.navigate('FollowList', { userIds: profile.followers || [], title: 'Followers' })} style={{ alignItems: 'center' }}>
+            <Text style={{ ...typography.h4, color: colors.foreground }}>{profile.followers?.length || 0}</Text>
+            <Text style={{ ...typography.small, color: colors.textSecondary }}>Followers</Text>
+          </Pressable>
         </View>
 
-        <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginTop: spacing.lg, marginHorizontal: spacing.md, paddingVertical: spacing.md, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.border }}>
-          {[
-            { label: 'Reviews', count: reviews?.length || 0 },
-            { label: 'Following', count: profile.following.length },
-            { label: 'Followers', count: profile.followers.length },
-          ].map((stat) => (
-            <View key={stat.label} style={{ alignItems: 'center' }}>
-              <Text style={{ ...typography.h4, color: colors.foreground }}>{stat.count}</Text>
-              <Text style={{ ...typography.small, color: colors.textSecondary }}>{stat.label}</Text>
-            </View>
-          ))}
-        </View>
-
-        <View style={{ padding: spacing.md }}>
-          <Text style={{ ...typography.h4, color: colors.foreground, marginBottom: spacing.md }}>Reviews</Text>
-          {!reviews || reviews.length === 0 ? (
-            <Text style={{ ...typography.body, color: colors.textSecondary }}>No reviews yet</Text>
-          ) : (
-            reviews.map((review) => (
-              <View key={review.id} style={{ marginBottom: spacing.md }}>
-                <ReviewCard review={review} />
+        {/* Favourite Matches */}
+        {favoriteMatches.length > 0 && (
+          <View style={{ marginTop: spacing.md, paddingHorizontal: HORIZONTAL_PADDING, paddingVertical: spacing.md, backgroundColor: `${colors.accent}30`, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.border }}>
+            <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: spacing.sm }}>
+              Favourite Matches
+            </Text>
+            {favoriteMatchQueries.some((q) => q.isLoading) ? (
+              <View style={{ paddingVertical: spacing.lg, alignItems: 'center' }}>
+                <LoadingSpinner fullScreen={false} />
               </View>
-            ))
-          )}
+            ) : (
+              <View style={{ flexDirection: 'row', gap: GAP }}>
+                {favoriteMatches.map((match) => (
+                  <MatchPosterCard
+                    key={match.id}
+                    match={match}
+                    onPress={() => handleMatchPress(match.id)}
+                    width={CARD_WIDTH}
+                  />
+                ))}
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Recent Activity */}
+        {recentReviews.length > 0 && (
+          <View style={{ paddingHorizontal: HORIZONTAL_PADDING, paddingVertical: spacing.md, backgroundColor: `${colors.accent}30`, borderBottomWidth: 1, borderColor: colors.border }}>
+            <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: spacing.sm }}>
+              Recent Activity
+            </Text>
+            {recentMatchQueries.some((q) => q.isLoading) && recentMatchMap.size === 0 ? (
+              <View style={{ paddingVertical: spacing.lg, alignItems: 'center' }}>
+                <LoadingSpinner fullScreen={false} />
+              </View>
+            ) : (
+              <View style={{ flexDirection: 'row', gap: GAP }}>
+                {recentReviews.map((review) => {
+                  const match = recentMatchMap.get(review.matchId);
+                  const hasText = review.text.trim().length > 0;
+                  return match ? (
+                    <View key={review.id} style={{ width: CARD_WIDTH }}>
+                      <MatchPosterCard
+                        match={match}
+                        onPress={() => navigation.navigate('ReviewDetail', { reviewId: review.id })}
+                        width={CARD_WIDTH}
+                      />
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 4 }}>
+                        <StarRating rating={review.rating} size={10} />
+                        {hasText && (
+                          <Ionicons name="reorder-three" size={12} color={colors.textSecondary} style={{ marginLeft: 1 }} />
+                        )}
+                      </View>
+                    </View>
+                  ) : null;
+                })}
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Navigation links */}
+        <View style={{ marginTop: spacing.md, paddingHorizontal: spacing.md }}>
+          <View style={{ backgroundColor: colors.card, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' }}>
+            {navLinks.map((link, i) => (
+              <View
+                key={link.label}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  paddingVertical: spacing.md,
+                  paddingHorizontal: spacing.md,
+                  borderTopWidth: i > 0 ? 1 : 0,
+                  borderTopColor: colors.border,
+                }}
+              >
+                <Text style={{ ...typography.body, color: colors.foreground }}>{link.label}</Text>
+                <Text style={{ ...typography.caption, color: colors.textSecondary }}>{link.count}</Text>
+              </View>
+            ))}
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
