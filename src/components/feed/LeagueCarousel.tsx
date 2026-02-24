@@ -9,9 +9,10 @@ interface LeagueCarouselProps {
   title: string;
   matches: Match[];
   onMatchPress?: (matchId: number) => void;
+  onMorePress?: () => void;
 }
 
-export function LeagueCarousel({ title, matches, onMatchPress }: LeagueCarouselProps) {
+export function LeagueCarousel({ title, matches, onMatchPress, onMorePress }: LeagueCarouselProps) {
   const { theme } = useTheme();
   const { colors, spacing, typography } = theme;
 
@@ -29,10 +30,10 @@ export function LeagueCarousel({ title, matches, onMatchPress }: LeagueCarouselP
           marginBottom: spacing.sm,
         }}
       >
-        <Text style={{ ...typography.h4, color: colors.foreground }}>
+        <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1 }}>
           {title}
         </Text>
-        <Pressable style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+        <Pressable onPress={onMorePress} style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
           <Text style={{ ...typography.caption, color: colors.primary }}>More</Text>
           <Ionicons name="chevron-forward" size={14} color={colors.primary} />
         </Pressable>

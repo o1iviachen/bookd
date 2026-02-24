@@ -171,6 +171,7 @@ export function OnboardingMatchesScreen() {
                 value={pickerSearch}
                 onChangeText={setPickerSearch}
                 autoCapitalize="none"
+                autoCorrect={false}
                 autoFocus
                 style={{
                   flex: 1,

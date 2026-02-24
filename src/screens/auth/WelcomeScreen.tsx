@@ -18,7 +18,7 @@ export function WelcomeScreen({ navigation }: Props) {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <ImageBackground
-        source={require('../../../assets/grealish-background.jpeg')}
+        source={require('../../../assets/stadium-background.jpg')}
         style={StyleSheet.absoluteFill}
         resizeMode="cover"
       />
@@ -26,7 +26,7 @@ export function WelcomeScreen({ navigation }: Props) {
       {/* Gradient overlay — transparent at top, solid at bottom */}
       <LinearGradient
         colors={['transparent', `${colors.background}99`, `${colors.background}E6`, colors.background]}
-        locations={[0.2, 0.45, 0.6, 0.7]}
+        locations={[0.35, 0.55, 0.7, 0.8]}
         style={StyleSheet.absoluteFill}
       />
 

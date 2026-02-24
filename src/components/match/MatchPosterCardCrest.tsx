@@ -48,8 +48,7 @@ export function MatchPosterCardCrest({ match, onPress, width: widthProp }: Match
     >
       {/* Split diagonal gradient: home color top-left, away color bottom-right */}
       <LinearGradient
-        colors={[homeColor, '#14181c', awayColor]}
-        locations={[0, 0.5, 1]}
+        colors={[homeColor, awayColor]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={{ flex: 1 }}
@@ -75,18 +74,6 @@ export function MatchPosterCardCrest({ match, onPress, width: widthProp }: Match
             }}
             contentFit="contain"
           />
-
-          {/* VS divider */}
-          <Text
-            style={{
-              fontSize: CARD_WIDTH * 0.08,
-              fontWeight: '800',
-              color: 'rgba(255,255,255,0.3)',
-              letterSpacing: 1,
-            }}
-          >
-            v
-          </Text>
 
           {/* Away crest */}
           <Image

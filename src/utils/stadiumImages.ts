@@ -1,51 +1,52 @@
 // Maps home team ID to their stadium image URL
 // Uses verified Wikimedia Commons thumbnails (1280px wide, landscape)
+// All images are INTERIOR views (taken from inside the stadium looking at the pitch/stands)
 const STADIUM_IMAGES: Record<string, string> = {
   // Premier League
-  '57': 'https://upload.wikimedia.org/wikipedia/commons/thumb/2/29/London_Emirates_Stadium_arsenal.jpg/1280px-London_Emirates_Stadium_arsenal.jpg', // Arsenal - Emirates Stadium
-  '58': 'https://upload.wikimedia.org/wikipedia/commons/thumb/f/fe/Birmingham_aston_villa_park_stadium.jpg/1280px-Birmingham_aston_villa_park_stadium.jpg', // Aston Villa - Villa Park
-  '402': 'https://upload.wikimedia.org/wikipedia/commons/thumb/7/7e/Brentford_Gtech_Community_Stadium.jpg/1280px-Brentford_Gtech_Community_Stadium.jpg', // Brentford - Gtech
-  '397': 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/43/Amex_Community_Stadium.jpg/1280px-Amex_Community_Stadium.jpg', // Brighton - Amex
-  '61': 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/London_Stamford_Bridge.jpg/1280px-London_Stamford_Bridge.jpg', // Chelsea - Stamford Bridge
-  '354': 'https://upload.wikimedia.org/wikipedia/commons/thumb/6/66/2023_09_09_arne_mueseler_17_18_07_00743-Verbessert-RR_%2853283239217%29.jpg/1280px-2023_09_09_arne_mueseler_17_18_07_00743-Verbessert-RR_%2853283239217%29.jpg', // Crystal Palace - Selhurst Park
-  '62': 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/15/2023_07_31_arne_mueseler_00023-Verbessert-RR_%2853105680992%29.jpg/1280px-2023_07_31_arne_mueseler_00023-Verbessert-RR_%2853105680992%29.jpg', // Everton - Goodison Park
-  '341': 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/84/Leeds_United_-_31559864360.jpg/1280px-Leeds_United_-_31559864360.jpg', // Leeds - Elland Road
-  '64': 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/02/Panorama_of_Anfield_with_new_main_stand_%2829676137824%29.jpg/1280px-Panorama_of_Anfield_with_new_main_stand_%2829676137824%29.jpg', // Liverpool - Anfield
-  '65': 'https://upload.wikimedia.org/wikipedia/commons/thumb/2/27/City_of_Manchester_Stadium_2023_cropped.jpg/1280px-City_of_Manchester_Stadium_2023_cropped.jpg', // Man City - Etihad
-  '66': 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/1a/2023_07_31_arne_mueseler_00060-Verbessert-RR_%2853106651455%29.jpg/1280px-2023_07_31_arne_mueseler_00060-Verbessert-RR_%2853106651455%29.jpg', // Man Utd - Old Trafford
-  '67': 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Newcastle_st-james-park_stadium.jpg/1280px-Newcastle_st-james-park_stadium.jpg', // Newcastle - St James' Park
-  '351': 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ae/CityGroundFromAboveTrentBridgeCricketGround.jpg/1280px-CityGroundFromAboveTrentBridgeCricketGround.jpg', // Nottingham Forest - City Ground
-  '71': 'https://upload.wikimedia.org/wikipedia/commons/thumb/b/b1/Sunderland_stadium_of_light.jpg/1280px-Sunderland_stadium_of_light.jpg', // Sunderland - Stadium of Light
-  '73': 'https://upload.wikimedia.org/wikipedia/commons/thumb/b/be/London_Tottenham_Hotspur_Stadium.jpg/1280px-London_Tottenham_Hotspur_Stadium.jpg', // Tottenham
-  '563': 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/34/London_Olympic_Stadium_West_Ham.jpg/1280px-London_Olympic_Stadium_West_Ham.jpg', // West Ham - London Stadium
-  '76': 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/35/MolineuxStadium2022.jpg/1280px-MolineuxStadium2022.jpg', // Wolves - Molineux
-  '328': 'https://upload.wikimedia.org/wikipedia/commons/thumb/f/f0/Turf_Moor_-_Harry_Potts_Way_%28east%29.jpg/1280px-Turf_Moor_-_Harry_Potts_Way_%28east%29.jpg', // Burnley - Turf Moor
+  '57': 'https://upload.wikimedia.org/wikipedia/commons/thumb/d/d1/Emirates_Stadium_-_East_stand_Club_Level.jpg/1280px-Emirates_Stadium_-_East_stand_Club_Level.jpg', // Arsenal - Emirates Stadium (interior, East stand Club Level view)
+  '58': 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e6/-2007-05-05_Aston_Villa_v_Sheffield_United%2C_Villa_Park_from_the_Holt_End_%281%29.JPG/1280px--2007-05-05_Aston_Villa_v_Sheffield_United%2C_Villa_Park_from_the_Holt_End_%281%29.JPG', // Aston Villa - Villa Park (interior, from the Holte End)
+  '402': 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5c/Line-up_at_the_Brentford_v_Nottingham_Forest_football_match_on_21_December_2024_at_Brentford_Community_Stadium.jpg/1280px-Line-up_at_the_Brentford_v_Nottingham_Forest_football_match_on_21_December_2024_at_Brentford_Community_Stadium.jpg', // Brentford - Gtech (interior, match day lineup view)
+  '397': 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/4d/American_Express_Community_Stadium_on_09-08-2011_%28BHAFC_v_Gillingham%2C_League_Cup_First_Round%29_%281%29.JPG/1280px-American_Express_Community_Stadium_on_09-08-2011_%28BHAFC_v_Gillingham%2C_League_Cup_First_Round%29_%281%29.JPG', // Brighton - Amex (interior, match day view)
+  '61': 'https://upload.wikimedia.org/wikipedia/commons/thumb/7/76/Chelsea_2_Arsenal_0_%2815272717097%29.jpg/1280px-Chelsea_2_Arsenal_0_%2815272717097%29.jpg', // Chelsea - Stamford Bridge (interior, match day view)
+  '354': 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/4d/Crystal_Palace_vs._Norwich_City_%282019%29.jpg/1280px-Crystal_Palace_vs._Norwich_City_%282019%29.jpg', // Crystal Palace - Selhurst Park (interior, match day view)
+  '62': 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/06/GoodisonMay2025.jpg/1280px-GoodisonMay2025.jpg', // Everton - Goodison Park (interior, May 2025 view)
+  '341': 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/84/Leeds_United_-_31559864360.jpg/1280px-Leeds_United_-_31559864360.jpg', // Leeds - Elland Road (interior, South Stand view)
+  '64': 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/02/Panorama_of_Anfield_with_new_main_stand_%2829676137824%29.jpg/1280px-Panorama_of_Anfield_with_new_main_stand_%2829676137824%29.jpg', // Liverpool - Anfield (interior panorama with new Main Stand)
+  '65': 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/City_v_United_2020.jpg/1280px-City_v_United_2020.jpg', // Man City - Etihad (interior, Carabao Cup semi-final Man City v Man Utd 2020)
+  '66': 'https://upload.wikimedia.org/wikipedia/commons/thumb/7/74/Inside_Old_Trafford_Football_Stadium_-_geograph.org.uk_-_1777320.jpg/1280px-Inside_Old_Trafford_Football_Stadium_-_geograph.org.uk_-_1777320.jpg', // Man Utd - Old Trafford (interior view)
+  '67': 'https://upload.wikimedia.org/wikipedia/commons/thumb/d/de/Newcastle_United_vs_Wolverhampton_Wanderers%2C_25_February_2012.jpg/1280px-Newcastle_United_vs_Wolverhampton_Wanderers%2C_25_February_2012.jpg', // Newcastle - St James' Park (interior, match day view)
+  '351': 'https://upload.wikimedia.org/wikipedia/commons/thumb/b/ba/Trent_End_City_Ground_August_2022.jpeg/1280px-Trent_End_City_Ground_August_2022.jpeg', // Nottingham Forest - City Ground (interior, Trent End view)
+  '71': 'https://upload.wikimedia.org/wikipedia/commons/thumb/6/66/Stadium_Light_Sunderland_1.jpg/1280px-Stadium_Light_Sunderland_1.jpg', // Sunderland - Stadium of Light (interior view)
+  '73': 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/45/South_stand_of_Tottenham_Hotspur_Stadium%2C_December_2020.jpg/1280px-South_stand_of_Tottenham_Hotspur_Stadium%2C_December_2020.jpg', // Tottenham (interior, South Stand view)
+  '563': 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c0/West_Ham_London_Stadium_Panorama.jpg/1280px-West_Ham_London_Stadium_Panorama.jpg', // West Ham - London Stadium (interior panorama)
+  '76': 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/35/MolineuxStadium2022.jpg/1280px-MolineuxStadium2022.jpg', // Wolves - Molineux (interior view)
+  '328': 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/cc/Turf_Moor_panorama.jpg/1280px-Turf_Moor_panorama.jpg', // Burnley - Turf Moor (interior panorama)
 
   // La Liga
-  '78': 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Atleti_vs_Villarreal_-_September_2025.jpg/1280px-Atleti_vs_Villarreal_-_September_2025.jpg', // Atletico Madrid - Metropolitano
-  '81': 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ad/Camp_Nou_aerial.jpg/1280px-Camp_Nou_aerial.jpg', // Barcelona - Camp Nou
-  '86': 'https://upload.wikimedia.org/wikipedia/commons/thumb/b/b5/Estadio_Santiago_Bernab%C3%A9u_%282014%29.JPG/1280px-Estadio_Santiago_Bernab%C3%A9u_%282014%29.JPG', // Real Madrid - Bernabéu
-  '95': 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/03/CAMP_DE_MESTALLA_GRADA_DE_LA_MAR_2014.JPG/1280px-CAMP_DE_MESTALLA_GRADA_DE_LA_MAR_2014.JPG', // Valencia - Mestalla
+  '78': 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Atleti_vs_Villarreal_-_September_2025.jpg/1280px-Atleti_vs_Villarreal_-_September_2025.jpg', // Atletico Madrid - Metropolitano (interior, match day)
+  '81': 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c9/Camp_Nou_%282%29.jpg/1280px-Camp_Nou_%282%29.jpg', // Barcelona - Camp Nou (interior view of pitch and stands)
+  '86': 'https://upload.wikimedia.org/wikipedia/commons/thumb/f/fa/Santiagobernabeupanorama.jpg/1280px-Santiagobernabeupanorama.jpg', // Real Madrid - Bernabeu (interior panorama)
+  '95': 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/03/CAMP_DE_MESTALLA_GRADA_DE_LA_MAR_2014.JPG/1280px-CAMP_DE_MESTALLA_GRADA_DE_LA_MAR_2014.JPG', // Valencia - Mestalla (interior, Grada de la Mar stand view)
 
   // Bundesliga
-  '5': 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e9/Allianz_Arena_2008-02-09.jpg/1280px-Allianz_Arena_2008-02-09.jpg', // Bayern Munich - Allianz Arena
-  '3': 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/ef/Bayarena_Leverkusen_2020.jpg/1280px-Bayarena_Leverkusen_2020.jpg', // Bayer Leverkusen - BayArena
-  '4': 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/13/Signal_iduna_park_stadium_dortmund_4.jpg/1280px-Signal_iduna_park_stadium_dortmund_4.jpg', // Borussia Dortmund - Signal Iduna
+  '5': 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9c/Allianz_Arena_%2822916770899%29.jpg/1280px-Allianz_Arena_%2822916770899%29.jpg', // Bayern Munich - Allianz Arena (interior view)
+  '3': 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/ea/BayArena_from_Grass_Level.jpg/1280px-BayArena_from_Grass_Level.jpg', // Bayer Leverkusen - BayArena (interior, pitch level view)
+  '4': 'https://upload.wikimedia.org/wikipedia/commons/thumb/6/69/Auftakt_Westfalenstadion_2010_Panorama_Gro%C3%9F.jpg/1280px-Auftakt_Westfalenstadion_2010_Panorama_Gro%C3%9F.jpg', // Borussia Dortmund - Signal Iduna Park (interior panorama)
   '721': 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/ca/Leipzig_stadium.jpg/1280px-Leipzig_stadium.jpg', // RB Leipzig
   '19': 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9c/Deutsche_bank_park.jpg/1280px-Deutsche_bank_park.jpg', // Eintracht Frankfurt
   '10': 'https://upload.wikimedia.org/wikipedia/commons/thumb/7/7f/Stuttgart_stadium.jpg/1280px-Stuttgart_stadium.jpg', // VfB Stuttgart - MHP Arena
 
   // Serie A
-  '108': 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/17/Stadio_Meazza_2021_3.jpg/1280px-Stadio_Meazza_2021_3.jpg', // Inter Milan - San Siro
-  '98': 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/17/Stadio_Meazza_2021_3.jpg/1280px-Stadio_Meazza_2021_3.jpg', // AC Milan - San Siro (shared)
-  '109': 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/84/Allianz_Stadium_dal_Colle_della_Maddalena.jpg/1280px-Allianz_Stadium_dal_Colle_della_Maddalena.jpg', // Juventus - Allianz Stadium
-  '113': 'https://upload.wikimedia.org/wikipedia/commons/thumb/7/71/Stadio_Maradona_Serie_A.jpg/1280px-Stadio_Maradona_Serie_A.jpg', // Napoli - Maradona
-  '100': 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5f/Stadio_Olimpico_2024.jpg/1280px-Stadio_Olimpico_2024.jpg', // Roma - Olimpico
-  '110': 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5f/Stadio_Olimpico_2024.jpg/1280px-Stadio_Olimpico_2024.jpg', // Lazio - Olimpico (shared)
+  '108': 'https://upload.wikimedia.org/wikipedia/commons/thumb/d/d6/The_San_Siro_stadium_during_a_Inter_match_in_2019.jpg/1280px-The_San_Siro_stadium_during_a_Inter_match_in_2019.jpg', // Inter Milan - San Siro (interior, match day)
+  '98': 'https://upload.wikimedia.org/wikipedia/commons/thumb/2/23/The_San_Siro_Stadium_before_a_match_between_AC_Milan_and_SSC_Napoli_in_December_2021.jpg/1280px-The_San_Siro_Stadium_before_a_match_between_AC_Milan_and_SSC_Napoli_in_December_2021.jpg', // AC Milan - San Siro (interior, pre-match)
+  '109': 'https://upload.wikimedia.org/wikipedia/commons/thumb/d/db/Inside_Juventus_Stadium.jpg/1280px-Inside_Juventus_Stadium.jpg', // Juventus - Allianz Stadium (interior view)
+  '113': 'https://upload.wikimedia.org/wikipedia/commons/thumb/7/71/Stadio_Maradona_Serie_A.jpg/1280px-Stadio_Maradona_Serie_A.jpg', // Napoli - Maradona (interior panorama, Serie A match)
+  '100': 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c6/Stadio_Olimpico_%28Rome%29_-_2014_-_AS_Roma_v_Juventus_FC.jpg/1280px-Stadio_Olimpico_%28Rome%29_-_2014_-_AS_Roma_v_Juventus_FC.jpg', // Roma - Olimpico (interior, match day)
+  '110': 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c6/Stadio_Olimpico_%28Rome%29_-_2014_-_AS_Roma_v_Juventus_FC.jpg/1280px-Stadio_Olimpico_%28Rome%29_-_2014_-_AS_Roma_v_Juventus_FC.jpg', // Lazio - Olimpico (shared, interior match day)
 
   // Ligue 1
-  '524': 'https://upload.wikimedia.org/wikipedia/en/thumb/f/fd/Paris_Le_Parc_des_Princes.jpg/1280px-Paris_Le_Parc_des_Princes.jpg', // PSG - Parc des Princes
-  '523': 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e5/Groupama_Stadium%2C_Lyon%2C_sans_la_pelouse_%28juin_2024%29.jpg/1280px-Groupama_Stadium%2C_Lyon%2C_sans_la_pelouse_%28juin_2024%29.jpg', // Lyon - Groupama
+  '524': 'https://upload.wikimedia.org/wikipedia/commons/thumb/d/dc/Parc_des_Princes_Paris_Saint_Germain_z_07.jpg/1280px-Parc_des_Princes_Paris_Saint_Germain_z_07.jpg', // PSG - Parc des Princes (interior, match day view)
+  '523': 'https://upload.wikimedia.org/wikipedia/commons/thumb/d/d2/Int%C3%A9rieur_POL.JPG/1280px-Int%C3%A9rieur_POL.JPG', // Lyon - Groupama Stadium (interior view)
 };
 
 /**

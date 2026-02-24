@@ -8,8 +8,6 @@ export const LEAGUES = {
   CHAMPIONS_LEAGUE: { id: 2001, code: 'CL', name: 'Champions League' },
 } as const;
 
-export const LEAGUE_LIST = Object.values(LEAGUES);
-
 export const MATCH_TAGS = [
   'Thriller',
   'Boring',

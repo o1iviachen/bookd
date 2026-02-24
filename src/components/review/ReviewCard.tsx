@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useVoteOnReview } from '../../hooks/useReviews';
+import { useUserProfile } from '../../hooks/useUser';
 import { Avatar } from '../ui/Avatar';
 import { StarRating } from '../ui/StarRating';
 import { VoteButtons } from './VoteButtons';
@@ -22,6 +23,11 @@ export function ReviewCard({ review, onPress, commentCount }: ReviewCardProps) {
   const { colors, spacing, typography, borderRadius } = theme;
   const { user } = useAuth();
   const voteMutation = useVoteOnReview();
+  const { data: authorProfile } = useUserProfile(review.userId);
+  const displayName = authorProfile?.displayName || authorProfile?.username || review.username;
+  const displayUsername = authorProfile?.username || review.username;
+  const displayAvatar = authorProfile?.avatar ?? review.userAvatar;
+  const reviewerLikedMatch = authorProfile?.likedMatchIds?.some((id) => String(id) === String(review.matchId)) || false;
 
   const handleLike = () => {
     if (!user) return;
@@ -44,13 +50,21 @@ export function ReviewCard({ review, onPress, commentCount }: ReviewCardProps) {
     >
       {/* User header */}
       <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm }}>
-        <Avatar uri={review.userAvatar} name={review.username} size={40} />
+        <Avatar uri={displayAvatar} name={displayName} size={40} />
         <View style={{ marginLeft: spacing.sm, flex: 1 }}>
-          <Text style={{ ...typography.bodyBold, color: colors.foreground }}>
-            {review.username}
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+            <Text style={{ ...typography.bodyBold, color: colors.foreground }} numberOfLines={1}>
+              {displayName}
+            </Text>
+            <Text style={{ ...typography.small, color: colors.textSecondary }} numberOfLines={1}>
+              @{displayUsername}
+            </Text>
+          </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: 2 }}>
             <StarRating rating={review.rating} size={12} />
+            {reviewerLikedMatch && (
+              <Ionicons name="heart" size={12} color="#ef4444" />
+            )}
             <Text style={{ ...typography.small, color: colors.textSecondary }}>
               {formatRelativeTime(review.createdAt)}
               {review.editedAt ? ' (edited)' : ''}

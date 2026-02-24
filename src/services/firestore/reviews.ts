@@ -1,5 +1,6 @@
 import {
   collection,
+  collectionGroup,
   doc,
   addDoc,
   getDoc,
@@ -176,6 +177,40 @@ export async function voteOnReview(
       });
     }
   }
+}
+
+export async function getReviewUpvoterIds(reviewId: string): Promise<string[]> {
+  const votesRef = collection(db, 'reviews', reviewId, 'votes');
+  const q = query(votesRef, where('voteType', '==', 'up'));
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map((d) => d.id);
+}
+
+export async function getReviewsUpvotedByUser(userId: string, currentUserId?: string): Promise<Review[]> {
+  const votesQuery = query(
+    collectionGroup(db, 'votes'),
+    where('voteType', '==', 'up')
+  );
+  const votesSnapshot = await getDocs(votesQuery);
+  const reviewIds: string[] = [];
+  votesSnapshot.docs.forEach((d) => {
+    if (d.id === userId) {
+      const reviewId = d.ref.parent.parent?.id;
+      if (reviewId) reviewIds.push(reviewId);
+    }
+  });
+
+  if (reviewIds.length === 0) return [];
+
+  const reviews = await Promise.all(
+    reviewIds.map(async (id) => {
+      const reviewSnap = await getDoc(doc(db, 'reviews', id));
+      if (!reviewSnap.exists()) return null;
+      const vote = currentUserId ? await getUserVote(id, currentUserId) : null;
+      return docToReview(reviewSnap, vote);
+    })
+  );
+  return reviews.filter(Boolean) as Review[];
 }
 
 export async function updateReview(

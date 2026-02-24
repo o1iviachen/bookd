@@ -5,6 +5,7 @@ import {
   ScrollView,
   Pressable,
   TextInput as RNTextInput,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -181,77 +182,93 @@ export function FAQScreen() {
             </Text>
           </View>
         ) : (
-          categories.map((category) => {
-            const categoryFAQs = filteredFAQs.filter((f) => f.category === category);
-            return (
-              <View key={category} style={{ marginBottom: spacing.xl }}>
-                <Text
-                  style={{
-                    fontSize: 11,
-                    fontWeight: '600',
-                    color: colors.textSecondary,
-                    textTransform: 'uppercase',
-                    letterSpacing: 1,
-                    marginBottom: spacing.md,
-                  }}
-                >
-                  {category}
-                </Text>
-                {categoryFAQs.map((faq) => {
-                  const isExpanded = expandedId === faq.id;
-                  return (
-                    <Pressable
-                      key={faq.id}
-                      onPress={() => toggleQuestion(faq.id)}
-                      style={{
-                        borderBottomWidth: 1,
-                        borderBottomColor: colors.border,
-                        paddingVertical: spacing.md,
-                      }}
-                    >
-                      <View
+          <>
+            {categories.map((category) => {
+              const categoryFAQs = filteredFAQs.filter((f) => f.category === category);
+              return (
+                <View key={category} style={{ marginBottom: spacing.xl }}>
+                  <Text
+                    style={{
+                      fontSize: 11,
+                      fontWeight: '600',
+                      color: colors.textSecondary,
+                      textTransform: 'uppercase',
+                      letterSpacing: 1,
+                      marginBottom: spacing.md,
+                    }}
+                  >
+                    {category}
+                  </Text>
+                  {categoryFAQs.map((faq) => {
+                    const isExpanded = expandedId === faq.id;
+                    return (
+                      <Pressable
+                        key={faq.id}
+                        onPress={() => toggleQuestion(faq.id)}
                         style={{
-                          flexDirection: 'row',
-                          alignItems: 'flex-start',
-                          justifyContent: 'space-between',
-                          gap: spacing.sm,
+                          borderBottomWidth: 1,
+                          borderBottomColor: colors.border,
+                          paddingVertical: spacing.md,
                         }}
                       >
-                        <Text
+                        <View
                           style={{
-                            flex: 1,
-                            fontSize: 17,
-                            fontWeight: '600',
-                            color: colors.foreground,
+                            flexDirection: 'row',
+                            alignItems: 'flex-start',
+                            justifyContent: 'space-between',
+                            gap: spacing.sm,
                           }}
                         >
-                          {faq.question}
-                        </Text>
-                        <Ionicons
-                          name={isExpanded ? 'chevron-up' : 'chevron-down'}
-                          size={20}
-                          color={colors.textSecondary}
-                          style={{ marginTop: 2 }}
-                        />
-                      </View>
-                      {isExpanded && (
-                        <Text
-                          style={{
-                            ...typography.body,
-                            color: colors.textSecondary,
-                            lineHeight: 22,
-                            marginTop: spacing.sm,
-                          }}
-                        >
-                          {faq.answer}
-                        </Text>
-                      )}
-                    </Pressable>
-                  );
-                })}
-              </View>
-            );
-          })
+                          <Text
+                            style={{
+                              flex: 1,
+                              fontSize: 17,
+                              fontWeight: '600',
+                              color: colors.foreground,
+                            }}
+                          >
+                            {faq.question}
+                          </Text>
+                          <Ionicons
+                            name={isExpanded ? 'chevron-up' : 'chevron-down'}
+                            size={20}
+                            color={colors.textSecondary}
+                            style={{ marginTop: 2 }}
+                          />
+                        </View>
+                        {isExpanded && (
+                          <Text
+                            style={{
+                              ...typography.body,
+                              color: colors.textSecondary,
+                              lineHeight: 22,
+                              marginTop: spacing.sm,
+                            }}
+                          >
+                            {faq.answer}
+                          </Text>
+                        )}
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              );
+            })}
+
+            {/* Contact */}
+            <View style={{ alignItems: 'center', marginTop: spacing.md, marginBottom: spacing.lg }}>
+              <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center' }}>
+                Still need help? Reach out to us at
+              </Text>
+              <Pressable
+                onPress={() => Linking.openURL('mailto:support@bookd.app?subject=bookd%20Support%20Request')}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: spacing.sm, backgroundColor: colors.primary, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: borderRadius.md }}
+              >
+                <Ionicons name="mail-outline" size={18} color="#14181c" />
+                <Text style={{ ...typography.bodyBold, color: '#14181c' }}>support@bookd.app</Text>
+              </Pressable>
+            </View>
+          </>
         )}
       </ScrollView>
     </SafeAreaView>

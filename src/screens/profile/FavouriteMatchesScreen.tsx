@@ -187,6 +187,7 @@ export function FavouriteMatchesScreen() {
                 value={pickerSearch}
                 onChangeText={setPickerSearch}
                 autoCapitalize="none"
+                autoCorrect={false}
                 style={{
                   flex: 1,
                   paddingLeft: 10,

@@ -12,6 +12,8 @@ import { getMatchById } from '../../services/matchService';
 import { TeamLogo } from '../../components/match/TeamLogo';
 import { StarRating } from '../../components/ui/StarRating';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
+import { ScreenHeader } from '../../components/ui/ScreenHeader';
+import { EmptyState } from '../../components/ui/EmptyState';
 import { Review } from '../../types/review';
 import { Match } from '../../types/match';
 
@@ -70,44 +72,14 @@ export function DiaryScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
-      {/* Header */}
-      <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          paddingHorizontal: spacing.md,
-          paddingVertical: spacing.sm,
-          borderBottomWidth: 1,
-          borderBottomColor: colors.border,
-        }}
-      >
-        <Pressable onPress={() => navigation.goBack()} hitSlop={8}>
-          <Ionicons name="arrow-back" size={22} color={colors.foreground} />
-        </Pressable>
-        <Text
-          style={{
-            ...typography.bodyBold,
-            color: colors.foreground,
-            flex: 1,
-            textAlign: 'center',
-            fontSize: 17,
-          }}
-        >
-          Diary
-        </Text>
-        <View style={{ width: 22 }} />
-      </View>
+      <ScreenHeader title="Diary" onBack={() => navigation.goBack()} />
 
       {sections.length === 0 ? (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl }}>
-          <Ionicons name="book-outline" size={48} color={colors.textSecondary} />
-          <Text style={{ ...typography.h4, color: colors.foreground, marginTop: spacing.md }}>
-            No entries yet
-          </Text>
-          <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.xs }}>
-            Start logging matches to build your diary
-          </Text>
-        </View>
+        <EmptyState
+          icon="book-outline"
+          title="No entries yet"
+          subtitle="Start logging matches to build your diary"
+        />
       ) : (
         <SectionList
           indicatorStyle={isDark ? 'white' : 'default'}
@@ -257,7 +229,7 @@ function DiaryEntry({
             <Ionicons name="heart" size={12} color="#ef4444" />
           )}
           {hasText && (
-            <Ionicons name="reorder-three" size={14} color={colors.textSecondary} />
+            <Ionicons name="reorder-three-outline" size={14} color={colors.textSecondary} />
           )}
         </View>
       </View>

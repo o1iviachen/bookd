@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, Pressable, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import { View, Text, Pressable, KeyboardAvoidingView, Platform, Alert, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -72,8 +72,7 @@ export function CreateListScreen({ navigation }: Props) {
           />
 
           {/* Ranked toggle */}
-          <Pressable
-            onPress={() => setRanked(!ranked)}
+          <View
             style={{
               flexDirection: 'row',
               alignItems: 'center',
@@ -82,18 +81,19 @@ export function CreateListScreen({ navigation }: Props) {
               marginBottom: spacing.sm,
             }}
           >
-            <View>
+            <View style={{ flex: 1, marginRight: spacing.md }}>
               <Text style={{ ...typography.bodyBold, color: colors.foreground }}>Ranked list</Text>
               <Text style={{ ...typography.caption, color: colors.textSecondary, marginTop: 2 }}>
                 Manually order matches by your ranking
               </Text>
             </View>
-            <Ionicons
-              name={ranked ? 'checkbox' : 'square-outline'}
-              size={24}
-              color={ranked ? colors.primary : colors.textSecondary}
+            <Switch
+              value={ranked}
+              onValueChange={setRanked}
+              trackColor={{ false: colors.muted, true: colors.primary }}
+              thumbColor="#fff"
             />
-          </Pressable>
+          </View>
 
           <Button
             title="Create List"

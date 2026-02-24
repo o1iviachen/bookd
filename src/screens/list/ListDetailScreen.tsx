@@ -1,18 +1,25 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, ScrollView, Pressable, Alert, Modal, useWindowDimensions } from 'react-native';
+import { View, Text, ScrollView, Pressable, Alert, useWindowDimensions, TextInput as RNTextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQueries } from '@tanstack/react-query';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
-import { useList, useDeleteList } from '../../hooks/useLists';
+import { useUserProfile } from '../../hooks/useUser';
+import { useList, useDeleteList, useListLikedBy, useToggleListLike, useListComments, useCreateListComment, useDeleteListComment } from '../../hooks/useLists';
 import { getMatchById } from '../../services/matchService';
+import { getUserProfile } from '../../services/firestore/users';
 import { MatchPosterCard } from '../../components/match/MatchPosterCard';
 import { MatchFilters, MatchFilterState, applyMatchFilters } from '../../components/match/MatchFilters';
+import { Avatar } from '../../components/ui/Avatar';
 import { Select } from '../../components/ui/Select';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
+import { ScreenHeader } from '../../components/ui/ScreenHeader';
+import { ActionMenu } from '../../components/ui/ActionMenu';
+import { LikedByModal } from '../../components/ui/LikedByModal';
 import { formatRelativeTime } from '../../utils/formatDate';
 import { Match } from '../../types/match';
+import { User } from '../../types/user';
 
 const NUM_COLUMNS = 3;
 
@@ -33,13 +40,51 @@ export function ListDetailScreen({ route, navigation }: any) {
   const HORIZONTAL_PADDING = spacing.md;
   const CARD_WIDTH = (screenWidth - HORIZONTAL_PADDING * 2 - GAP * (NUM_COLUMNS - 1)) / NUM_COLUMNS;
   const { user } = useAuth();
+  const { data: profile } = useUserProfile(user?.uid || '');
   const { data: list, isLoading } = useList(listId);
   const deleteListMutation = useDeleteList();
+  const { data: likedBy } = useListLikedBy(listId);
+  const toggleLike = useToggleListLike();
+  const { data: comments } = useListComments(listId);
+  const createComment = useCreateListComment();
+  const deleteComment = useDeleteListComment();
   const [sortBy, setSortBy] = useState<SortBy>('list');
   const [showMenu, setShowMenu] = useState(false);
+  const [showLikes, setShowLikes] = useState(false);
   const [filters, setFilters] = useState<MatchFilterState>({ league: 'all', team: 'all', season: 'all' });
+  const [commentText, setCommentText] = useState('');
+
+  const { data: listAuthorProfile } = useUserProfile(list?.userId || '');
+  const listAuthorName = listAuthorProfile?.displayName || listAuthorProfile?.username || list?.username || '';
+  const listAuthorUsername = listAuthorProfile?.username || list?.username || '';
+
+  const isLiked = likedBy?.includes(user?.uid || '') || false;
+  const likeCount = likedBy?.length || 0;
 
   const isOwner = user?.uid === list?.userId;
+
+  // Fetch user profiles for likers
+  const likerQueries = useQueries({
+    queries: (likedBy || []).map((uid) => ({
+      queryKey: ['user', uid],
+      queryFn: () => getUserProfile(uid),
+      staleTime: 60 * 1000,
+      enabled: showLikes && (likedBy?.length || 0) > 0,
+    })),
+  });
+
+  const sortedLikers = useMemo(() => {
+    const likers: User[] = [];
+    likerQueries.forEach((q) => {
+      if (q.data) likers.push(q.data);
+    });
+    const following = profile?.following || [];
+    return likers.sort((a, b) => {
+      const aFollowed = following.includes(a.id) ? 0 : 1;
+      const bFollowed = following.includes(b.id) ? 0 : 1;
+      return aFollowed - bFollowed;
+    });
+  }, [likerQueries, profile?.following]);
 
   // Fetch match data for all matchIds
   const matchQueries = useQueries({
@@ -80,6 +125,27 @@ export function ListDetailScreen({ route, navigation }: any) {
     return result;
   }, [matches, filters, sortBy]);
 
+  // Fetch current profiles for comment authors
+  const commentAuthorIds = useMemo(
+    () => [...new Set((comments || []).map((c) => c.userId))],
+    [comments]
+  );
+  const commentAuthorQueries = useQueries({
+    queries: commentAuthorIds.map((id) => ({
+      queryKey: ['user', id],
+      queryFn: () => getUserProfile(id),
+      staleTime: 2 * 60 * 1000,
+      enabled: commentAuthorIds.length > 0,
+    })),
+  });
+  const commentAuthorMap = useMemo(() => {
+    const map = new Map<string, { username: string; displayName: string; avatar: string | null }>();
+    commentAuthorQueries.forEach((q) => {
+      if (q.data) map.set(q.data.id, { username: q.data.username, displayName: q.data.displayName || q.data.username, avatar: q.data.avatar });
+    });
+    return map;
+  }, [commentAuthorQueries]);
+
   if (isLoading || !list) return <LoadingSpinner />;
 
   const handleEdit = () => {
@@ -114,82 +180,39 @@ export function ListDetailScreen({ route, navigation }: any) {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
-      {/* Header */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border }}>
-        <Pressable onPress={() => navigation.goBack()} hitSlop={8}>
-          <Ionicons name="arrow-back" size={22} color={colors.foreground} />
-        </Pressable>
-        <Text style={{ ...typography.bodyBold, color: colors.foreground, flex: 1, textAlign: 'center', fontSize: 16 }}>
-          List
-        </Text>
-        {isOwner ? (
-          <Pressable onPress={() => setShowMenu(true)} hitSlop={8}>
-            <Ionicons name="ellipsis-horizontal" size={22} color={colors.foreground} />
-          </Pressable>
-        ) : (
-          <View style={{ width: 22 }} />
-        )}
-      </View>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={0}>
+      <ScreenHeader
+        title="List"
+        onBack={() => navigation.goBack()}
+        rightElement={
+          isOwner ? (
+            <Pressable onPress={() => setShowMenu(true)} hitSlop={8}>
+              <Ionicons name="ellipsis-horizontal" size={22} color={colors.foreground} />
+            </Pressable>
+          ) : undefined
+        }
+      />
 
-      {/* Three-dot action menu */}
-      <Modal
+      <ActionMenu
         visible={showMenu}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowMenu(false)}
-      >
-        <Pressable
-          onPress={() => setShowMenu(false)}
-          style={{ flex: 1, backgroundColor: colors.overlay, justifyContent: 'center', alignItems: 'center', padding: spacing.xl }}
-        >
-          <Pressable
-            onPress={(e) => e.stopPropagation()}
-            style={{
-              width: '100%',
-              maxWidth: 280,
-              backgroundColor: colors.card,
-              borderRadius: borderRadius.lg,
-              overflow: 'hidden',
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 8 },
-              shadowOpacity: 0.3,
-              shadowRadius: 16,
-              elevation: 12,
-            }}
-          >
-            <Pressable
-              onPress={handleEdit}
-              style={({ pressed }) => ({
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: spacing.sm,
-                paddingHorizontal: spacing.md,
-                paddingVertical: spacing.md,
-                backgroundColor: pressed ? colors.muted : 'transparent',
-                borderBottomWidth: 1,
-                borderBottomColor: colors.border,
-              })}
-            >
-              <Ionicons name="create-outline" size={20} color={colors.foreground} />
-              <Text style={{ ...typography.body, color: colors.foreground }}>Edit list</Text>
-            </Pressable>
-            <Pressable
-              onPress={handleDelete}
-              style={({ pressed }) => ({
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: spacing.sm,
-                paddingHorizontal: spacing.md,
-                paddingVertical: spacing.md,
-                backgroundColor: pressed ? colors.muted : 'transparent',
-              })}
-            >
-              <Ionicons name="trash-outline" size={20} color="#ef4444" />
-              <Text style={{ ...typography.body, color: '#ef4444' }}>Delete list</Text>
-            </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
+        onClose={() => setShowMenu(false)}
+        items={[
+          { label: 'Edit list', icon: 'create-outline', onPress: handleEdit },
+          { label: 'Delete list', icon: 'trash-outline', onPress: handleDelete, destructive: true },
+        ]}
+      />
+
+      <LikedByModal
+        visible={showLikes}
+        onClose={() => setShowLikes(false)}
+        likers={sortedLikers}
+        isLoading={likerQueries.some((q) => q.isLoading) && sortedLikers.length === 0}
+        following={profile?.following || []}
+        onUserPress={(userId) => {
+          setShowLikes(false);
+          navigation.navigate('UserProfile', { userId });
+        }}
+      />
 
       <ScrollView
         indicatorStyle={isDark ? 'white' : 'default'}
@@ -207,16 +230,44 @@ export function ListDetailScreen({ route, navigation }: any) {
             )}
           </View>
           <Text style={{ ...typography.caption, color: colors.textSecondary, marginTop: spacing.xs }}>
-            by {list.username} &middot; {formatRelativeTime(list.createdAt)}
+            by <Text style={{ fontWeight: '600', color: colors.foreground }}>{listAuthorName}</Text> @{listAuthorUsername} &middot; {formatRelativeTime(list.createdAt)}
           </Text>
           {list.description ? (
             <Text style={{ ...typography.body, color: colors.textSecondary, marginTop: spacing.sm }}>
               {list.description}
             </Text>
           ) : null}
-          <Text style={{ ...typography.bodyBold, color: colors.foreground, marginTop: spacing.md }}>
-            {list.matchIds.length} {list.matchIds.length === 1 ? 'match' : 'matches'}
-          </Text>
+          {/* Like + stats row */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: spacing.md }}>
+            <Pressable
+              onPress={() => {
+                if (!user) return;
+                toggleLike.mutate({
+                  listId: list.id,
+                  userId: user.uid,
+                  senderInfo: profile ? { username: profile.username, avatar: profile.avatar } : undefined,
+                });
+              }}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+            >
+              <Ionicons name={isLiked ? 'heart' : 'heart-outline'} size={20} color={isLiked ? '#ef4444' : colors.textSecondary} />
+            </Pressable>
+            {likeCount > 0 && (
+              <Pressable onPress={() => setShowLikes(true)} hitSlop={6}>
+                <Text style={{ ...typography.caption, color: isLiked ? '#ef4444' : colors.textSecondary }}>{likeCount}</Text>
+              </Pressable>
+            )}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Ionicons name="chatbubble-outline" size={18} color={colors.textSecondary} />
+              {(comments?.length || 0) > 0 && (
+                <Text style={{ ...typography.caption, color: colors.textSecondary }}>{comments?.length}</Text>
+              )}
+            </View>
+            <Text style={{ ...typography.caption, color: colors.textSecondary }}>
+              {list.matchIds.length} {list.matchIds.length === 1 ? 'match' : 'matches'}
+            </Text>
+          </View>
+
         </View>
 
         {/* Filters */}
@@ -256,7 +307,7 @@ export function ListDetailScreen({ route, navigation }: any) {
               No matches yet
             </Text>
             <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.xs }}>
-              Add matches to your list
+              {isOwner ? 'Add matches to start building your list' : 'This list has no matches yet'}
             </Text>
           </View>
         ) : (
@@ -265,20 +316,18 @@ export function ListDetailScreen({ route, navigation }: any) {
               {displayMatches.map((match) => {
                 const listIndex = list.matchIds.indexOf(match.id);
                 return (
-                  <Pressable
-                    key={match.id}
-                    onPress={() => navigation.navigate('MatchDetail', { matchId: match.id })}
-                  >
+                  <View key={match.id} style={{ position: 'relative' }}>
                     <MatchPosterCard
                       match={match}
                       width={CARD_WIDTH}
+                      onPress={() => navigation.navigate('MatchDetail', { matchId: match.id })}
                     />
                     {/* Rank badge for ranked lists */}
                     {showRankedControls && (
-                      <View style={{
+                      <View pointerEvents="none" style={{
                         position: 'absolute',
-                        top: 4,
-                        right: 4,
+                        top: spacing.sm,
+                        right: spacing.sm,
                         backgroundColor: 'rgba(0,0,0,0.7)',
                         borderRadius: 10,
                         minWidth: 20,
@@ -292,13 +341,125 @@ export function ListDetailScreen({ route, navigation }: any) {
                         </Text>
                       </View>
                     )}
-                  </Pressable>
+                  </View>
                 );
               })}
             </View>
           </View>
         )}
+        {/* ---- Discussion ---- */}
+        <View style={{ borderTopWidth: 1, borderTopColor: colors.border, marginTop: spacing.lg }}>
+          <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 15, marginBottom: spacing.md, paddingTop: spacing.lg, paddingHorizontal: spacing.md }}>
+            Discussion
+          </Text>
+        </View>
+
+        {(comments || []).length === 0 ? (
+          <View style={{ alignItems: 'center', paddingVertical: spacing.xl }}>
+            <Ionicons name="chatbubbles-outline" size={36} color={colors.textSecondary} />
+            <Text style={{ ...typography.body, color: colors.textSecondary, marginTop: spacing.sm }}>
+              No comments yet. Start the conversation!
+            </Text>
+          </View>
+        ) : (
+          <View style={{ paddingHorizontal: spacing.md }}>
+            {(comments || []).map((comment) => {
+              const cAuthor = commentAuthorMap.get(comment.userId);
+              const cDisplayName = cAuthor?.displayName || cAuthor?.username || comment.username;
+              const cDisplayUsername = cAuthor?.username || comment.username;
+              const cDisplayAvatar = cAuthor?.avatar ?? comment.userAvatar;
+              return (
+                <View key={comment.id} style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md }}>
+                  <Pressable onPress={() => navigation.navigate('UserProfile', { userId: comment.userId })}>
+                    <Avatar uri={cDisplayAvatar} name={cDisplayName} size={32} />
+                  </Pressable>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+                      <Pressable onPress={() => navigation.navigate('UserProfile', { userId: comment.userId })}>
+                        <Text style={{ ...typography.caption, color: colors.foreground, fontWeight: '600' }}>
+                          {cDisplayName}
+                        </Text>
+                      </Pressable>
+                      <Text style={{ ...typography.small, color: colors.textSecondary }}>
+                        @{cDisplayUsername}
+                      </Text>
+                      <Text style={{ ...typography.small, color: colors.textSecondary }}>
+                        {formatRelativeTime(comment.createdAt)}
+                      </Text>
+                    </View>
+                    <Text style={{ ...typography.body, color: colors.foreground, marginTop: 2 }}>
+                      {comment.text}
+                    </Text>
+                  </View>
+                  {comment.userId === user?.uid && (
+                    <Pressable
+                      onPress={() => {
+                        Alert.alert('Delete Comment', 'Are you sure?', [
+                          { text: 'Cancel', style: 'cancel' },
+                          { text: 'Delete', style: 'destructive', onPress: () => deleteComment.mutate({ commentId: comment.id, listId }) },
+                        ]);
+                      }}
+                      hitSlop={8}
+                    >
+                      <Ionicons name="trash-outline" size={14} color={colors.textSecondary} />
+                    </Pressable>
+                  )}
+                </View>
+              );
+            })}
+          </View>
+        )}
       </ScrollView>
+
+      {/* Sticky comment input bar */}
+      {user && (
+        <View style={{ borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.background }}>
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingHorizontal: spacing.md,
+            paddingVertical: spacing.sm,
+            gap: spacing.sm,
+          }}>
+            <Avatar uri={profile?.avatar || null} name={profile?.displayName || 'You'} size={28} />
+            <RNTextInput
+              placeholder="Add a comment..."
+              placeholderTextColor={colors.textSecondary}
+              value={commentText}
+              onChangeText={setCommentText}
+              style={{
+                flex: 1,
+                backgroundColor: colors.muted,
+                borderRadius: borderRadius.full,
+                paddingHorizontal: spacing.md,
+                paddingVertical: spacing.sm,
+                color: colors.foreground,
+                fontSize: 14,
+              }}
+              multiline
+              maxLength={500}
+            />
+            <Pressable
+              onPress={() => {
+                if (!commentText.trim() || !user || !profile) return;
+                createComment.mutate({
+                  listId,
+                  userId: user.uid,
+                  username: profile.username,
+                  userAvatar: profile.avatar,
+                  text: commentText.trim(),
+                });
+                setCommentText('');
+              }}
+              disabled={!commentText.trim()}
+              style={{ opacity: commentText.trim() ? 1 : 0.4 }}
+            >
+              <Ionicons name="send" size={22} color={commentText.trim() ? colors.primary : colors.textSecondary} />
+            </Pressable>
+          </View>
+        </View>
+      )}
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

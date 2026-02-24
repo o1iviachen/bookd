@@ -12,10 +12,10 @@ interface MatchPosterCardProps {
   match: Match;
   onPress?: () => void;
   width?: number;
-  hideOverlay?: boolean;
+  compact?: boolean;
 }
 
-export function MatchPosterCard({ match, onPress, width: widthProp, hideOverlay }: MatchPosterCardProps) {
+export function MatchPosterCard({ match, onPress, width: widthProp, compact }: MatchPosterCardProps) {
   const { theme } = useTheme();
   const { spacing } = theme;
   const { width: screenWidth } = useWindowDimensions();
@@ -54,7 +54,7 @@ export function MatchPosterCard({ match, onPress, width: widthProp, hideOverlay 
         style={{ flex: 1 }}
       >
         {/* Team crests */}
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingBottom: hideOverlay ? 0 : CARD_HEIGHT * 0.12 }}>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingBottom: compact ? 0 : CARD_HEIGHT * 0.12 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: CARD_WIDTH * 0.08 }}>
             <Image
               source={{ uri: match.homeTeam.crest }}
@@ -77,114 +77,114 @@ export function MatchPosterCard({ match, onPress, width: widthProp, hideOverlay 
           </View>
         </View>
 
-        {!hideOverlay && (
-          <>
-            {/* Dark overlay for text readability */}
-            <LinearGradient
-              colors={['transparent', 'rgba(0,0,0,0.4)', 'rgba(0,0,0,0.9)']}
+        {/* Dark overlay for score readability */}
+        <LinearGradient
+          colors={['transparent', 'rgba(0,0,0,0.4)', 'rgba(0,0,0,0.9)']}
+          style={{
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: compact ? '40%' : '55%',
+            justifyContent: 'flex-end',
+            padding: spacing.sm + 2,
+          }}
+        >
+          {/* Score */}
+          {(isFinished || isLive) ? (
+            <Text
               style={{
-                position: 'absolute',
-                bottom: 0,
-                left: 0,
-                right: 0,
-                height: '55%',
-                justifyContent: 'flex-end',
-                padding: spacing.sm + 2,
+                fontSize: CARD_WIDTH * 0.16,
+                fontWeight: '700',
+                color: '#00e054',
+                textAlign: 'center',
+                marginBottom: compact ? 0 : 2,
               }}
             >
-              {/* Score */}
-              {(isFinished || isLive) ? (
-                <Text
-                  style={{
-                    fontSize: CARD_WIDTH * 0.16,
-                    fontWeight: '700',
-                    color: '#00e054',
-                    textAlign: 'center',
-                    marginBottom: 2,
-                  }}
-                >
-                  {match.homeScore} - {match.awayScore}
-                </Text>
-              ) : null}
+              {match.homeScore} - {match.awayScore}
+            </Text>
+          ) : null}
 
-              {/* LIVE badge */}
-              {isLive && (
-                <View
-                  style={{
-                    alignSelf: 'center',
-                    backgroundColor: '#00e054',
-                    paddingHorizontal: 6,
-                    paddingVertical: 1,
-                    borderRadius: 3,
-                    marginBottom: 4,
-                  }}
-                >
-                  <Text style={{ fontSize: 9, fontWeight: '800', color: '#14181c' }}>LIVE</Text>
-                </View>
-              )}
-
-              {/* Team names */}
-              <Text
-                style={{
-                  fontSize: 10,
-                  fontWeight: '600',
-                  color: '#ffffff',
-                  textAlign: 'center',
-                  letterSpacing: 0.3,
-                }}
-                numberOfLines={1}
-              >
-                {match.homeTeam.shortName} v {match.awayTeam.shortName}
-              </Text>
-
-              {/* Competition + date */}
-              <Text
-                style={{
-                  fontSize: 9,
-                  color: 'rgba(255,255,255,0.6)',
-                  textAlign: 'center',
-                  marginTop: 2,
-                }}
-                numberOfLines={1}
-              >
-                {match.competition.code} · {formatMatchDate(match.kickoff)}
-              </Text>
-            </LinearGradient>
-
-            {/* Competition emblem — top-left badge */}
+          {/* LIVE badge */}
+          {isLive && (
             <View
               style={{
-                position: 'absolute',
-                top: spacing.sm,
-                left: spacing.sm,
-                backgroundColor: 'rgba(255,255,255,0.85)',
-                borderRadius: 10,
-                padding: 4,
+                alignSelf: 'center',
+                backgroundColor: '#00e054',
+                paddingHorizontal: 6,
+                paddingVertical: 1,
+                borderRadius: 3,
+                marginBottom: 4,
               }}
             >
-              <Image
-                source={{ uri: match.competition.emblem }}
-                style={{ width: CARD_WIDTH * 0.14, height: CARD_WIDTH * 0.14 }}
-                contentFit="contain"
-              />
+              <Text style={{ fontSize: 9, fontWeight: '800', color: '#14181c' }}>LIVE</Text>
             </View>
+          )}
 
-            {/* Upcoming match lock badge */}
-            {isUpcoming && (
-              <View
-                style={{
-                  position: 'absolute',
-                  top: spacing.sm,
-                  right: spacing.sm,
-                  backgroundColor: 'rgba(0,0,0,0.6)',
-                  borderRadius: 12,
-                  padding: 5,
-                }}
-              >
-                <Ionicons name="lock-closed" size={10} color="rgba(255,255,255,0.7)" />
-              </View>
-            )}
-          </>
+          {/* Team names — hidden in compact mode */}
+          {!compact && (
+            <Text
+              style={{
+                fontSize: 10,
+                fontWeight: '600',
+                color: '#ffffff',
+                textAlign: 'center',
+                letterSpacing: 0.3,
+              }}
+              numberOfLines={1}
+            >
+              {match.homeTeam.shortName} v {match.awayTeam.shortName}
+            </Text>
+          )}
+
+          {/* Competition + date — hidden in compact mode */}
+          {!compact && (
+            <Text
+              style={{
+                fontSize: 9,
+                color: 'rgba(255,255,255,0.6)',
+                textAlign: 'center',
+                marginTop: 2,
+              }}
+              numberOfLines={1}
+            >
+              {match.competition.code} · {formatMatchDate(match.kickoff)}
+            </Text>
+          )}
+        </LinearGradient>
+
+        {/* Competition emblem — top-left badge */}
+        <View
+          style={{
+            position: 'absolute',
+            top: spacing.sm,
+            left: spacing.sm,
+            backgroundColor: 'rgba(255,255,255,0.85)',
+            borderRadius: 10,
+            padding: 4,
+          }}
+        >
+          <Image
+            source={{ uri: match.competition.emblem }}
+            style={{ width: CARD_WIDTH * 0.14, height: CARD_WIDTH * 0.14 }}
+            contentFit="contain"
+          />
+        </View>
+
+        {/* Upcoming match lock badge */}
+        {isUpcoming && (
+          <View
+            style={{
+              position: 'absolute',
+              top: spacing.sm,
+              right: spacing.sm,
+              backgroundColor: 'rgba(0,0,0,0.6)',
+              borderRadius: 12,
+              padding: 5,
+            }}
+          >
+            <Ionicons name="lock-closed" size={10} color="rgba(255,255,255,0.7)" />
+          </View>
         )}
       </LinearGradient>
     </Pressable>

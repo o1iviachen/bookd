@@ -33,9 +33,27 @@ export function StarRating({
 
         if (interactive && onRate) {
           return (
-            <Pressable key={i} onPress={() => onRate(rating === starNumber ? 0 : starNumber)}>
-              <Ionicons name={icon} size={size} color={color} />
-            </Pressable>
+            <View key={i} style={{ flexDirection: 'row' }}>
+              {/* Left half — tap for half star */}
+              <Pressable
+                onPress={() => {
+                  const half = starNumber - 0.5;
+                  onRate(rating === half ? 0 : half);
+                }}
+                style={{ width: size / 2, height: size, overflow: 'hidden' }}
+              >
+                <Ionicons name={icon} size={size} color={color} />
+              </Pressable>
+              {/* Right half — tap for full star */}
+              <Pressable
+                onPress={() => onRate(rating === starNumber ? starNumber - 0.5 : starNumber)}
+                style={{ width: size / 2, height: size, overflow: 'hidden' }}
+              >
+                <View style={{ marginLeft: -(size / 2) }}>
+                  <Ionicons name={icon} size={size} color={color} />
+                </View>
+              </Pressable>
+            </View>
           );
         }
 

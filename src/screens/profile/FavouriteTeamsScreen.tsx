@@ -80,6 +80,7 @@ export function FavouriteTeamsScreen() {
             value={searchQuery}
             onChangeText={setSearchQuery}
             autoCapitalize="none"
+            autoCorrect={false}
             style={{
               flex: 1,
               paddingLeft: 10,

@@ -11,6 +11,8 @@ import { Avatar } from '../../components/ui/Avatar';
 import { MatchPosterCard } from '../../components/match/MatchPosterCard';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { SearchStackParamList } from '../../types/navigation';
+import { POPULAR_TEAMS } from '../../utils/constants';
+import { TeamLogo } from '../../components/match/TeamLogo';
 
 type Nav = NativeStackNavigationProp<SearchStackParamList, 'Search'>;
 type Category = 'matches' | 'teams' | 'players' | 'members' | 'reviews' | 'lists';
@@ -81,6 +83,7 @@ export function SearchScreen() {
             onFocus={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setIsSearching(true); }}
             onBlur={() => { if (!queryStr) { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setIsSearching(false); } }}
             autoCapitalize="none"
+            autoCorrect={false}
             style={{
               flex: 1,
               paddingLeft: 10,
@@ -217,14 +220,45 @@ export function SearchScreen() {
         )}
 
         {/* Teams results */}
-        {isSearching && queryStr.length >= 2 && activeCategory === 'teams' && (
-          <View style={{ alignItems: 'center', paddingTop: spacing.xxl * 2, paddingHorizontal: spacing.xl }}>
-            <Ionicons name="shield-outline" size={48} color={colors.textSecondary} />
-            <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.md }}>
-              Team search coming soon
-            </Text>
-          </View>
-        )}
+        {isSearching && queryStr.length >= 2 && activeCategory === 'teams' && (() => {
+          const q = queryStr.toLowerCase();
+          const teamResults = POPULAR_TEAMS.filter(
+            (t) => t.name.toLowerCase().includes(q) || t.league.toLowerCase().includes(q)
+          );
+          return teamResults.length === 0 ? (
+            <View style={{ alignItems: 'center', paddingTop: spacing.xxl * 2, paddingHorizontal: spacing.xl }}>
+              <Ionicons name="shield-outline" size={48} color={colors.textSecondary} />
+              <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.md }}>
+                No teams found
+              </Text>
+            </View>
+          ) : (
+            <View style={{ paddingHorizontal: spacing.md }}>
+              {teamResults.map((team) => (
+                <Pressable
+                  key={team.id}
+                  onPress={() => navigation.navigate('TeamDetail', { teamId: Number(team.id), teamName: team.name, teamCrest: team.crest })}
+                  style={({ pressed }) => ({
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: spacing.sm,
+                    paddingVertical: spacing.sm + 2,
+                    borderBottomWidth: 1,
+                    borderBottomColor: colors.border,
+                    opacity: pressed ? 0.7 : 1,
+                  })}
+                >
+                  <TeamLogo uri={team.crest} size={36} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ ...typography.body, color: colors.foreground, fontSize: 15 }}>{team.name}</Text>
+                    <Text style={{ ...typography.caption, color: colors.textSecondary }}>{team.league}</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={14} color={colors.textSecondary} />
+                </Pressable>
+              ))}
+            </View>
+          );
+        })()}
 
         {/* Players and Managers results */}
         {isSearching && queryStr.length >= 2 && activeCategory === 'players' && (
@@ -275,7 +309,7 @@ export function SearchScreen() {
         {/* Reviews results */}
         {isSearching && queryStr.length >= 2 && activeCategory === 'reviews' && (
           <View style={{ alignItems: 'center', paddingTop: spacing.xxl * 2, paddingHorizontal: spacing.xl }}>
-            <Ionicons name="chatbubble-outline" size={48} color={colors.textSecondary} />
+            <Ionicons name="reorder-three-outline" size={48} color={colors.textSecondary} />
             <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.md }}>
               Review search coming soon
             </Text>

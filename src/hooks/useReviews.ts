@@ -9,6 +9,8 @@ import {
   voteOnReview,
   deleteReview,
   getAvgRatingsForMatches,
+  getReviewUpvoterIds,
+  getReviewsUpvotedByUser,
 } from '../services/firestore/reviews';
 import { ReviewMedia } from '../types/review';
 import { useAuth } from '../context/AuthContext';
@@ -38,6 +40,7 @@ export function useRecentReviews() {
     queryKey: ['reviews', 'recent', user?.uid],
     queryFn: () => getRecentReviews(user?.uid),
     staleTime: 30 * 1000,
+    retry: 2,
   });
 }
 
@@ -112,6 +115,25 @@ export function useVoteOnReview() {
       queryClient.invalidateQueries({ queryKey: ['reviews'] });
       queryClient.invalidateQueries({ queryKey: ['review'] });
     },
+  });
+}
+
+export function useLikedReviews(userId: string) {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ['reviews', 'liked', userId],
+    queryFn: () => getReviewsUpvotedByUser(userId, user?.uid),
+    staleTime: 60 * 1000,
+    enabled: !!userId,
+  });
+}
+
+export function useReviewUpvoters(reviewId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ['reviewUpvoters', reviewId],
+    queryFn: () => getReviewUpvoterIds(reviewId),
+    staleTime: 60 * 1000,
+    enabled: enabled && !!reviewId,
   });
 }
 

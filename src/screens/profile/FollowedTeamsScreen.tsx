@@ -7,6 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useUserProfile } from '../../hooks/useUser';
 import { updateUserProfile } from '../../services/firestore/users';
 import { TextInput } from '../../components/ui/TextInput';
+import { ScreenHeader } from '../../components/ui/ScreenHeader';
 import { TeamLogo } from '../../components/match/TeamLogo';
 import { POPULAR_TEAMS } from '../../utils/constants';
 
@@ -39,16 +40,7 @@ export function FollowedTeamsScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
-      {/* Header */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border }}>
-        <Pressable onPress={() => navigation.goBack()} hitSlop={8}>
-          <Ionicons name="arrow-back" size={22} color={colors.foreground} />
-        </Pressable>
-        <Text style={{ ...typography.bodyBold, color: colors.foreground, flex: 1, textAlign: 'center', fontSize: 17 }}>
-          Teams
-        </Text>
-        <View style={{ width: 22 }} />
-      </View>
+      <ScreenHeader title="Teams" onBack={() => navigation.goBack()} />
 
       <ScrollView indicatorStyle={isDark ? 'white' : 'default'}
         style={{ flex: 1 }}
@@ -62,6 +54,7 @@ export function FollowedTeamsScreen({ navigation }: any) {
           value={search}
           onChangeText={setSearch}
           autoCapitalize="none"
+          autoCorrect={false}
         />
         <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
           {filteredTeams.map((team) => {

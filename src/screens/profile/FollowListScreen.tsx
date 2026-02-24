@@ -7,6 +7,8 @@ import { useTheme } from '../../context/ThemeContext';
 import { getUserProfile } from '../../services/firestore/users';
 import { Avatar } from '../../components/ui/Avatar';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
+import { ScreenHeader } from '../../components/ui/ScreenHeader';
+import { EmptyState } from '../../components/ui/EmptyState';
 
 export function FollowListScreen({ route, navigation }: any) {
   const { userIds, title } = route.params as { userIds: string[]; title: string };
@@ -32,27 +34,14 @@ export function FollowListScreen({ route, navigation }: any) {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
-      {/* Header */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border }}>
-        <Pressable onPress={() => navigation.goBack()} hitSlop={8}>
-          <Ionicons name="arrow-back" size={22} color={colors.foreground} />
-        </Pressable>
-        <Text style={{ ...typography.bodyBold, color: colors.foreground, flex: 1, textAlign: 'center', fontSize: 17 }}>
-          {title}
-        </Text>
-        <View style={{ width: 22 }} />
-      </View>
+      <ScreenHeader title={title} onBack={() => navigation.goBack()} />
 
       {users.length === 0 ? (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl }}>
-          <Ionicons name="people-outline" size={48} color={colors.textSecondary} />
-          <Text style={{ ...typography.h4, color: colors.foreground, marginTop: spacing.md }}>
-            {title === 'Following' ? 'Not following anyone yet' : 'No followers yet'}
-          </Text>
-          <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.xs }}>
-            {title === 'Following' ? 'Find people to follow in Search' : 'Share your profile to get followers'}
-          </Text>
-        </View>
+        <EmptyState
+          icon="people-outline"
+          title={title === 'Following' ? 'Not following anyone yet' : 'No followers yet'}
+          subtitle={title === 'Following' ? 'Find people to follow in Search' : 'Share your profile to get followers'}
+        />
       ) : (
         <FlatList indicatorStyle={isDark ? 'white' : 'default'}
           data={users}

@@ -1,24 +1,37 @@
 import React from 'react';
 import { View, Text, Pressable } from 'react-native';
 import { useQueries } from '@tanstack/react-query';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
 import { getMatchById } from '../../services/matchService';
+import { useListComments, useListLikedBy } from '../../hooks/useLists';
+import { useUserProfile } from '../../hooks/useUser';
 import { MatchPosterCard } from '../match/MatchPosterCard';
 import { MatchList } from '../../types/list';
 import { Match } from '../../types/match';
 
 const PREVIEW_COUNT = 5;
 const POSTER_WIDTH = 70;
-const POSTER_OVERLAP = 20;
+const POSTER_GAP = 6;
 
 interface ListPreviewCardProps {
   list: MatchList;
   onPress?: () => void;
+  onMatchPress?: (matchId: number) => void;
 }
 
-export function ListPreviewCard({ list, onPress }: ListPreviewCardProps) {
+export function ListPreviewCard({ list, onPress, onMatchPress }: ListPreviewCardProps) {
   const { theme } = useTheme();
   const { colors, spacing, typography } = theme;
+  const { user } = useAuth();
+  const { data: comments } = useListComments(list.id);
+  const { data: likedBy } = useListLikedBy(list.id);
+  const { data: authorProfile } = useUserProfile(list.userId);
+  const commentCount = comments?.length ?? 0;
+  const isLiked = !!(user && likedBy?.includes(user.uid));
+  const displayName = authorProfile?.displayName || authorProfile?.username || list.username;
+  const displayUsername = authorProfile?.username || list.username;
 
   // Fetch first few matches for poster previews
   const previewIds = list.matchIds.slice(0, PREVIEW_COUNT);
@@ -35,54 +48,68 @@ export function ListPreviewCard({ list, onPress }: ListPreviewCardProps) {
     .map((q) => q.data)
     .filter((m): m is Match => m !== undefined);
 
-  const stackWidth = previewMatches.length > 0
-    ? POSTER_WIDTH + (previewMatches.length - 1) * (POSTER_WIDTH - POSTER_OVERLAP)
-    : 0;
-
   return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => ({
-        paddingVertical: spacing.md,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border,
-        opacity: pressed && onPress ? 0.9 : 1,
-      })}
-    >
-      {/* Text info */}
-      <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 16 }} numberOfLines={1}>
-        {list.name}
-      </Text>
-      {list.description ? (
-        <Text style={{ ...typography.body, color: colors.textSecondary, marginTop: 2 }} numberOfLines={1}>
-          {list.description}
+    <View style={{
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.md,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    }}>
+      {/* Text info — taps open the list */}
+      <Pressable
+        onPress={onPress}
+        style={({ pressed }) => ({ opacity: pressed && onPress ? 0.7 : 1 })}
+      >
+        <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 16 }} numberOfLines={1}>
+          {list.name}
         </Text>
-      ) : null}
-      <Text style={{ ...typography.small, color: colors.textSecondary, marginTop: 4 }}>
-        {list.username} · {list.matchIds.length} {list.matchIds.length === 1 ? 'match' : 'matches'}
-      </Text>
+        {list.description ? (
+          <Text style={{ ...typography.body, color: colors.textSecondary, marginTop: 2 }} numberOfLines={1}>
+            {list.description}
+          </Text>
+        ) : null}
+        <Text style={{ ...typography.small, color: colors.textSecondary, marginTop: 4 }}>
+          <Text style={{ fontWeight: '600', color: colors.foreground }}>{displayName}</Text>
+          {' '}
+          <Text>@{displayUsername}</Text>
+          {' · '}{list.matchIds.length} {list.matchIds.length === 1 ? 'match' : 'matches'}
+        </Text>
+      </Pressable>
 
-      {/* Overlapping poster stack (no text overlay) */}
+      {/* Poster row — each poster taps to that match */}
       {previewMatches.length > 0 && (
-        <View style={{ height: POSTER_WIDTH * 1.5, width: stackWidth, marginTop: spacing.sm }}>
-          {previewMatches.map((match, index) => (
-            <View
+        <View style={{ flexDirection: 'row', gap: POSTER_GAP, marginTop: spacing.sm }}>
+          {previewMatches.map((match) => (
+            <MatchPosterCard
               key={match.id}
-              style={{
-                position: 'absolute',
-                left: index * (POSTER_WIDTH - POSTER_OVERLAP),
-                zIndex: PREVIEW_COUNT - index,
-              }}
-            >
-              <MatchPosterCard
-                match={match}
-                width={POSTER_WIDTH}
-                hideOverlay
-              />
-            </View>
+              match={match}
+              width={POSTER_WIDTH}
+              compact
+              onPress={onMatchPress ? () => onMatchPress(match.id) : undefined}
+            />
           ))}
         </View>
       )}
-    </Pressable>
+
+      {/* Likes & comments */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: spacing.sm }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <Ionicons
+            name={isLiked ? 'heart' : 'heart-outline'}
+            size={14}
+            color={isLiked ? '#ef4444' : colors.textSecondary}
+          />
+          {list.likes > 0 && (
+            <Text style={{ fontSize: 12, color: isLiked ? '#ef4444' : colors.textSecondary }}>{list.likes}</Text>
+          )}
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <Ionicons name="chatbubble-outline" size={14} color={colors.textSecondary} />
+          {commentCount > 0 && (
+            <Text style={{ fontSize: 12, color: colors.textSecondary }}>{commentCount}</Text>
+          )}
+        </View>
+      </View>
+    </View>
   );
 }

@@ -1,4 +1,4 @@
-export type NotificationType = 'follow' | 'review_like' | 'comment' | 'comment_like';
+export type NotificationType = 'follow' | 'review_like' | 'comment' | 'comment_like' | 'list_like' | 'list_comment';
 
 export interface AppNotification {
   id: string;
@@ -9,6 +9,7 @@ export interface AppNotification {
   type: NotificationType;
   reviewId: string | null;
   commentId: string | null;
+  listId: string | null;
   isRead: boolean;
   createdAt: Date;
 }

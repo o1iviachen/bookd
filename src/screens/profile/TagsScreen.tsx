@@ -6,6 +6,8 @@ import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useReviewsForUser } from '../../hooks/useReviews';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
+import { ScreenHeader } from '../../components/ui/ScreenHeader';
+import { EmptyState } from '../../components/ui/EmptyState';
 
 interface TagEntry {
   tag: string;
@@ -35,27 +37,14 @@ export function TagsScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
-      {/* Header */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border }}>
-        <Pressable onPress={() => navigation.goBack()} hitSlop={8}>
-          <Ionicons name="arrow-back" size={22} color={colors.foreground} />
-        </Pressable>
-        <Text style={{ ...typography.bodyBold, color: colors.foreground, flex: 1, textAlign: 'center', fontSize: 17 }}>
-          Tags
-        </Text>
-        <View style={{ width: 22 }} />
-      </View>
+      <ScreenHeader title="Tags" onBack={() => navigation.goBack()} />
 
       {tags.length === 0 ? (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl }}>
-          <Ionicons name="pricetag-outline" size={48} color={colors.textSecondary} />
-          <Text style={{ ...typography.h4, color: colors.foreground, marginTop: spacing.md }}>
-            No tags yet
-          </Text>
-          <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.xs }}>
-            Add tags when reviewing matches
-          </Text>
-        </View>
+        <EmptyState
+          icon="pricetag-outline"
+          title="No tags yet"
+          subtitle="Add tags when reviewing matches"
+        />
       ) : (
         <FlatList indicatorStyle={isDark ? 'white' : 'default'}
           data={tags}

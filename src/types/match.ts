@@ -22,6 +22,11 @@ export type MatchStatus =
   | 'CANCELLED'
   | 'SUSPENDED';
 
+export interface Coach {
+  id: number;
+  name: string;
+}
+
 export interface Match {
   id: number;
   competition: Competition;
@@ -33,4 +38,5 @@ export interface Match {
   kickoff: string;
   venue: string | null;
   matchday: number | null;
+  stage: string | null;
 }

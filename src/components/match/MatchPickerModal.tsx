@@ -106,6 +106,7 @@ export function MatchPickerModal({ visible, onClose, onAddMatches, excludeMatchI
             <RNTextInput
               placeholder="Search by team or league..."
               placeholderTextColor={colors.textSecondary}
+              autoCorrect={false}
               value={search}
               onChangeText={setSearch}
               autoCapitalize="none"
@@ -158,8 +159,8 @@ export function MatchPickerModal({ visible, onClose, onAddMatches, excludeMatchI
                   {isSelected && (
                     <View style={{
                       position: 'absolute',
-                      top: 4,
-                      right: 4,
+                      top: spacing.sm,
+                      right: spacing.sm,
                       backgroundColor: colors.primary,
                       borderRadius: 12,
                       width: 22,

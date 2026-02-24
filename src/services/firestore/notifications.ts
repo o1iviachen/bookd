@@ -25,6 +25,7 @@ function docToNotification(docSnap: any): AppNotification {
     type: data.type,
     reviewId: data.reviewId || null,
     commentId: data.commentId || null,
+    listId: data.listId || null,
     isRead: data.isRead || false,
     createdAt: data.createdAt?.toDate() || new Date(),
   };
@@ -38,6 +39,7 @@ export async function createNotification(params: {
   type: NotificationType;
   reviewId?: string | null;
   commentId?: string | null;
+  listId?: string | null;
 }): Promise<void> {
   if (params.senderId === params.recipientId) return;
 
@@ -49,6 +51,7 @@ export async function createNotification(params: {
     type: params.type,
     reviewId: params.reviewId || null,
     commentId: params.commentId || null,
+    listId: params.listId || null,
     isRead: false,
     createdAt: serverTimestamp(),
   });
@@ -58,11 +61,11 @@ export async function getNotificationsForUser(userId: string): Promise<AppNotifi
   const q = query(
     collection(db, 'notifications'),
     where('recipientId', '==', userId),
-    orderBy('createdAt', 'desc'),
-    limit(50)
   );
   const snapshot = await getDocs(q);
-  return snapshot.docs.map(docToNotification);
+  const notifications = snapshot.docs.map(docToNotification);
+  notifications.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  return notifications.slice(0, 50);
 }
 
 export async function markNotificationRead(notificationId: string): Promise<void> {

@@ -121,10 +121,3 @@ export function generateFallbackColor(teamName: string): string {
 export function getTeamColor(teamId: number, teamName: string): string {
   return TEAM_COLORS[teamId]?.primary ?? generateFallbackColor(teamName);
 }
-
-/**
- * Get the secondary kit color for a team, with fallback.
- */
-export function getTeamSecondaryColor(teamId: number, teamName: string): string {
-  return TEAM_COLORS[teamId]?.secondary ?? generateFallbackColor(teamName + '_secondary');
-}

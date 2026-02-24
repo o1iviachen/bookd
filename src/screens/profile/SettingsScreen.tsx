@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, ScrollView, Pressable, Alert } from 'react-native';
+import { View, Text, ScrollView, Pressable, Alert, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,14 +24,15 @@ export function SettingsScreen() {
       title: 'Appearance',
       items: [
         {
-          label: isDark ? 'Dark Mode' : 'Light Mode',
-          icon: isDark ? 'moon' : 'sunny-outline',
-          onPress: toggleTheme,
+          label: 'Dark Mode',
+          icon: 'moon',
           right: (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-              <Text style={{ ...typography.caption, color: colors.textSecondary }}>{isDark ? 'On' : 'Off'}</Text>
-              <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
-            </View>
+            <Switch
+              value={isDark}
+              onValueChange={toggleTheme}
+              trackColor={{ false: colors.muted, true: colors.primary }}
+              thumbColor="#fff"
+            />
           ),
         },
       ],
@@ -54,14 +55,13 @@ export function SettingsScreen() {
       title: 'Account',
       items: [
         { label: 'Edit Profile', icon: 'person-outline', onPress: () => navigation.navigate('EditProfile' as never) },
-        { label: 'Notifications', icon: 'notifications-outline' },
-        { label: 'Privacy', icon: 'lock-closed-outline' },
+        { label: 'Notifications', icon: 'notifications-outline', onPress: () => navigation.navigate('NotificationSettings' as never) },
       ],
     },
     {
       title: 'About',
       items: [
-        { label: 'Help and Support', icon: 'help-circle-outline' },
+        { label: 'Privacy Policy', icon: 'lock-closed-outline' },
         { label: 'Terms of Service', icon: 'document-text-outline' },
       ],
     },

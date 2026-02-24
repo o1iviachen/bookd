@@ -16,6 +16,7 @@ import { TeamLogo } from '../../components/match/TeamLogo';
 import { MatchPosterCard } from '../../components/match/MatchPosterCard';
 import { StarRating } from '../../components/ui/StarRating';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
+import { RatingChart } from '../../components/profile/RatingChart';
 import { ProfileStackParamList } from '../../types/navigation';
 import { POPULAR_TEAMS } from '../../utils/constants';
 import { Match } from '../../types/match';
@@ -90,7 +91,7 @@ export function ProfileScreen() {
   const navLinks: { label: string; count: number | string; icon: keyof typeof Ionicons.glyphMap }[] = [
     { label: 'Games', count: `${reviews?.length || 0} this year`, icon: 'football-outline' },
     { label: 'Diary', count: reviews?.length || 0, icon: 'book-outline' },
-    { label: 'Reviews', count: reviews?.length || 0, icon: 'chatbubble-outline' },
+    { label: 'Reviews', count: reviews?.length || 0, icon: 'reorder-three-outline' },
     { label: 'Lists', count: lists?.length || 0, icon: 'list-outline' },
     { label: 'Likes', count: profile?.likedMatchIds?.length || 0, icon: 'heart-outline' },
     { label: 'Tags', count: new Set((reviews || []).flatMap((r) => r.tags)).size, icon: 'pricetag-outline' },
@@ -228,7 +229,10 @@ export function ProfileScreen() {
               <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1 }}>
                 Recent Activity
               </Text>
-              <Ionicons name="chevron-forward" size={14} color={colors.textSecondary} />
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                <Text style={{ ...typography.caption, color: colors.primary }}>More</Text>
+                <Ionicons name="chevron-forward" size={14} color={colors.primary} />
+              </View>
             </Pressable>
             {recentMatchQueries.some((q) => q.isLoading) && recentMatchMap.size === 0 ? (
               <View style={{ paddingVertical: spacing.lg, alignItems: 'center' }}>
@@ -254,7 +258,7 @@ export function ProfileScreen() {
                         <Ionicons name="heart" size={9} color="#ef4444" />
                       )}
                       {hasText && (
-                        <Ionicons name="reorder-three" size={10} color={colors.textSecondary} />
+                        <Ionicons name="reorder-three-outline" size={10} color={colors.textSecondary} />
                       )}
                     </View>
                   </View>
@@ -282,7 +286,7 @@ export function ProfileScreen() {
                         <Ionicons name="heart" size={8} color="#ef4444" style={{ marginLeft: 1 }} />
                       )}
                       {hasText && (
-                        <Ionicons name="reorder-three" size={10} color={colors.textSecondary} style={{ marginLeft: 1 }} />
+                        <Ionicons name="reorder-three-outline" size={10} color={colors.textSecondary} style={{ marginLeft: 1 }} />
                       )}
                     </View>
                   </Pressable>
@@ -292,6 +296,9 @@ export function ProfileScreen() {
             )}
           </View>
         )}
+
+        {/* Rating distribution */}
+        {reviews && reviews.length > 0 && <RatingChart reviews={reviews} />}
 
         {/* Navigation links */}
         <View style={{ marginTop: spacing.md, paddingHorizontal: spacing.md }}>

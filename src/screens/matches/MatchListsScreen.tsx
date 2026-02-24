@@ -1,10 +1,11 @@
 import React from 'react';
 import { View, Text, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { useListsForMatch } from '../../hooks/useLists';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
+import { ScreenHeader } from '../../components/ui/ScreenHeader';
+import { EmptyState } from '../../components/ui/EmptyState';
 import { formatRelativeTime } from '../../utils/formatDate';
 
 export function MatchListsScreen({ route, navigation }: any) {
@@ -15,26 +16,16 @@ export function MatchListsScreen({ route, navigation }: any) {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-      {/* Header */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', padding: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }}>
-        <Pressable onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={colors.foreground} />
-        </Pressable>
-        <Text style={{ ...typography.bodyBold, color: colors.foreground, flex: 1, textAlign: 'center', fontSize: 17 }}>
-          Lists
-        </Text>
-        <View style={{ width: 24 }} />
-      </View>
+      <ScreenHeader title="Lists" onBack={() => navigation.goBack()} />
 
       {isLoading ? (
         <LoadingSpinner />
       ) : !lists || lists.length === 0 ? (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl }}>
-          <Ionicons name="list-outline" size={48} color={colors.textSecondary} />
-          <Text style={{ ...typography.body, color: colors.textSecondary, marginTop: spacing.sm, textAlign: 'center' }}>
-            This match hasn't been added to any lists yet
-          </Text>
-        </View>
+        <EmptyState
+          icon="list-outline"
+          title="No lists yet"
+          subtitle="This match hasn't been added to any lists yet"
+        />
       ) : (
         <ScrollView indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ padding: spacing.md }}>
           <Text style={{ ...typography.caption, color: colors.textSecondary, marginBottom: spacing.md }}>

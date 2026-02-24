@@ -1,20 +1,27 @@
-import React, { useState, useRef } from 'react';
-import { View, Text, ScrollView, Pressable, TextInput, KeyboardAvoidingView, Platform, Alert, Modal } from 'react-native';
+import React, { useState, useRef, useMemo } from 'react';
+import { View, Text, ScrollView, Pressable, TextInput, KeyboardAvoidingView, Platform, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import { useQueries } from '@tanstack/react-query';
 import { useTheme } from '../../context/ThemeContext';
-import { useReview, useVoteOnReview, useDeleteReview } from '../../hooks/useReviews';
+import { useReview, useVoteOnReview, useDeleteReview, useReviewUpvoters } from '../../hooks/useReviews';
 import { useMatch } from '../../hooks/useMatches';
 import { useCommentsForReview, useCreateComment, useToggleCommentLike, useDeleteComment } from '../../hooks/useComments';
 import { useUserProfile } from '../../hooks/useUser';
+import { getUserProfile } from '../../services/firestore/users';
 import { Avatar } from '../../components/ui/Avatar';
 import { StarRating } from '../../components/ui/StarRating';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
+import { ScreenHeader } from '../../components/ui/ScreenHeader';
+import { ActionMenu } from '../../components/ui/ActionMenu';
+import { LikedByModal } from '../../components/ui/LikedByModal';
+import { EmptyState } from '../../components/ui/EmptyState';
 import { TeamLogo } from '../../components/match/TeamLogo';
 import { useAuth } from '../../context/AuthContext';
 import { formatRelativeTime, formatMatchDate } from '../../utils/formatDate';
 import { Comment } from '../../services/firestore/comments';
+import { User } from '../../types/user';
 
 export function ReviewDetailScreen({ route, navigation }: any) {
   const { theme, isDark } = useTheme();
@@ -32,14 +39,65 @@ export function ReviewDetailScreen({ route, navigation }: any) {
   const [commentText, setCommentText] = useState('');
   const [replyingTo, setReplyingTo] = useState<{ id: string; username: string } | null>(null);
   const [showMenu, setShowMenu] = useState(false);
+  const [showLikes, setShowLikes] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
   const inputRef = useRef<TextInput>(null);
+
+  // Fetch review author's current profile
+  const { data: authorProfile } = useUserProfile(review?.userId || '');
+  const authorDisplayName = authorProfile?.displayName || authorProfile?.username || review?.username || '';
+  const authorUsername = authorProfile?.username || review?.username || '';
+  const authorAvatar = authorProfile?.avatar ?? review?.userAvatar ?? null;
 
   const sortedComments = comments
     ? [...comments].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
     : [];
 
+  // Fetch current profiles for all comment authors
+  const commentAuthorIds = useMemo(
+    () => [...new Set(sortedComments.map((c) => c.userId))],
+    [sortedComments]
+  );
+
+  const commentAuthorQueries = useQueries({
+    queries: commentAuthorIds.map((id) => ({
+      queryKey: ['user', id],
+      queryFn: () => getUserProfile(id),
+      staleTime: 2 * 60 * 1000,
+      enabled: commentAuthorIds.length > 0,
+    })),
+  });
+
+  const commentAuthorMap = useMemo(() => {
+    const map = new Map<string, { username: string; displayName: string; avatar: string | null }>();
+    commentAuthorQueries.forEach((q) => {
+      if (q.data) map.set(q.data.id, { username: q.data.username, displayName: q.data.displayName || q.data.username, avatar: q.data.avatar });
+    });
+    return map;
+  }, [commentAuthorQueries]);
+
   const totalCount = sortedComments.length;
+
+  // Fetch upvoter user IDs + profiles for "liked by" popup
+  const { data: upvoterIds } = useReviewUpvoters(reviewId, showLikes);
+  const upvoterQueries = useQueries({
+    queries: (upvoterIds || []).map((uid) => ({
+      queryKey: ['user', uid],
+      queryFn: () => getUserProfile(uid),
+      staleTime: 60 * 1000,
+      enabled: showLikes && (upvoterIds?.length || 0) > 0,
+    })),
+  });
+  const sortedLikers = useMemo(() => {
+    const likers: User[] = [];
+    upvoterQueries.forEach((q) => { if (q.data) likers.push(q.data); });
+    const following = profile?.following || [];
+    return likers.sort((a, b) => {
+      const aFollowed = following.includes(a.id) ? 0 : 1;
+      const bFollowed = following.includes(b.id) ? 0 : 1;
+      return aFollowed - bFollowed;
+    });
+  }, [upvoterQueries, profile?.following]);
 
   if (isLoading || !review) return <LoadingSpinner />;
 
@@ -140,82 +198,38 @@ export function ReviewDetailScreen({ route, navigation }: any) {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={0}
       >
-        {/* Header */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border }}>
-          <Pressable onPress={() => navigation.goBack()} hitSlop={8}>
-            <Ionicons name="arrow-back" size={22} color={colors.foreground} />
-          </Pressable>
-          <Text style={{ ...typography.bodyBold, color: colors.foreground, flex: 1, textAlign: 'center', fontSize: 16 }}>
-            Review
-          </Text>
-          {isOwnReview ? (
-            <Pressable onPress={() => setShowMenu(true)} hitSlop={8}>
-              <Ionicons name="ellipsis-horizontal" size={22} color={colors.foreground} />
-            </Pressable>
-          ) : (
-            <View style={{ width: 22 }} />
-          )}
-        </View>
+        <ScreenHeader
+          title="Review"
+          onBack={() => navigation.goBack()}
+          rightElement={
+            isOwnReview ? (
+              <Pressable onPress={() => setShowMenu(true)} hitSlop={8}>
+                <Ionicons name="ellipsis-horizontal" size={22} color={colors.foreground} />
+              </Pressable>
+            ) : undefined
+          }
+        />
 
-        {/* Three-dot action menu */}
-        <Modal
+        <ActionMenu
           visible={showMenu}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setShowMenu(false)}
-        >
-          <Pressable
-            onPress={() => setShowMenu(false)}
-            style={{ flex: 1, backgroundColor: colors.overlay, justifyContent: 'center', alignItems: 'center', padding: spacing.xl }}
-          >
-            <Pressable
-              onPress={(e) => e.stopPropagation()}
-              style={{
-                width: '100%',
-                maxWidth: 280,
-                backgroundColor: colors.card,
-                borderRadius: borderRadius.lg,
-                overflow: 'hidden',
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 8 },
-                shadowOpacity: 0.3,
-                shadowRadius: 16,
-                elevation: 12,
-              }}
-            >
-              <Pressable
-                onPress={handleEdit}
-                style={({ pressed }) => ({
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: spacing.sm,
-                  paddingHorizontal: spacing.md,
-                  paddingVertical: spacing.md,
-                  backgroundColor: pressed ? colors.muted : 'transparent',
-                  borderBottomWidth: 1,
-                  borderBottomColor: colors.border,
-                })}
-              >
-                <Ionicons name="create-outline" size={20} color={colors.foreground} />
-                <Text style={{ ...typography.body, color: colors.foreground }}>Edit review</Text>
-              </Pressable>
-              <Pressable
-                onPress={handleDelete}
-                style={({ pressed }) => ({
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: spacing.sm,
-                  paddingHorizontal: spacing.md,
-                  paddingVertical: spacing.md,
-                  backgroundColor: pressed ? colors.muted : 'transparent',
-                })}
-              >
-                <Ionicons name="trash-outline" size={20} color="#ef4444" />
-                <Text style={{ ...typography.body, color: '#ef4444' }}>Delete review</Text>
-              </Pressable>
-            </Pressable>
-          </Pressable>
-        </Modal>
+          onClose={() => setShowMenu(false)}
+          items={[
+            { label: 'Edit review', icon: 'create-outline', onPress: handleEdit },
+            { label: 'Delete review', icon: 'trash-outline', onPress: handleDelete, destructive: true },
+          ]}
+        />
+
+        <LikedByModal
+          visible={showLikes}
+          onClose={() => setShowLikes(false)}
+          likers={sortedLikers}
+          isLoading={upvoterQueries.some((q) => q.isLoading)}
+          following={profile?.following || []}
+          onUserPress={(userId) => {
+            setShowLikes(false);
+            navigation.navigate('UserProfile', { userId });
+          }}
+        />
 
         <ScrollView indicatorStyle={isDark ? 'white' : 'default'}
           ref={scrollRef}
@@ -233,9 +247,12 @@ export function ReviewDetailScreen({ route, navigation }: any) {
                 onPress={() => navigation.navigate('UserProfile', { userId: review.userId })}
                 style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}
               >
-              <Avatar uri={review.userAvatar} name={review.username} size={44} />
+              <Avatar uri={authorAvatar} name={authorDisplayName} size={44} />
               <View style={{ marginLeft: spacing.sm, flex: 1 }}>
-                <Text style={{ ...typography.bodyBold, color: colors.foreground }}>{review.username}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+                  <Text style={{ ...typography.bodyBold, color: colors.foreground }} numberOfLines={1}>{authorDisplayName}</Text>
+                  <Text style={{ ...typography.small, color: colors.textSecondary }} numberOfLines={1}>@{authorUsername}</Text>
+                </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: 2 }}>
                   <StarRating rating={review.rating} size={16} />
                   {isMatchLiked && (
@@ -312,21 +329,22 @@ export function ReviewDetailScreen({ route, navigation }: any) {
 
             {/* Like + comment count row */}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.lg, paddingVertical: spacing.sm }}>
-              <Pressable
-                onPress={handleLikeReview}
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
-              >
-                <Ionicons
-                  name={isLiked ? 'heart' : 'heart-outline'}
-                  size={18}
-                  color={isLiked ? '#ef4444' : colors.textSecondary}
-                />
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Pressable onPress={handleLikeReview} hitSlop={6}>
+                  <Ionicons
+                    name={isLiked ? 'heart' : 'heart-outline'}
+                    size={18}
+                    color={isLiked ? '#ef4444' : colors.textSecondary}
+                  />
+                </Pressable>
                 {review.upvotes > 0 && (
-                  <Text style={{ ...typography.caption, color: isLiked ? '#ef4444' : colors.textSecondary }}>
-                    {review.upvotes}
-                  </Text>
+                  <Pressable onPress={() => setShowLikes(true)} hitSlop={6}>
+                    <Text style={{ ...typography.caption, color: isLiked ? '#ef4444' : colors.textSecondary }}>
+                      {review.upvotes}
+                    </Text>
+                  </Pressable>
                 )}
-              </Pressable>
+              </View>
 
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                 <Ionicons name="chatbubble-outline" size={18} color={colors.textSecondary} />
@@ -345,12 +363,10 @@ export function ReviewDetailScreen({ route, navigation }: any) {
           </View>
 
           {totalCount === 0 ? (
-            <View style={{ alignItems: 'center', paddingVertical: spacing.xl, paddingHorizontal: spacing.md }}>
-              <Ionicons name="chatbubbles-outline" size={32} color={colors.textSecondary} />
-              <Text style={{ ...typography.body, color: colors.textSecondary, marginTop: spacing.sm, textAlign: 'center' }}>
-                No comments yet. Start the conversation!
-              </Text>
-            </View>
+            <EmptyState
+              icon="chatbubbles-outline"
+              title="No comments yet. Start the conversation!"
+            />
           ) : (
             (() => {
               const topLevel = sortedComments.filter((c) => !c.parentId);
@@ -374,6 +390,7 @@ export function ReviewDetailScreen({ route, navigation }: any) {
                     typography={typography}
                     isReply={false}
                     navigation={navigation}
+                    authorMap={commentAuthorMap}
                   />
                   {(replyMap.get(comment.id) || []).map((reply) => (
                     <CommentRow
@@ -388,6 +405,7 @@ export function ReviewDetailScreen({ route, navigation }: any) {
                       typography={typography}
                       isReply={true}
                       navigation={navigation}
+                      authorMap={commentAuthorMap}
                     />
                   ))}
                 </View>
@@ -468,6 +486,7 @@ function CommentRow({
   typography,
   isReply,
   navigation,
+  authorMap,
 }: {
   comment: Comment;
   userId: string | null;
@@ -479,10 +498,15 @@ function CommentRow({
   typography: any;
   isReply: boolean;
   navigation: any;
+  authorMap: Map<string, { username: string; displayName: string; avatar: string | null }>;
 }) {
   const isLiked = userId ? comment.likedBy.includes(userId) : false;
   const isOwn = userId === comment.userId;
   const avatarSize = isReply ? 24 : 32;
+  const currentAuthor = authorMap.get(comment.userId);
+  const displayName = currentAuthor?.displayName || currentAuthor?.username || comment.username;
+  const displayUsername = currentAuthor?.username || comment.username;
+  const displayAvatar = currentAuthor?.avatar ?? comment.userAvatar;
 
   return (
     <View
@@ -494,15 +518,18 @@ function CommentRow({
       }}
     >
       <Pressable onPress={() => navigation.navigate('UserProfile', { userId: comment.userId })}>
-        <Avatar uri={comment.userAvatar} name={comment.username} size={avatarSize} />
+        <Avatar uri={displayAvatar} name={displayName} size={avatarSize} />
       </Pressable>
       <View style={{ marginLeft: spacing.sm, flex: 1 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
           <Pressable onPress={() => navigation.navigate('UserProfile', { userId: comment.userId })}>
             <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: isReply ? 12 : 13 }}>
-              {comment.username}
+              {displayName}
             </Text>
           </Pressable>
+          <Text style={{ ...typography.small, color: colors.textSecondary, fontSize: isReply ? 11 : 12 }}>
+            @{displayUsername}
+          </Text>
           <Text style={{ ...typography.small, color: colors.textSecondary }}>
             {formatRelativeTime(comment.createdAt)}
           </Text>
@@ -528,7 +555,7 @@ function CommentRow({
           </Pressable>
 
           <Pressable
-            onPress={() => onReply(comment.id, comment.username)}
+            onPress={() => onReply(comment.id, displayName)}
             style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}
           >
             <Ionicons name="chatbubble-outline" size={13} color={colors.textSecondary} />

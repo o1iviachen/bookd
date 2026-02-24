@@ -15,6 +15,7 @@ import { MatchPosterCard } from '../../components/match/MatchPosterCard';
 import { StarRating } from '../../components/ui/StarRating';
 import { Button } from '../../components/ui/Button';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
+import { ScreenHeader } from '../../components/ui/ScreenHeader';
 import { POPULAR_TEAMS } from '../../utils/constants';
 import { Match } from '../../types/match';
 
@@ -103,7 +104,7 @@ export function UserProfileScreen({ route, navigation }: any) {
   const navLinks: { label: string; count: number | string; icon: keyof typeof Ionicons.glyphMap }[] = [
     { label: 'Games', count: `${reviews?.length || 0} this year`, icon: 'football-outline' },
     { label: 'Diary', count: reviews?.length || 0, icon: 'book-outline' },
-    { label: 'Reviews', count: reviews?.length || 0, icon: 'chatbubble-outline' },
+    { label: 'Reviews', count: reviews?.length || 0, icon: 'reorder-three-outline' },
     { label: 'Lists', count: lists?.length || 0, icon: 'list-outline' },
     { label: 'Likes', count: profile?.likedMatchIds?.length || 0, icon: 'heart-outline' },
     { label: 'Tags', count: new Set((reviews || []).flatMap((r) => r.tags)).size, icon: 'pricetag-outline' },
@@ -111,16 +112,7 @@ export function UserProfileScreen({ route, navigation }: any) {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
-      {/* Header */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border }}>
-        <Pressable onPress={() => navigation.goBack()} hitSlop={8}>
-          <Ionicons name="arrow-back" size={22} color={colors.foreground} />
-        </Pressable>
-        <Text style={{ ...typography.bodyBold, color: colors.foreground, flex: 1, textAlign: 'center', fontSize: 17 }}>
-          {profile.username}
-        </Text>
-        <View style={{ width: 22 }} />
-      </View>
+      <ScreenHeader title={profile.username} onBack={() => navigation.goBack()} />
 
       <ScrollView indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: 60 }}>
         {/* Avatar + name */}
@@ -254,7 +246,7 @@ export function UserProfileScreen({ route, navigation }: any) {
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 4 }}>
                         <StarRating rating={review.rating} size={10} />
                         {hasText && (
-                          <Ionicons name="reorder-three" size={12} color={colors.textSecondary} style={{ marginLeft: 1 }} />
+                          <Ionicons name="reorder-three-outline" size={12} color={colors.textSecondary} style={{ marginLeft: 1 }} />
                         )}
                       </View>
                     </View>

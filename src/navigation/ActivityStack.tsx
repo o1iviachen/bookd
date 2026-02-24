@@ -7,7 +7,10 @@ import { ReviewDetailScreen } from '../screens/review/ReviewDetailScreen';
 import { FollowListScreen } from '../screens/profile/FollowListScreen';
 import { MatchDetailScreen } from '../screens/matches/MatchDetailScreen';
 import { MatchListsScreen } from '../screens/matches/MatchListsScreen';
+import { WatchedByScreen } from '../screens/matches/WatchedByScreen';
 import { ListDetailScreen } from '../screens/list/ListDetailScreen';
+import { TeamDetailScreen } from '../screens/team/TeamDetailScreen';
+import { PersonDetailScreen } from '../screens/person/PersonDetailScreen';
 import { useTheme } from '../context/ThemeContext';
 
 const Stack = createNativeStackNavigator<ActivityStackParamList>();
@@ -28,7 +31,10 @@ export function ActivityStack() {
       <Stack.Screen name="FollowList" component={FollowListScreen} />
       <Stack.Screen name="MatchDetail" component={MatchDetailScreen} />
       <Stack.Screen name="MatchLists" component={MatchListsScreen} />
+      <Stack.Screen name="WatchedBy" component={WatchedByScreen} />
       <Stack.Screen name="ListDetail" component={ListDetailScreen as any} />
+      <Stack.Screen name="TeamDetail" component={TeamDetailScreen} />
+      <Stack.Screen name="PersonDetail" component={PersonDetailScreen} />
     </Stack.Navigator>
   );
 }

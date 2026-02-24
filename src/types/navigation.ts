@@ -15,26 +15,36 @@ export type FeedStackParamList = {
   Feed: undefined;
   MatchDetail: { matchId: number };
   MatchLists: { matchId: number };
+  WatchedBy: { matchId: number; initialTab?: 'everyone' | 'friends' };
   ListDetail: { listId: string };
   CreateReview: { matchId: number; reviewId?: string };
   ReviewDetail: { reviewId: string };
   UserProfile: { userId: string };
   FollowList: { userIds: string[]; title: string };
+  LeagueDetail: { competitionCode: string; competitionName: string; competitionEmblem: string };
+  TeamDetail: { teamId: number; teamName: string; teamCrest: string };
+  PersonDetail: { personId: number; personName: string; role: 'player' | 'manager' };
 };
 
 export type MatchesStackParamList = {
   Matches: undefined;
   MatchDetail: { matchId: number };
   MatchLists: { matchId: number };
+  WatchedBy: { matchId: number; initialTab?: 'everyone' | 'friends' };
   ListDetail: { listId: string };
   CreateReview: { matchId: number; reviewId?: string };
   ReviewDetail: { reviewId: string };
+  UserProfile: { userId: string };
+  LeagueDetail: { competitionCode: string; competitionName: string; competitionEmblem: string };
+  TeamDetail: { teamId: number; teamName: string; teamCrest: string };
+  PersonDetail: { personId: number; personName: string; role: 'player' | 'manager' };
 };
 
 export type SearchStackParamList = {
   Search: undefined;
   MatchDetail: { matchId: number };
   MatchLists: { matchId: number };
+  WatchedBy: { matchId: number; initialTab?: 'everyone' | 'friends' };
   ListDetail: { listId: string };
   CreateReview: { matchId: number; reviewId?: string };
   UserProfile: { userId: string };
@@ -46,6 +56,8 @@ export type SearchStackParamList = {
   BrowseFeaturedLists: undefined;
   NewHere: undefined;
   FAQ: undefined;
+  TeamDetail: { teamId: number; teamName: string; teamCrest: string };
+  PersonDetail: { personId: number; personName: string; role: 'player' | 'manager' };
 };
 
 export type ActivityStackParamList = {
@@ -55,7 +67,10 @@ export type ActivityStackParamList = {
   FollowList: { userIds: string[]; title: string };
   MatchDetail: { matchId: number };
   MatchLists: { matchId: number };
+  WatchedBy: { matchId: number; initialTab?: 'everyone' | 'friends' };
   ListDetail: { listId: string };
+  TeamDetail: { teamId: number; teamName: string; teamCrest: string };
+  PersonDetail: { personId: number; personName: string; role: 'player' | 'manager' };
 };
 
 export type ProfileStackParamList = {
@@ -80,8 +95,12 @@ export type ProfileStackParamList = {
   CreateList: undefined;
   EditList: { listId: string };
   MatchDetail: { matchId: number };
+  WatchedBy: { matchId: number; initialTab?: 'everyone' | 'friends' };
   CreateReview: { matchId: number; reviewId?: string };
   ReviewDetail: { reviewId: string };
+  NotificationSettings: undefined;
+  TeamDetail: { teamId: number; teamName: string; teamCrest: string };
+  PersonDetail: { personId: number; personName: string; role: 'player' | 'manager' };
 };
 
 export type MainTabsParamList = {

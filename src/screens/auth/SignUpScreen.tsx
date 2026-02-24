@@ -79,7 +79,7 @@ export function SignUpScreen({ navigation }: Props) {
         {/* Hero image area */}
         <View style={{ height: height * 0.35 }}>
           <Image
-            source={require('../../../assets/grealish-background.jpeg')}
+            source={require('../../../assets/stadium-background.jpg')}
             style={{ width: '100%', height: '100%' }}
             contentFit="cover"
           />

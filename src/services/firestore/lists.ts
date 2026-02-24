@@ -13,10 +13,10 @@ import {
   serverTimestamp,
   arrayUnion,
   arrayRemove,
-  increment,
 } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { MatchList } from '../../types/list';
+import { createNotification } from './notifications';
 
 function docToList(docSnap: any): MatchList {
   const data = docSnap.data();
@@ -100,8 +100,126 @@ export async function getListsContainingMatch(matchId: number): Promise<MatchLis
   return snapshot.docs.map(docToList);
 }
 
-export async function likeList(listId: string): Promise<void> {
-  await updateDoc(doc(db, 'lists', listId), { likes: increment(1) });
+export async function toggleListLike(
+  listId: string,
+  userId: string,
+  senderInfo?: { username: string; avatar: string | null }
+): Promise<void> {
+  const ref = doc(db, 'lists', listId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return;
+
+  const data = snap.data();
+  const likedBy: string[] = data.likedBy || [];
+  if (likedBy.includes(userId)) {
+    await updateDoc(ref, {
+      likedBy: arrayRemove(userId),
+      likes: Math.max((data.likes || 1) - 1, 0),
+    });
+  } else {
+    await updateDoc(ref, {
+      likedBy: arrayUnion(userId),
+      likes: (data.likes || 0) + 1,
+    });
+
+    if (senderInfo && data.userId) {
+      await createNotification({
+        recipientId: data.userId,
+        senderId: userId,
+        senderUsername: senderInfo.username,
+        senderAvatar: senderInfo.avatar,
+        type: 'list_like',
+        listId,
+      });
+    }
+  }
+}
+
+export async function getListsLikedByUser(userId: string): Promise<MatchList[]> {
+  const q = query(
+    collection(db, 'lists'),
+    where('likedBy', 'array-contains', userId)
+  );
+  const snapshot = await getDocs(q);
+  const lists = snapshot.docs.map(docToList);
+  lists.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  return lists;
+}
+
+export async function getListLikedBy(listId: string): Promise<string[]> {
+  const snap = await getDoc(doc(db, 'lists', listId));
+  return snap.exists() ? snap.data().likedBy || [] : [];
+}
+
+export interface ListComment {
+  id: string;
+  listId: string;
+  userId: string;
+  username: string;
+  userAvatar: string | null;
+  text: string;
+  createdAt: Date;
+}
+
+function docToListComment(docSnap: any): ListComment {
+  const data = docSnap.data();
+  return {
+    id: docSnap.id,
+    listId: data.listId,
+    userId: data.userId,
+    username: data.username || 'Anonymous',
+    userAvatar: data.userAvatar || null,
+    text: data.text || '',
+    createdAt: data.createdAt?.toDate() || new Date(),
+  };
+}
+
+export async function createListComment(
+  listId: string,
+  userId: string,
+  username: string,
+  userAvatar: string | null,
+  text: string,
+): Promise<string> {
+  const ref = await addDoc(collection(db, 'listComments'), {
+    listId,
+    userId,
+    username,
+    userAvatar,
+    text,
+    createdAt: serverTimestamp(),
+  });
+
+  const listSnap = await getDoc(doc(db, 'lists', listId));
+  const listUserId = listSnap.data()?.userId;
+  if (listUserId) {
+    await createNotification({
+      recipientId: listUserId,
+      senderId: userId,
+      senderUsername: username,
+      senderAvatar: userAvatar,
+      type: 'list_comment',
+      listId,
+      commentId: ref.id,
+    });
+  }
+
+  return ref.id;
+}
+
+export async function getCommentsForList(listId: string): Promise<ListComment[]> {
+  const q = query(
+    collection(db, 'listComments'),
+    where('listId', '==', listId),
+  );
+  const snapshot = await getDocs(q);
+  const comments = snapshot.docs.map(docToListComment);
+  comments.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  return comments;
+}
+
+export async function deleteListComment(commentId: string): Promise<void> {
+  await deleteDoc(doc(db, 'listComments', commentId));
 }
 
 export async function updateList(

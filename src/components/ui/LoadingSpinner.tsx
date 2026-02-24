@@ -8,8 +8,8 @@ interface LoadingSpinnerProps {
 }
 
 export function LoadingSpinner({ size = 'large', fullScreen = true }: LoadingSpinnerProps) {
-  const { theme } = useTheme();
-  const spinnerColor = theme.colors.foreground;
+  const { theme, isDark } = useTheme();
+  const spinnerColor = isDark ? '#ffffff' : theme.colors.foreground;
 
   if (!fullScreen) {
     return <ActivityIndicator size={size} color={spinnerColor} />;

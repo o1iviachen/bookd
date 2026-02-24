@@ -1,7 +1,6 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { View, Text, FlatList, Pressable, useWindowDimensions } from 'react-native';
+import { View, Text, FlatList, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import { useQueries } from '@tanstack/react-query';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
@@ -11,6 +10,8 @@ import { MatchPosterCard } from '../../components/match/MatchPosterCard';
 import { MatchFilters, MatchFilterState, applyMatchFilters } from '../../components/match/MatchFilters';
 import { Select } from '../../components/ui/Select';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
+import { ScreenHeader } from '../../components/ui/ScreenHeader';
+import { EmptyState } from '../../components/ui/EmptyState';
 import { Review } from '../../types/review';
 import { Match } from '../../types/match';
 
@@ -21,8 +22,8 @@ const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: 'recent_played', label: 'Recently Played' },
   { value: 'rating_high', label: 'Your Rating (High)' },
   { value: 'rating_low', label: 'Your Rating (Low)' },
-  { value: 'avg_rating_high', label: 'Avg Rating (High)' },
-  { value: 'avg_rating_low', label: 'Avg Rating (Low)' },
+  { value: 'avg_rating_high', label: 'Average Rating (High)' },
+  { value: 'avg_rating_low', label: 'Average Rating (Low)' },
   { value: 'popular', label: 'Most Reviewed' },
 ];
 
@@ -162,16 +163,7 @@ export function GamesScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
-      {/* Header */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border }}>
-        <Pressable onPress={() => navigation.goBack()} hitSlop={8}>
-          <Ionicons name="arrow-back" size={22} color={colors.foreground} />
-        </Pressable>
-        <Text style={{ ...typography.bodyBold, color: colors.foreground, flex: 1, textAlign: 'center', fontSize: 17 }}>
-          Games
-        </Text>
-        <View style={{ width: 22 }} />
-      </View>
+      <ScreenHeader title="Games" onBack={() => navigation.goBack()} />
 
       {/* Filters — same component as browse screens */}
       <MatchFilters
@@ -200,15 +192,11 @@ export function GamesScreen({ navigation }: any) {
 
       {/* Grid */}
       {filtered.length === 0 ? (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl }}>
-          <Ionicons name="football-outline" size={48} color={colors.textSecondary} />
-          <Text style={{ ...typography.h4, color: colors.foreground, marginTop: spacing.md }}>
-            {entries.length === 0 ? 'No games logged yet' : 'No matches found'}
-          </Text>
-          <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.xs }}>
-            {entries.length === 0 ? 'Start reviewing matches to build your collection' : 'Try adjusting your filters'}
-          </Text>
-        </View>
+        <EmptyState
+          icon="football-outline"
+          title={entries.length === 0 ? 'No games logged yet' : 'No matches found'}
+          subtitle={entries.length === 0 ? 'Start reviewing matches to build your collection' : 'Try adjusting your filters'}
+        />
       ) : (
         <FlatList indicatorStyle={isDark ? 'white' : 'default'}
           data={filtered}

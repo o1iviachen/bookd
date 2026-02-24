@@ -1,18 +1,27 @@
-import React, { useState, useMemo } from 'react';
-import { View, Text, FlatList, Pressable, useWindowDimensions } from 'react-native';
+import React, { useState, useMemo, useRef, useCallback } from 'react';
+import { View, Text, FlatList, ScrollView, useWindowDimensions } from 'react-native';
+import PagerView from 'react-native-pager-view';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import { useQueries } from '@tanstack/react-query';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useUserProfile } from '../../hooks/useUser';
-import { useReviewsForUser, useAvgRatings } from '../../hooks/useReviews';
+import { useReviewsForUser, useAvgRatings, useLikedReviews } from '../../hooks/useReviews';
+import { useLikedLists } from '../../hooks/useLists';
 import { getMatchById } from '../../services/matchService';
 import { MatchPosterCard } from '../../components/match/MatchPosterCard';
 import { MatchFilters, MatchFilterState, applyMatchFilters } from '../../components/match/MatchFilters';
+import { ReviewCard } from '../../components/review/ReviewCard';
+import { ListPreviewCard } from '../../components/list/ListPreviewCard';
 import { Select } from '../../components/ui/Select';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
+import { ScreenHeader } from '../../components/ui/ScreenHeader';
+import { SegmentedControl } from '../../components/ui/SegmentedControl';
+import { EmptyState } from '../../components/ui/EmptyState';
 import { Match } from '../../types/match';
+
+const TABS = ['Matches', 'Reviews', 'Lists'] as const;
+type Tab = (typeof TABS)[number];
 
 type SortKey = 'recent_liked' | 'recent_played' | 'rating_high' | 'rating_low' | 'avg_rating_high' | 'avg_rating_low' | 'popular';
 
@@ -21,8 +30,8 @@ const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: 'recent_played', label: 'Recently Played' },
   { value: 'rating_high', label: 'Your Rating (High)' },
   { value: 'rating_low', label: 'Your Rating (Low)' },
-  { value: 'avg_rating_high', label: 'Avg Rating (High)' },
-  { value: 'avg_rating_low', label: 'Avg Rating (Low)' },
+  { value: 'avg_rating_high', label: 'Average Rating (High)' },
+  { value: 'avg_rating_low', label: 'Average Rating (Low)' },
   { value: 'popular', label: 'Most Reviewed' },
 ];
 
@@ -43,18 +52,29 @@ export function LikesScreen({ navigation }: any) {
   const { data: profile, isLoading: profileLoading } = useUserProfile(user?.uid || '');
   const { data: reviews } = useReviewsForUser(user?.uid || '');
 
+  const [activeTabIndex, setActiveTabIndex] = useState(0);
+  const pagerRef = useRef<PagerView>(null);
+  const [sort, setSort] = useState<SortKey>('recent_liked');
+
+  const handleTabPress = useCallback((index: number) => {
+    setActiveTabIndex(index);
+    pagerRef.current?.setPage(index);
+  }, []);
+
+  const handlePageSelected = useCallback((e: any) => {
+    setActiveTabIndex(e.nativeEvent.position);
+  }, []);
+  const [filters, setFilters] = useState<MatchFilterState>({ league: 'all', team: 'all', season: 'all' });
+
+  // ─── Matches tab data ───
   const likedMatchIds = useMemo(() => profile?.likedMatchIds || [], [profile]);
   const { data: avgRatingsMap } = useAvgRatings(likedMatchIds);
-
-  const [sort, setSort] = useState<SortKey>('recent_liked');
-  const [filters, setFilters] = useState<MatchFilterState>({ league: 'all', team: 'all', season: 'all' });
 
   const GAP = spacing.sm;
   const HORIZONTAL_PADDING = spacing.md;
   const NUM_COLUMNS = 3;
   const CARD_WIDTH = (screenWidth - HORIZONTAL_PADDING * 2 - GAP * (NUM_COLUMNS - 1)) / NUM_COLUMNS;
 
-  // Fetch match data
   const matchQueries = useQueries({
     queries: likedMatchIds.map((id) => ({
       queryKey: ['match', id],
@@ -74,7 +94,6 @@ export function LikesScreen({ navigation }: any) {
 
   const allMatches = useMemo(() => Array.from(matchMap.values()), [matchMap]);
 
-  // Build user rating map from reviews
   const userRatingMap = useMemo(() => {
     const map = new Map<number, { avgRating: number; count: number }>();
     if (!reviews) return map;
@@ -143,74 +162,135 @@ export function LikesScreen({ navigation }: any) {
     return result;
   }, [entries, allMatches, filters, sort]);
 
+  // ─── Reviews tab data ───
+  const { data: likedReviews, isLoading: likedReviewsLoading } = useLikedReviews(user?.uid || '');
+
+  // ─── Lists tab data ───
+  const { data: likedLists, isLoading: likedListsLoading } = useLikedLists(user?.uid || '');
+
   const isLoading = profileLoading || matchQueries.some((q) => q.isLoading);
-  if (isLoading && entries.length === 0) return <LoadingSpinner />;
+  if (isLoading && entries.length === 0 && activeTabIndex === 0) return <LoadingSpinner />;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
-      {/* Header */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border }}>
-        <Pressable onPress={() => navigation.goBack()} hitSlop={8}>
-          <Ionicons name="arrow-back" size={22} color={colors.foreground} />
-        </Pressable>
-        <Text style={{ ...typography.bodyBold, color: colors.foreground, flex: 1, textAlign: 'center', fontSize: 17 }}>
-          Likes
-        </Text>
-        <View style={{ width: 22 }} />
+      <ScreenHeader title="Likes" onBack={() => navigation.goBack()} />
+
+      {/* Segmented control */}
+      <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.sm }}>
+        <SegmentedControl tabs={TABS} activeTab={TABS[activeTabIndex]} onTabChange={(tab) => handleTabPress(TABS.indexOf(tab))} />
       </View>
 
-      {/* Filters */}
-      <MatchFilters
-        filters={filters}
-        onFiltersChange={setFilters}
-        minLogs={0}
-        onMinLogsChange={() => {}}
-        matches={allMatches}
-        showMinLogs={false}
-      />
-
-      {/* Sort + count row */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingVertical: spacing.sm }}>
-        <Text style={{ ...typography.caption, color: colors.textSecondary }}>
-          {filtered.length} {filtered.length === 1 ? 'match' : 'matches'}
-        </Text>
-        <View style={{ width: 160 }}>
-          <Select
-            value={sort}
-            onValueChange={(v) => setSort(v as SortKey)}
-            title="Sort By"
-            options={SORT_OPTIONS}
+      <PagerView
+        ref={pagerRef}
+        style={{ flex: 1 }}
+        initialPage={0}
+        onPageSelected={handlePageSelected}
+      >
+        {/* ─── Matches Page ─── */}
+        <View key="matches" style={{ flex: 1 }}>
+          <MatchFilters
+            filters={filters}
+            onFiltersChange={setFilters}
+            minLogs={0}
+            onMinLogsChange={() => {}}
+            matches={allMatches}
+            showMinLogs={false}
           />
-        </View>
-      </View>
 
-      {/* Grid */}
-      {filtered.length === 0 ? (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl }}>
-          <Ionicons name="heart-outline" size={48} color={colors.textSecondary} />
-          <Text style={{ ...typography.h4, color: colors.foreground, marginTop: spacing.md }}>
-            {likedMatchIds.length === 0 ? 'No liked matches yet' : 'No matches found'}
-          </Text>
-          <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.xs }}>
-            {likedMatchIds.length === 0 ? 'Like matches to build your collection' : 'Try adjusting your filters'}
-          </Text>
-        </View>
-      ) : (
-        <FlatList indicatorStyle={isDark ? 'white' : 'default'}
-          data={filtered}
-          keyExtractor={(item) => String(item.matchId)}
-          numColumns={NUM_COLUMNS}
-          contentContainerStyle={{ padding: HORIZONTAL_PADDING, gap: GAP }}
-          columnWrapperStyle={{ gap: GAP }}
-          renderItem={({ item }) => (
-            <MatchPosterCard
-              match={item.match}
-              onPress={() => navigation.navigate('MatchDetail', { matchId: item.matchId })}
-              width={CARD_WIDTH}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingVertical: spacing.sm }}>
+            <Text style={{ ...typography.caption, color: colors.textSecondary }}>
+              {filtered.length} {filtered.length === 1 ? 'match' : 'matches'}
+            </Text>
+            <View style={{ width: 160 }}>
+              <Select
+                value={sort}
+                onValueChange={(v) => setSort(v as SortKey)}
+                title="Sort By"
+                options={SORT_OPTIONS}
+              />
+            </View>
+          </View>
+
+          {filtered.length === 0 ? (
+            <EmptyState
+              icon="heart-outline"
+              title={likedMatchIds.length === 0 ? 'No liked matches yet' : 'No matches found'}
+              subtitle={likedMatchIds.length === 0 ? 'Like matches to build your collection' : 'Try adjusting your filters'}
+            />
+          ) : (
+            <FlatList
+              indicatorStyle={isDark ? 'white' : 'default'}
+              data={filtered}
+              keyExtractor={(item) => String(item.matchId)}
+              numColumns={NUM_COLUMNS}
+              contentContainerStyle={{ padding: HORIZONTAL_PADDING, gap: GAP }}
+              columnWrapperStyle={{ gap: GAP }}
+              renderItem={({ item }) => (
+                <MatchPosterCard
+                  match={item.match}
+                  onPress={() => navigation.navigate('MatchDetail', { matchId: item.matchId })}
+                  width={CARD_WIDTH}
+                />
+              )}
             />
           )}
-        />
-      )}
+        </View>
+
+        {/* ─── Reviews Page ─── */}
+        <View key="reviews" style={{ flex: 1 }}>
+          {likedReviewsLoading ? (
+            <View style={{ flex: 1, justifyContent: 'center' }}><LoadingSpinner fullScreen={false} /></View>
+          ) : !likedReviews || likedReviews.length === 0 ? (
+            <EmptyState
+              icon="heart-outline"
+              title="No liked reviews yet"
+              subtitle="Like reviews to save them here"
+            />
+          ) : (
+            <ScrollView
+              indicatorStyle={isDark ? 'white' : 'default'}
+              nestedScrollEnabled
+              contentContainerStyle={{ paddingHorizontal: spacing.md, paddingBottom: spacing.xl }}
+            >
+              {likedReviews.map((review) => (
+                <ReviewCard
+                  key={review.id}
+                  review={review}
+                  onPress={() => navigation.navigate('ReviewDetail', { reviewId: review.id })}
+                />
+              ))}
+            </ScrollView>
+          )}
+        </View>
+
+        {/* ─── Lists Page ─── */}
+        <View key="lists" style={{ flex: 1 }}>
+          {likedListsLoading ? (
+            <View style={{ flex: 1, justifyContent: 'center' }}><LoadingSpinner fullScreen={false} /></View>
+          ) : !likedLists || likedLists.length === 0 ? (
+            <EmptyState
+              icon="heart-outline"
+              title="No liked lists yet"
+              subtitle="Like lists to save them here"
+            />
+          ) : (
+            <ScrollView
+              indicatorStyle={isDark ? 'white' : 'default'}
+              nestedScrollEnabled
+              contentContainerStyle={{ paddingBottom: spacing.xl }}
+            >
+              {likedLists.map((list) => (
+                <ListPreviewCard
+                  key={list.id}
+                  list={list}
+                  onPress={() => navigation.navigate('ListDetail', { listId: list.id })}
+                  onMatchPress={(matchId) => navigation.navigate('MatchDetail', { matchId })}
+                />
+              ))}
+            </ScrollView>
+          )}
+        </View>
+      </PagerView>
     </SafeAreaView>
   );
 }

@@ -9,16 +9,20 @@ import { TeamLogo } from './TeamLogo';
 interface LeagueSectionProps {
   leagueName: string;
   leagueEmblem?: string;
+  leagueCode?: string;
   matches: Match[];
   onMatchPress?: (matchId: number) => void;
+  onLeaguePress?: () => void;
   defaultExpanded?: boolean;
 }
 
 export function LeagueSection({
   leagueName,
   leagueEmblem,
+  leagueCode,
   matches,
   onMatchPress,
+  onLeaguePress,
   defaultExpanded = true,
 }: LeagueSectionProps) {
   const { theme } = useTheme();
@@ -27,8 +31,7 @@ export function LeagueSection({
 
   return (
     <View style={{ marginBottom: spacing.sm }}>
-      <Pressable
-        onPress={() => setExpanded(!expanded)}
+      <View
         style={{
           flexDirection: 'row',
           alignItems: 'center',
@@ -46,30 +49,38 @@ export function LeagueSection({
             marginRight: spacing.sm,
           }}
         />
-        {leagueEmblem && (
-          <View style={{ backgroundColor: '#fff', borderRadius: 6, padding: 3 }}>
-            <TeamLogo uri={leagueEmblem} size={20} />
-          </View>
-        )}
-        <Text
-          style={{
-            ...typography.bodyBold,
-            color: colors.foreground,
-            flex: 1,
-            marginLeft: leagueEmblem ? spacing.sm : 0,
-          }}
+        <Pressable
+          onPress={onLeaguePress}
+          style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}
+          disabled={!onLeaguePress}
         >
-          {leagueName}
-        </Text>
+          {leagueEmblem && (
+            <View style={{ backgroundColor: '#fff', borderRadius: 6, padding: 3 }}>
+              <TeamLogo uri={leagueEmblem} size={20} />
+            </View>
+          )}
+          <Text
+            style={{
+              ...typography.bodyBold,
+              color: colors.foreground,
+              flex: 1,
+              marginLeft: leagueEmblem ? spacing.sm : 0,
+            }}
+          >
+            {leagueName}
+          </Text>
+        </Pressable>
         <Text style={{ ...typography.caption, color: colors.textSecondary, marginRight: spacing.xs }}>
           {matches.length}
         </Text>
-        <Ionicons
-          name={expanded ? 'chevron-up' : 'chevron-down'}
-          size={16}
-          color={colors.textSecondary}
-        />
-      </Pressable>
+        <Pressable onPress={() => setExpanded(!expanded)} hitSlop={12}>
+          <Ionicons
+            name={expanded ? 'chevron-up' : 'chevron-down'}
+            size={16}
+            color={colors.textSecondary}
+          />
+        </Pressable>
+      </View>
 
       {expanded && (
         <View

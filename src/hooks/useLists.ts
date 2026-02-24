@@ -4,12 +4,18 @@ import {
   getRecentLists,
   getListById,
   getListsContainingMatch,
+  getListsLikedByUser,
   createList,
   updateList,
   deleteList,
   addMatchToList,
   removeMatchFromList,
   updateMatchOrder,
+  toggleListLike,
+  getListLikedBy,
+  getCommentsForList,
+  createListComment,
+  deleteListComment,
 } from '../services/firestore/lists';
 
 export function useListsForUser(userId: string) {
@@ -27,6 +33,7 @@ export function useRecentLists() {
     queryKey: ['lists', 'recent'],
     queryFn: getRecentLists,
     staleTime: 60 * 1000,
+    retry: 2,
   });
 }
 
@@ -118,6 +125,73 @@ export function useUpdateMatchOrder() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['lists'] });
       queryClient.invalidateQueries({ queryKey: ['list'] });
+    },
+  });
+}
+
+export function useLikedLists(userId: string) {
+  return useQuery({
+    queryKey: ['lists', 'liked', userId],
+    queryFn: () => getListsLikedByUser(userId),
+    staleTime: 60 * 1000,
+    enabled: !!userId,
+  });
+}
+
+export function useListLikedBy(listId: string) {
+  return useQuery({
+    queryKey: ['listLikedBy', listId],
+    queryFn: () => getListLikedBy(listId),
+    enabled: !!listId,
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useToggleListLike() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (params: { listId: string; userId: string; senderInfo?: { username: string; avatar: string | null } }) =>
+      toggleListLike(params.listId, params.userId, params.senderInfo),
+    onSuccess: (_, params) => {
+      queryClient.invalidateQueries({ queryKey: ['listLikedBy', params.listId] });
+      queryClient.invalidateQueries({ queryKey: ['list', params.listId] });
+      queryClient.invalidateQueries({ queryKey: ['lists'] });
+    },
+  });
+}
+
+export function useListComments(listId: string) {
+  return useQuery({
+    queryKey: ['listComments', listId],
+    queryFn: () => getCommentsForList(listId),
+    enabled: !!listId,
+    staleTime: 15 * 1000,
+  });
+}
+
+export function useCreateListComment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (params: {
+      listId: string;
+      userId: string;
+      username: string;
+      userAvatar: string | null;
+      text: string;
+    }) => createListComment(params.listId, params.userId, params.username, params.userAvatar, params.text),
+    onSuccess: (_, params) => {
+      queryClient.invalidateQueries({ queryKey: ['listComments', params.listId] });
+      queryClient.invalidateQueries({ queryKey: ['lists'] });
+    },
+  });
+}
+
+export function useDeleteListComment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (params: { commentId: string; listId: string }) => deleteListComment(params.commentId),
+    onSuccess: (_, params) => {
+      queryClient.invalidateQueries({ queryKey: ['listComments', params.listId] });
     },
   });
 }

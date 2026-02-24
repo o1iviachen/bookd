@@ -1,9 +1,11 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useCallback } from 'react';
 import { View, Text, ScrollView, RefreshControl, TextInput as RNTextInput, Pressable } from 'react-native';
+import PagerView from 'react-native-pager-view';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
+import { addDays, isSameDay } from 'date-fns';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useUserProfile } from '../../hooks/useUser';
@@ -25,6 +27,9 @@ const LEAGUE_RANK: Record<string, number> = {
   ELC: 7, DED: 8, PPL: 9, BSA: 10, CLI: 11,
 };
 
+const DATE_RANGE = 14;
+const todayKey = new Date().toISOString().split('T')[0];
+
 export function MatchesScreen() {
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
@@ -34,6 +39,31 @@ export function MatchesScreen() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [searchQuery, setSearchQuery] = useState('');
   const [favouritesExpanded, setFavouritesExpanded] = useState(true);
+  const pagerRef = useRef<PagerView>(null);
+
+  const today = useMemo(() => new Date(), [todayKey]);
+  const dates = useMemo(
+    () => Array.from({ length: DATE_RANGE * 2 + 1 }, (_, i) => addDays(today, i - DATE_RANGE)),
+    [today]
+  );
+
+  const selectedPageIndex = useMemo(
+    () => dates.findIndex((d) => isSameDay(d, selectedDate)),
+    [dates, selectedDate]
+  );
+
+  const handleDateChange = useCallback((date: Date) => {
+    setSelectedDate(date);
+    const idx = dates.findIndex((d) => isSameDay(d, date));
+    if (idx >= 0) pagerRef.current?.setPageWithoutAnimation(idx);
+  }, [dates]);
+
+  const handlePageSelected = useCallback((e: any) => {
+    const idx = e.nativeEvent.position;
+    if (idx >= 0 && idx < dates.length) {
+      setSelectedDate(dates[idx]);
+    }
+  }, [dates]);
 
   const { data: matches, isLoading, refetch, isRefetching } = useMatchesByDate(selectedDate);
 
@@ -111,6 +141,7 @@ export function MatchesScreen() {
             value={searchQuery}
             onChangeText={setSearchQuery}
             autoCapitalize="none"
+            autoCorrect={false}
             style={{
               flex: 1,
               paddingLeft: 10,
@@ -121,108 +152,132 @@ export function MatchesScreen() {
           />
         </View>
 
-        <DatePicker selectedDate={selectedDate} onDateChange={setSelectedDate} />
+        <DatePicker selectedDate={selectedDate} onDateChange={handleDateChange} />
       </View>
 
-      <ScrollView indicatorStyle={isDark ? 'white' : 'default'}
+      <PagerView
+        ref={pagerRef}
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: 100, paddingTop: spacing.sm }}
-        refreshControl={
-          <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.foreground} colors={[colors.foreground]} />
-        }
+        initialPage={selectedPageIndex >= 0 ? selectedPageIndex : DATE_RANGE}
+        onPageSelected={handlePageSelected}
       >
-        {isLoading ? (
-          <View style={{ marginTop: spacing.xxl }}>
-            <LoadingSpinner fullScreen={false} />
-          </View>
-        ) : filteredMatches.length === 0 ? (
-          <View style={{ alignItems: 'center', marginTop: spacing.xxl * 2 }}>
-            <Ionicons name="football-outline" size={48} color={colors.textSecondary} />
-            <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.md }}>
-              {searchQuery ? `No matches found for "${searchQuery}"` : 'No matches on this date'}
-            </Text>
-          </View>
-        ) : (
-          <>
-            {/* Favourites section */}
-            {favouriteMatches.length > 0 && (
-              <View style={{ marginBottom: spacing.sm }}>
-                <Pressable
-                  onPress={() => setFavouritesExpanded(!favouritesExpanded)}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    paddingVertical: spacing.sm + 2,
-                    paddingHorizontal: spacing.md,
-                  }}
-                >
-                  <Ionicons name="star" size={18} color={colors.primary} style={{ marginRight: spacing.sm }} />
-                  <Text style={{ ...typography.bodyBold, color: colors.foreground, flex: 1 }}>
-                    Favourites
+        {dates.map((date, pageIdx) => (
+          <View key={date.toISOString()} style={{ flex: 1 }}>
+            <ScrollView indicatorStyle={isDark ? 'white' : 'default'}
+              style={{ flex: 1 }}
+              nestedScrollEnabled
+              contentContainerStyle={{ paddingBottom: 100, paddingTop: spacing.sm }}
+              refreshControl={
+                <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#fff" colors={['#fff']} />
+              }
+            >
+              {isLoading ? (
+                <View style={{ marginTop: spacing.xxl }}>
+                  <LoadingSpinner fullScreen={false} />
+                </View>
+              ) : filteredMatches.length === 0 ? (
+                <View style={{ alignItems: 'center', marginTop: spacing.xxl * 2 }}>
+                  <Ionicons name="football-outline" size={48} color={colors.textSecondary} />
+                  <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.md }}>
+                    {searchQuery ? `No matches found for "${searchQuery}"` : 'No matches on this date'}
                   </Text>
-                  <Text style={{ ...typography.caption, color: colors.textSecondary, marginRight: spacing.xs }}>
-                    {favouriteMatches.length} {favouriteMatches.length === 1 ? 'match' : 'matches'}
-                  </Text>
-                  <Ionicons
-                    name={favouritesExpanded ? 'chevron-up' : 'chevron-down'}
-                    size={16}
-                    color={colors.textSecondary}
-                  />
-                </Pressable>
-
-                {favouritesExpanded && (
-                  <View
-                    style={{
-                      backgroundColor: colors.card,
-                      borderRadius: borderRadius.md,
-                      marginHorizontal: spacing.md,
-                      borderWidth: 1,
-                      borderColor: colors.border,
-                      overflow: 'hidden',
-                    }}
-                  >
-                    {favouriteMatches.map((match, index) => (
-                      <View key={match.id}>
-                        {index > 0 && (
-                          <View style={{ height: 1, backgroundColor: colors.border, marginHorizontal: spacing.md }} />
-                        )}
-                        <CompactMatchRow
-                          match={match}
-                          onPress={() => navigation.navigate('MatchDetail', { matchId: match.id })}
+                </View>
+              ) : (
+                <>
+                  {/* Favourites section */}
+                  {favouriteMatches.length > 0 && (
+                    <View style={{ marginBottom: spacing.sm }}>
+                      <Pressable
+                        onPress={() => setFavouritesExpanded(!favouritesExpanded)}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          paddingVertical: spacing.sm + 2,
+                          paddingHorizontal: spacing.md,
+                        }}
+                      >
+                        <Ionicons name="star" size={18} color={colors.primary} style={{ marginRight: spacing.sm }} />
+                        <Text style={{ ...typography.bodyBold, color: colors.foreground, flex: 1 }}>
+                          Favourites
+                        </Text>
+                        <Text style={{ ...typography.caption, color: colors.textSecondary, marginRight: spacing.xs }}>
+                          {favouriteMatches.length} {favouriteMatches.length === 1 ? 'match' : 'matches'}
+                        </Text>
+                        <Ionicons
+                          name={favouritesExpanded ? 'chevron-up' : 'chevron-down'}
+                          size={16}
+                          color={colors.textSecondary}
                         />
-                      </View>
-                    ))}
-                  </View>
-                )}
-              </View>
-            )}
+                      </Pressable>
 
-            {/* Followed leagues */}
-            {followedLeagueEntries.map(([league, leagueMatches]) => (
-              <LeagueSection
-                key={league}
-                leagueName={league}
-                leagueEmblem={leagueMatches[0]?.competition.emblem}
-                matches={leagueMatches}
-                onMatchPress={(id) => navigation.navigate('MatchDetail', { matchId: id })}
-                defaultExpanded={true}
-              />
-            ))}
+                      {favouritesExpanded && (
+                        <View
+                          style={{
+                            backgroundColor: colors.card,
+                            borderRadius: borderRadius.md,
+                            marginHorizontal: spacing.md,
+                            borderWidth: 1,
+                            borderColor: colors.border,
+                            overflow: 'hidden',
+                          }}
+                        >
+                          {favouriteMatches.map((match, index) => (
+                            <View key={match.id}>
+                              {index > 0 && (
+                                <View style={{ height: 1, backgroundColor: colors.border, marginHorizontal: spacing.md }} />
+                              )}
+                              <CompactMatchRow
+                                match={match}
+                                onPress={() => navigation.navigate('MatchDetail', { matchId: match.id })}
+                              />
+                            </View>
+                          ))}
+                        </View>
+                      )}
+                    </View>
+                  )}
 
-            {/* Other leagues */}
-            {otherLeagueEntries.map(([league, leagueMatches]) => (
-              <LeagueSection
-                key={league}
-                leagueName={league}
-                leagueEmblem={leagueMatches[0]?.competition.emblem}
-                matches={leagueMatches}
-                onMatchPress={(id) => navigation.navigate('MatchDetail', { matchId: id })}
-                defaultExpanded={false}
-              />
-            ))}
-          </>
-        )}
-      </ScrollView>
+                  {/* Followed leagues */}
+                  {followedLeagueEntries.map(([league, leagueMatches]) => (
+                    <LeagueSection
+                      key={league}
+                      leagueName={league}
+                      leagueEmblem={leagueMatches[0]?.competition.emblem}
+                      leagueCode={leagueMatches[0]?.competition.code}
+                      matches={leagueMatches}
+                      onMatchPress={(id) => navigation.navigate('MatchDetail', { matchId: id })}
+                      onLeaguePress={() => navigation.navigate('LeagueDetail', {
+                        competitionCode: leagueMatches[0]?.competition.code,
+                        competitionName: league,
+                        competitionEmblem: leagueMatches[0]?.competition.emblem,
+                      })}
+                      defaultExpanded={true}
+                    />
+                  ))}
+
+                  {/* Other leagues */}
+                  {otherLeagueEntries.map(([league, leagueMatches]) => (
+                    <LeagueSection
+                      key={league}
+                      leagueName={league}
+                      leagueEmblem={leagueMatches[0]?.competition.emblem}
+                      leagueCode={leagueMatches[0]?.competition.code}
+                      matches={leagueMatches}
+                      onMatchPress={(id) => navigation.navigate('MatchDetail', { matchId: id })}
+                      onLeaguePress={() => navigation.navigate('LeagueDetail', {
+                        competitionCode: leagueMatches[0]?.competition.code,
+                        competitionName: league,
+                        competitionEmblem: leagueMatches[0]?.competition.emblem,
+                      })}
+                      defaultExpanded={false}
+                    />
+                  ))}
+                </>
+              )}
+            </ScrollView>
+          </View>
+        ))}
+      </PagerView>
     </SafeAreaView>
   );
 }

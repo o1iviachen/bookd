@@ -1,25 +1,36 @@
-import React, { useState, useMemo, useRef } from 'react';
-import { View, Text, Pressable, Share, Modal, Animated } from 'react-native';
+import React, { useState, useMemo, useRef, useCallback } from 'react';
+import { View, Text, Pressable, Share, ScrollView } from 'react-native';
+import PagerView from 'react-native-pager-view';
 import { Select } from '../../components/ui/Select';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import { useQueries } from '@tanstack/react-query';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
-import { useMatch } from '../../hooks/useMatches';
+import { useMatch, useMatchDetail } from '../../hooks/useMatches';
 import { useReviewsForMatch } from '../../hooks/useReviews';
 import { useCommentsForReview } from '../../hooks/useComments';
 import { useUserProfile } from '../../hooks/useUser';
+import { getUserProfile } from '../../services/firestore/users';
 import { useListsForMatch } from '../../hooks/useLists';
 import { TeamLogo } from '../../components/match/TeamLogo';
+import { Avatar } from '../../components/ui/Avatar';
+import { StarRating } from '../../components/ui/StarRating';
 import { ReviewCard } from '../../components/review/ReviewCard';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { AddToListModal } from '../../components/list/AddToListModal';
+import { ActionMenu } from '../../components/ui/ActionMenu';
+import { RatingChart } from '../../components/profile/RatingChart';
 import { formatFullDate, formatMatchTime } from '../../utils/formatDate';
 import { getStadiumImageUrl } from '../../utils/stadiumImages';
 import { MatchesStackParamList } from '../../types/navigation';
+import { MatchDetail, MatchPlayer } from '../../services/footballApi';
+import { User } from '../../types/user';
+
+type MatchTab = 'reviews' | 'lineup' | 'info';
 
 type Props = NativeStackScreenProps<MatchesStackParamList, 'MatchDetail'>;
 
@@ -32,12 +43,30 @@ export function MatchDetailScreen({ route, navigation }: Props) {
   const { matchId } = route.params;
   const [showListModal, setShowListModal] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
-  const scrollY = useRef(new Animated.Value(0)).current;
+  const [activeTabIndex, setActiveTabIndex] = useState(0);
+  const pagerRef = useRef<PagerView>(null);
+  const insets = useSafeAreaInsets();
+
+  const MATCH_TABS: { key: MatchTab; label: string }[] = [
+    { key: 'reviews', label: 'Reviews' },
+    { key: 'lineup', label: 'Lineup' },
+    { key: 'info', label: 'Info' },
+  ];
+
+  const handleTabPress = useCallback((index: number) => {
+    setActiveTabIndex(index);
+    pagerRef.current?.setPage(index);
+  }, []);
+
+  const handlePageSelected = useCallback((e: any) => {
+    setActiveTabIndex(e.nativeEvent.position);
+  }, []);
 
   const { data: match, isLoading } = useMatch(matchId);
   const { data: reviews } = useReviewsForMatch(matchId);
   const { data: profile } = useUserProfile(user?.uid || '');
   const { data: matchLists } = useListsForMatch(matchId);
+  const { data: matchDetail } = useMatchDetail(matchId);
 
   if (isLoading || !match) {
     return <LoadingSpinner />;
@@ -48,10 +77,6 @@ export function MatchDetailScreen({ route, navigation }: Props) {
 
   const userReviews = reviews?.filter((r) => r.userId === user?.uid) || [];
   const hasReview = userReviews.length > 0;
-
-  const avgRating = reviews && reviews.length > 0
-    ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length)
-    : 0;
 
   const stadiumUrl = getStadiumImageUrl(match.homeTeam.id);
 
@@ -69,316 +94,342 @@ export function MatchDetailScreen({ route, navigation }: Props) {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
-      <Animated.ScrollView
-        indicatorStyle={isDark ? 'white' : 'default'}
-        contentContainerStyle={{ paddingBottom: 100 }}
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: true }
-        )}
-        scrollEventThrottle={16}
-      >
-        {/* Hero area with stadium background */}
-        <View style={{ height: 320, backgroundColor: '#1a1f25', overflow: 'visible' }}>
-          {/* Stretchy stadium image — expands when pulling down */}
-          <Animated.View
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      {/* Fixed gradient overlay behind status bar — stays pinned on scroll */}
+      <LinearGradient
+        colors={['rgba(0,0,0,0.6)', 'rgba(0,0,0,0.3)', 'transparent']}
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: insets.top + 40,
+          zIndex: 20,
+        }}
+        pointerEvents="none"
+      />
+
+      {/* Hero area with stadium background */}
+      <View style={{ height: 320, backgroundColor: colors.background, overflow: 'visible' }}>
+        <View
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 320,
+          }}
+        >
+          <Image
+            source={{ uri: stadiumUrl || FALLBACK_STADIUM }}
             style={{
               position: 'absolute',
               top: 0,
               left: 0,
               right: 0,
-              height: 320,
-              transform: [
-                {
-                  translateY: scrollY.interpolate({
-                    inputRange: [-320, 0],
-                    outputRange: [-160, 0],
-                    extrapolateRight: 'clamp',
-                  }),
-                },
-                {
-                  scale: scrollY.interpolate({
-                    inputRange: [-320, 0],
-                    outputRange: [2, 1],
-                    extrapolateRight: 'clamp',
-                  }),
-                },
-              ],
-            }}
-          >
-            <Image
-              source={{ uri: stadiumUrl || FALLBACK_STADIUM }}
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-              }}
-              contentFit="cover"
-              transition={300}
-            />
-            <LinearGradient
-              colors={['rgba(0,0,0,0.3)', 'rgba(0,0,0,0.5)']}
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-              }}
-            />
-          </Animated.View>
-
-          {/* Back button overlay */}
-          <Pressable
-            onPress={() => navigation.goBack()}
-            style={{
-              position: 'absolute',
-              top: spacing.md,
-              left: spacing.md,
-              zIndex: 10,
-              backgroundColor: 'rgba(0,0,0,0.5)',
-              borderRadius: borderRadius.full,
-              padding: spacing.sm,
-            }}
-          >
-            <Ionicons name="arrow-back" size={20} color="#fff" />
-          </Pressable>
-
-          {/* Three-dot menu button */}
-          <Pressable
-            onPress={() => setShowMenu(true)}
-            style={{
-              position: 'absolute',
-              top: spacing.md,
-              right: spacing.md,
-              zIndex: 10,
-              backgroundColor: 'rgba(0,0,0,0.5)',
-              borderRadius: borderRadius.full,
-              padding: spacing.sm,
-            }}
-          >
-            <Ionicons name="ellipsis-horizontal" size={20} color="#fff" />
-          </Pressable>
-
-          {/* Team crests in hero */}
-          <View
-            style={{
-              flex: 1,
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: spacing.xxl,
-              paddingTop: spacing.xl,
-            }}
-          >
-            <TeamLogo uri={match.homeTeam.crest} size={80} />
-            <TeamLogo uri={match.awayTeam.crest} size={80} />
-          </View>
-
-          {/* Gradient overlay at bottom of hero */}
-          <LinearGradient
-            colors={['transparent', `${colors.background}cc`, colors.background]}
-            style={{
-              position: 'absolute',
               bottom: 0,
+            }}
+            contentFit="cover"
+            transition={300}
+          />
+          <LinearGradient
+            colors={['rgba(0,0,0,0.3)', 'rgba(0,0,0,0.5)']}
+            style={{
+              position: 'absolute',
+              top: 0,
               left: 0,
               right: 0,
-              height: 160,
-              justifyContent: 'flex-end',
-              alignItems: 'center',
-              paddingBottom: spacing.md,
+              bottom: 0,
             }}
-          >
-            {/* Score */}
-            {(isFinished || isLive) ? (
-              <>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
-                  <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 16 }}>
-                    {match.homeTeam.shortName}
-                  </Text>
-                  <Text style={{ fontSize: 40, fontWeight: '700', color: colors.primary }}>
-                    {match.homeScore} - {match.awayScore}
-                  </Text>
-                  <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 16 }}>
-                    {match.awayTeam.shortName}
-                  </Text>
-                </View>
-                {isLive && (
-                  <View style={{ backgroundColor: colors.primary, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4, marginTop: 4 }}>
-                    <Text style={{ fontSize: 11, fontWeight: '800', color: '#14181c' }}>LIVE</Text>
-                  </View>
-                )}
-                {isFinished && (
-                  <Text style={{ ...typography.caption, color: colors.textSecondary, marginTop: 4 }}>Full Time</Text>
-                )}
-              </>
-            ) : (
-              <>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
-                  <Text style={{ ...typography.bodyBold, color: colors.foreground }}>
-                    {match.homeTeam.shortName}
-                  </Text>
-                  <Text style={{ ...typography.h2, color: colors.textSecondary }}>vs</Text>
-                  <Text style={{ ...typography.bodyBold, color: colors.foreground }}>
-                    {match.awayTeam.shortName}
-                  </Text>
-                </View>
-                <Text style={{ ...typography.caption, color: colors.textSecondary, marginTop: 4 }}>
-                  {formatMatchTime(match.kickoff)}
-                </Text>
-              </>
-            )}
-          </LinearGradient>
+          />
         </View>
 
-        {/* Competition + date */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, paddingVertical: spacing.sm }}>
-          <View style={{ backgroundColor: '#fff', borderRadius: 4, padding: 2 }}>
-            <TeamLogo uri={match.competition.emblem} size={16} />
-          </View>
-          <Text style={{ ...typography.caption, color: colors.textSecondary }}>
-            {match.competition.name} · {formatFullDate(match.kickoff)}
-          </Text>
-        </View>
+        {/* Back button overlay */}
+        <Pressable
+          onPress={() => navigation.goBack()}
+          style={{
+            position: 'absolute',
+            top: insets.top + spacing.xs,
+            left: spacing.md,
+            zIndex: 10,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            borderRadius: borderRadius.full,
+            padding: spacing.sm,
+          }}
+        >
+          <Ionicons name="arrow-back" size={20} color="#fff" />
+        </Pressable>
 
-        {/* Stats row */}
-        {isFinished && reviews && reviews.length > 0 && (
-          <View style={{ flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.md, marginTop: spacing.sm }}>
-            <View style={{ flex: 1, backgroundColor: colors.primary, borderRadius: borderRadius.md, padding: spacing.md, alignItems: 'center' }}>
-              <Text style={{ fontSize: 24, fontWeight: '700', color: '#14181c' }}>{reviews.length}</Text>
-              <Text style={{ fontSize: 11, color: '#14181c', fontWeight: '500' }}>Watched</Text>
-            </View>
-            <View style={{ flex: 1, backgroundColor: colors.muted, borderRadius: borderRadius.md, padding: spacing.md, alignItems: 'center' }}>
-              <Text style={{ fontSize: 24, fontWeight: '700', color: colors.foreground }}>{reviews.length}</Text>
-              <Text style={{ fontSize: 11, color: colors.textSecondary }}>Reviews</Text>
-            </View>
-            <Pressable
-              onPress={() => navigation.navigate('MatchLists', { matchId })}
-              style={{ flex: 1, backgroundColor: '#3b82f6', borderRadius: borderRadius.md, padding: spacing.md, alignItems: 'center' }}
-            >
-              <Text style={{ fontSize: 24, fontWeight: '700', color: '#fff' }}>{matchLists?.length || 0}</Text>
-              <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.8)' }}>Lists</Text>
-            </Pressable>
-          </View>
-        )}
+        {/* Three-dot menu button */}
+        <Pressable
+          onPress={() => setShowMenu(true)}
+          style={{
+            position: 'absolute',
+            top: insets.top + spacing.xs,
+            right: spacing.md,
+            zIndex: 10,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            borderRadius: borderRadius.full,
+            padding: spacing.sm,
+          }}
+        >
+          <Ionicons name="ellipsis-horizontal" size={20} color="#fff" />
+        </Pressable>
 
-        {/* Rating distribution bar chart */}
-        {isFinished && reviews && reviews.length > 0 && (
-          <RatingBarChart reviews={reviews} colors={colors} spacing={spacing} typography={typography} borderRadius={borderRadius} avgRating={avgRating} />
-        )}
-
-        {/* Locked state for non-finished matches */}
-        {!isFinished && (
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              backgroundColor: colors.muted,
-              borderRadius: borderRadius.md,
-              padding: spacing.md,
-              marginHorizontal: spacing.md,
-              marginTop: spacing.md,
-              gap: spacing.sm,
-            }}
-          >
-            <Ionicons name="lock-closed" size={18} color={colors.textSecondary} />
-            <Text style={{ ...typography.body, color: colors.textSecondary, flex: 1 }}>
-              {isLive ? 'Reviews unlock after full time' : 'Reviews unlock after this match is played'}
-            </Text>
-          </View>
-        )}
-
-        {/* Review CTA */}
-        {isFinished && (
-          <Pressable
-            onPress={() => navigation.navigate('CreateReview', { matchId })}
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              backgroundColor: colors.muted,
-              borderRadius: borderRadius.md,
-              padding: spacing.md,
-              marginHorizontal: spacing.md,
-              marginTop: spacing.md,
-              gap: spacing.md,
-            }}
-          >
-            <View style={{ flex: 1 }}>
-              <Text style={{ ...typography.bodyBold, color: colors.foreground }}>
-                {hasReview ? 'Log again...' : 'Rate or review...'}
-              </Text>
-              <Text style={{ ...typography.small, color: colors.textSecondary }}>
-                {hasReview ? 'Add another diary entry' : 'Share your thoughts on this match'}
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+        {/* Team crests in hero */}
+        <View
+          style={{
+            flex: 1,
+            flexDirection: 'row',
+            alignItems: 'flex-end',
+            justifyContent: 'center',
+            gap: spacing.xxl,
+            paddingBottom: 80,
+            zIndex: 5,
+          }}
+        >
+          <Pressable onPress={() => (navigation as any).navigate('TeamDetail', { teamId: match.homeTeam.id, teamName: match.homeTeam.name, teamCrest: match.homeTeam.crest })}>
+            <TeamLogo uri={match.homeTeam.crest} size={80} />
           </Pressable>
-        )}
+          <Pressable onPress={() => (navigation as any).navigate('TeamDetail', { teamId: match.awayTeam.id, teamName: match.awayTeam.name, teamCrest: match.awayTeam.crest })}>
+            <TeamLogo uri={match.awayTeam.crest} size={80} />
+          </Pressable>
+        </View>
 
+        {/* Gradient overlay at bottom of hero */}
+        <LinearGradient
+          colors={['transparent', `${colors.background}40`, `${colors.background}99`, `${colors.background}cc`, colors.background]}
+          locations={[0, 0.3, 0.55, 0.75, 1]}
+          style={{
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: 200,
+            justifyContent: 'flex-end',
+            alignItems: 'center',
+            paddingBottom: spacing.xs,
+          }}
+        >
+          {/* Score */}
+          {(isFinished || isLive) ? (
+            <>
+              <View style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'stretch', paddingHorizontal: spacing.md }}>
+                <Pressable onPress={() => (navigation as any).navigate('TeamDetail', { teamId: match.homeTeam.id, teamName: match.homeTeam.name, teamCrest: match.homeTeam.crest })} style={{ flex: 1 }}>
+                  <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 16, textAlign: 'right' }} numberOfLines={1}>
+                    {match.homeTeam.shortName}
+                  </Text>
+                </Pressable>
+                <Text style={{ fontSize: 40, fontWeight: '700', color: colors.primary, paddingHorizontal: spacing.md }}>
+                  {match.homeScore} - {match.awayScore}
+                </Text>
+                <Pressable onPress={() => (navigation as any).navigate('TeamDetail', { teamId: match.awayTeam.id, teamName: match.awayTeam.name, teamCrest: match.awayTeam.crest })} style={{ flex: 1 }}>
+                  <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 16, textAlign: 'left' }} numberOfLines={1}>
+                    {match.awayTeam.shortName}
+                  </Text>
+                </Pressable>
+              </View>
+              {isLive && (
+                <View style={{ backgroundColor: colors.primary, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4, marginTop: 4 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: '#14181c' }}>LIVE</Text>
+                </View>
+              )}
+              {isFinished && (
+                <Text style={{ ...typography.caption, color: colors.textSecondary, marginTop: 4 }}>Full Time</Text>
+              )}
+            </>
+          ) : (
+            <>
+              <View style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'stretch', paddingHorizontal: spacing.md }}>
+                <Pressable onPress={() => (navigation as any).navigate('TeamDetail', { teamId: match.homeTeam.id, teamName: match.homeTeam.name, teamCrest: match.homeTeam.crest })} style={{ flex: 1 }}>
+                  <Text style={{ ...typography.bodyBold, color: colors.foreground, textAlign: 'right' }} numberOfLines={1}>
+                    {match.homeTeam.shortName}
+                  </Text>
+                </Pressable>
+                <Text style={{ ...typography.h2, color: colors.textSecondary, paddingHorizontal: spacing.md }}>vs</Text>
+                <Pressable onPress={() => (navigation as any).navigate('TeamDetail', { teamId: match.awayTeam.id, teamName: match.awayTeam.name, teamCrest: match.awayTeam.crest })} style={{ flex: 1 }}>
+                  <Text style={{ ...typography.bodyBold, color: colors.foreground, textAlign: 'left' }} numberOfLines={1}>
+                    {match.awayTeam.shortName}
+                  </Text>
+                </Pressable>
+              </View>
+              <Text style={{ ...typography.caption, color: colors.textSecondary, marginTop: 4 }}>
+                {formatMatchTime(match.kickoff)}
+              </Text>
+            </>
+          )}
+        </LinearGradient>
+      </View>
 
-        {/* Reviews section — only show for finished matches */}
-        {isFinished && (
-          <ReviewsSection reviews={reviews || []} userId={user?.uid} profile={profile} colors={colors} spacing={spacing} typography={typography} borderRadius={borderRadius} navigation={navigation} />
-        )}
-      </Animated.ScrollView>
+      {/* Competition + date */}
+      <Pressable
+        onPress={() => (navigation as any).navigate('LeagueDetail', { competitionCode: match.competition.code, competitionName: match.competition.name, competitionEmblem: match.competition.emblem })}
+        style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, paddingBottom: spacing.xs, opacity: pressed ? 0.7 : 1 })}
+      >
+        <View style={{ backgroundColor: '#fff', borderRadius: 4, padding: 2 }}>
+          <TeamLogo uri={match.competition.emblem} size={16} />
+        </View>
+        <Text style={{ ...typography.caption, color: colors.textSecondary }}>
+          {match.competition.name} · {formatFullDate(match.kickoff)}
+        </Text>
+      </Pressable>
+
+      {/* Tab bar */}
+      <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: colors.border }}>
+        {MATCH_TABS.map((tab, i) => {
+          const isActive = activeTabIndex === i;
+          return (
+            <Pressable
+              key={tab.key}
+              onPress={() => handleTabPress(i)}
+              style={{
+                flex: 1,
+                alignItems: 'center',
+                paddingVertical: spacing.sm,
+                borderBottomWidth: 2,
+                borderBottomColor: isActive ? colors.primary : 'transparent',
+              }}
+            >
+              <Text style={{
+                ...typography.body,
+                fontWeight: isActive ? '600' : '400',
+                color: isActive ? colors.foreground : colors.textSecondary,
+                fontSize: 15,
+              }}>
+                {tab.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {/* Swipeable tab content */}
+      <PagerView
+        ref={pagerRef}
+        style={{ flex: 1 }}
+        initialPage={0}
+        onPageSelected={handlePageSelected}
+      >
+        {/* ─── Reviews Page ─── */}
+        <View key="reviews" style={{ flex: 1 }}>
+          <ScrollView indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: 40 }} nestedScrollEnabled>
+            {/* Stats row */}
+            {isFinished && reviews && reviews.length > 0 && (
+              <View style={{ flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.md, marginTop: spacing.sm, marginBottom: spacing.md }}>
+                <Pressable
+                  onPress={() => navigation.navigate('WatchedBy', { matchId })}
+                  style={{ flex: 1, backgroundColor: colors.primary, borderRadius: borderRadius.md, padding: spacing.md, alignItems: 'center' }}
+                >
+                  <Text style={{ fontSize: 24, fontWeight: '700', color: '#14181c' }}>{reviews.length}</Text>
+                  <Text style={{ fontSize: 11, color: '#14181c', fontWeight: '500' }}>Watched</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => navigation.navigate('MatchLists', { matchId })}
+                  style={{ flex: 1, backgroundColor: '#3b82f6', borderRadius: borderRadius.md, padding: spacing.md, alignItems: 'center' }}
+                >
+                  <Text style={{ fontSize: 24, fontWeight: '700', color: '#fff' }}>{matchLists?.length || 0}</Text>
+                  <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.8)' }}>Lists</Text>
+                </Pressable>
+              </View>
+            )}
+
+            {/* Rating distribution bar chart */}
+            {isFinished && reviews && reviews.length > 0 && (
+              <RatingChart reviews={reviews} showStats />
+            )}
+
+            {/* Locked state for non-finished matches */}
+            {!isFinished && (
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: colors.muted,
+                  borderRadius: borderRadius.md,
+                  padding: spacing.md,
+                  marginHorizontal: spacing.md,
+                  marginTop: spacing.md,
+                  gap: spacing.sm,
+                }}
+              >
+                <Ionicons name="lock-closed" size={18} color={colors.textSecondary} />
+                <Text style={{ ...typography.body, color: colors.textSecondary, flex: 1 }}>
+                  {isLive ? 'Reviews unlock after full time' : 'Reviews unlock after this match is played'}
+                </Text>
+              </View>
+            )}
+
+            {/* Watched by friends */}
+            {isFinished && reviews && reviews.length > 0 && (profile?.following?.length || 0) > 0 && (
+              <WatchedByFriends
+                reviews={reviews}
+                matchId={matchId}
+                following={profile?.following || []}
+                colors={colors}
+                spacing={spacing}
+                typography={typography}
+                navigation={navigation}
+              />
+            )}
+
+            {/* Review CTA */}
+            {isFinished && (
+              <Pressable
+                onPress={() => navigation.navigate('CreateReview', { matchId })}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: colors.muted,
+                  borderRadius: borderRadius.md,
+                  padding: spacing.md,
+                  marginHorizontal: spacing.md,
+                  marginTop: spacing.md,
+                  gap: spacing.md,
+                }}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={{ ...typography.bodyBold, color: colors.foreground }}>
+                    {hasReview ? 'Log again...' : 'Rate or review...'}
+                  </Text>
+                  <Text style={{ ...typography.small, color: colors.textSecondary }}>
+                    {hasReview ? 'Add another diary entry' : 'Share your thoughts on this match'}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+              </Pressable>
+            )}
+
+            {/* Reviews section */}
+            {isFinished && (
+              <ReviewsSection reviews={reviews || []} userId={user?.uid} profile={profile} colors={colors} spacing={spacing} typography={typography} borderRadius={borderRadius} navigation={navigation} />
+            )}
+          </ScrollView>
+        </View>
+
+        {/* ─── Lineup Page ─── */}
+        <View key="lineup" style={{ flex: 1 }}>
+          <ScrollView indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: 40 }} nestedScrollEnabled>
+            <LineupSection matchDetail={matchDetail || null} match={match} colors={colors} spacing={spacing} typography={typography} navigation={navigation} />
+          </ScrollView>
+        </View>
+
+        {/* ─── Info Page ─── */}
+        <View key="info" style={{ flex: 1 }}>
+          <ScrollView indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: 40 }} nestedScrollEnabled>
+            <InfoSection matchDetail={matchDetail || null} match={match} colors={colors} spacing={spacing} typography={typography} borderRadius={borderRadius} navigation={navigation} />
+          </ScrollView>
+        </View>
+      </PagerView>
 
       {/* Three-dot menu */}
-      <Modal visible={showMenu} transparent animationType="fade" onRequestClose={() => setShowMenu(false)}>
-        <Pressable
-          onPress={() => setShowMenu(false)}
-          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: spacing.xl }}
-        >
-          <Pressable
-            onPress={(e) => e.stopPropagation()}
-            style={{
-              width: '100%',
-              maxWidth: 280,
-              backgroundColor: colors.card,
-              borderRadius: borderRadius.lg,
-              overflow: 'hidden',
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 8 },
-              shadowOpacity: 0.3,
-              shadowRadius: 16,
-              elevation: 12,
-            }}
-          >
-            <Pressable
-              onPress={() => { setShowMenu(false); setShowListModal(true); }}
-              style={({ pressed }) => ({
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: spacing.sm,
-                paddingHorizontal: spacing.md,
-                paddingVertical: spacing.md,
-                backgroundColor: pressed ? colors.muted : 'transparent',
-                borderBottomWidth: 1,
-                borderBottomColor: colors.border,
-              })}
-            >
-              <Ionicons name="list-outline" size={20} color={colors.foreground} />
-              <Text style={{ ...typography.body, color: colors.foreground }}>Add to list</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => { setShowMenu(false); handleShare(); }}
-              style={({ pressed }) => ({
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: spacing.sm,
-                paddingHorizontal: spacing.md,
-                paddingVertical: spacing.md,
-                backgroundColor: pressed ? colors.muted : 'transparent',
-              })}
-            >
-              <Ionicons name="share-outline" size={20} color={colors.foreground} />
-              <Text style={{ ...typography.body, color: colors.foreground }}>Share</Text>
-            </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
+      <ActionMenu
+        visible={showMenu}
+        onClose={() => setShowMenu(false)}
+        items={[
+          { label: 'Add to list', icon: 'list-outline', onPress: () => { setShowMenu(false); setShowListModal(true); } },
+          { label: 'Share', icon: 'share-outline', onPress: () => { setShowMenu(false); handleShare(); } },
+        ]}
+      />
 
       {/* Add to List Modal */}
       <AddToListModal
@@ -386,86 +437,115 @@ export function MatchDetailScreen({ route, navigation }: Props) {
         onClose={() => setShowListModal(false)}
         matchId={matchId}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
-/* ─── Rating distribution bar chart ─── */
+/* ─── Watched by friends (horizontal avatar row) ─── */
 
-function RatingBarChart({ reviews, colors, spacing, typography, borderRadius, avgRating }: any) {
-  const [activeBar, setActiveBar] = useState<number | null>(null);
-
-  // 10 buckets: 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0
-  const HALF_STARS = [0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5];
-  const counts = new Array(10).fill(0);
-  let ratedCount = 0;
-  for (const r of reviews) {
-    if (r.rating > 0) {
-      // Snap to nearest half star
-      const snapped = Math.round(r.rating * 2) / 2;
-      const idx = HALF_STARS.indexOf(snapped);
-      if (idx >= 0) counts[idx]++;
-      ratedCount++;
+function WatchedByFriends({ reviews, matchId, following, colors, spacing, typography, navigation }: {
+  reviews: any[];
+  matchId: number;
+  following: string[];
+  colors: any;
+  spacing: any;
+  typography: any;
+  navigation: any;
+}) {
+  // Get friend reviews (deduplicate by userId, keep latest)
+  const friendReviews = useMemo(() => {
+    const map = new Map<string, any>();
+    const sorted = [...reviews].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    for (const r of sorted) {
+      if (following.includes(r.userId) && !map.has(r.userId)) {
+        map.set(r.userId, r);
+      }
     }
-  }
-  const maxCount = Math.max(...counts, 1);
+    return Array.from(map.values());
+  }, [reviews, following]);
+
+  // Fetch profiles for friend watchers
+  const friendIds = useMemo(() => friendReviews.map((r) => r.userId), [friendReviews]);
+  const profileQueries = useQueries({
+    queries: friendIds.map((uid) => ({
+      queryKey: ['user', uid],
+      queryFn: () => getUserProfile(uid),
+      staleTime: 2 * 60 * 1000,
+      enabled: friendIds.length > 0,
+    })),
+  });
+
+  const friendWatchers = useMemo(() => {
+    const entries: { userId: string; profile: User; rating: number; hasText: boolean; likedMatch: boolean; reviewId: string }[] = [];
+    profileQueries.forEach((q) => {
+      if (!q.data) return;
+      const p = q.data;
+      const review = friendReviews.find((r) => r.userId === p.id);
+      if (!review) return;
+      entries.push({
+        userId: p.id,
+        profile: p,
+        rating: review.rating,
+        hasText: (review.text?.trim().length || 0) > 0,
+        likedMatch: p.likedMatchIds?.some((id: number) => String(id) === String(matchId)) || false,
+        reviewId: review.id,
+      });
+    });
+    return entries;
+  }, [profileQueries, friendReviews, matchId]);
+
+  if (friendWatchers.length === 0) return null;
 
   return (
-    <View style={{ marginHorizontal: spacing.md, marginTop: spacing.md, backgroundColor: colors.card, borderRadius: borderRadius.lg, padding: spacing.md, borderWidth: 1, borderColor: colors.border }}>
-      {/* Header — swaps to held bar's stats */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md }}>
-        <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 15 }}>Ratings</Text>
-        {activeBar !== null && counts[activeBar] > 0 ? (
-          <View style={{ alignItems: 'flex-end' }}>
-            <Text style={{ fontSize: 16, lineHeight: 28, fontWeight: '700', color: colors.primary, letterSpacing: -0.5 }}>
-              {'★'.repeat(Math.floor(HALF_STARS[activeBar]))}{HALF_STARS[activeBar] % 1 !== 0 ? '½' : ''}
-            </Text>
-            <Text style={{ fontSize: 11, color: colors.textSecondary }}>{counts[activeBar]} {counts[activeBar] === 1 ? 'rating' : 'ratings'}</Text>
-          </View>
-        ) : (
-          <View style={{ alignItems: 'flex-end' }}>
-            <Text style={{ fontSize: 22, lineHeight: 28, fontWeight: '700', color: colors.foreground }}>{avgRating.toFixed(1)}</Text>
-            <Text style={{ fontSize: 11, color: colors.textSecondary }}>{ratedCount} {ratedCount === 1 ? 'rating' : 'ratings'}</Text>
-          </View>
-        )}
+    <View style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.md, backgroundColor: `${colors.accent}30`, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.border }}>
+      {/* Header */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm }}>
+        <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1 }}>
+          Watched by
+        </Text>
+        <Pressable
+          onPress={() => navigation.navigate('WatchedBy', { matchId, initialTab: 'friends' })}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}
+        >
+          <Text style={{ ...typography.caption, color: colors.primary }}>More</Text>
+          <Ionicons name="chevron-forward" size={14} color={colors.primary} />
+        </Pressable>
       </View>
 
-      {/* Bars */}
-      <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', height: 48, gap: 2 }}>
-        {counts.map((count, i) => {
-          const heightPct = count > 0 ? (count / maxCount) * 100 : 4;
-          const isActive = activeBar === i;
+      {/* Horizontal avatar scroll */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.md }}>
+        {friendWatchers.map((w) => {
+          const handlePress = () => {
+            if (w.rating > 0) {
+              navigation.navigate('ReviewDetail', { reviewId: w.reviewId });
+            } else {
+              navigation.navigate('UserProfile', { userId: w.userId });
+            }
+          };
+
           return (
-            <Pressable
-              key={i}
-              onPressIn={() => setActiveBar(i)}
-              onPressOut={() => setActiveBar(null)}
-              style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}
-            >
-              <View
-                style={{
-                  width: '100%',
-                  height: `${heightPct}%`,
-                  backgroundColor: isActive ? colors.primary : count > 0 ? colors.muted : `${colors.muted}60`,
-                  borderRadius: 2,
-                  minHeight: 3,
-                }}
-              />
+            <Pressable key={w.userId} onPress={handlePress} style={{ alignItems: 'center', width: 64 }}>
+              <View>
+                <Avatar uri={w.profile.avatar} name={w.profile.username} size={52} />
+                {/* Badge icons */}
+                <View style={{ position: 'absolute', top: -2, right: -2, flexDirection: 'row', gap: 1 }}>
+                  {w.hasText && (
+                    <View style={{ backgroundColor: colors.card, borderRadius: 8, padding: 2 }}>
+                      <Ionicons name="reorder-three-outline" size={10} color={colors.textSecondary} />
+                    </View>
+                  )}
+                </View>
+              </View>
+              {w.rating > 0 && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 4 }}>
+                  <StarRating rating={w.rating} size={8} />
+                  {w.likedMatch && <Ionicons name="heart" size={8} color="#ef4444" />}
+                </View>
+              )}
             </Pressable>
           );
         })}
-      </View>
-
-      {/* Star labels — show only whole numbers */}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 }}>
-        {HALF_STARS.map((val, i) => (
-          <View key={i} style={{ flex: 1, alignItems: 'center' }}>
-            {val % 1 === 0 ? (
-              <Text style={{ fontSize: 9, color: colors.textSecondary }}>{val}</Text>
-            ) : null}
-          </View>
-        ))}
-      </View>
+      </ScrollView>
     </View>
   );
 }
@@ -484,7 +564,8 @@ function ReviewsSection({ reviews, userId, profile, colors, spacing, typography,
   const [sort, setSort] = useState<ReviewSort>('popular');
 
   const filteredReviews = useMemo(() => {
-    let filtered = [...reviews];
+    // Only show reviews that have written text
+    let filtered = [...reviews].filter((r: any) => r.text?.trim().length > 0);
 
     if (filter === 'friends' && profile?.following?.length) {
       filtered = filtered.filter((r: any) => profile.following.includes(r.userId));
@@ -572,6 +653,355 @@ function ReviewsSection({ reviews, userId, profile, colors, spacing, typography,
           />
         ))
       )}
+    </View>
+  );
+}
+
+/* ─── Lineup Section ─── */
+
+function PlayerRow({ player, colors, spacing, typography, onPress }: { player: MatchPlayer; colors: any; spacing: any; typography: any; onPress?: () => void }) {
+  return (
+    <Pressable onPress={onPress} disabled={!onPress} style={({ pressed }) => ({ opacity: pressed && onPress ? 0.7 : 1 })}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.xs + 2, gap: spacing.sm }}>
+        {player.shirtNumber !== null && (
+          <Text style={{ width: 24, textAlign: 'center', ...typography.caption, color: colors.textSecondary }}>
+            {player.shirtNumber}
+          </Text>
+        )}
+        <Text style={{ ...typography.body, color: colors.foreground, fontSize: 14, flex: 1 }}>
+          {player.name}
+        </Text>
+        {player.position && (
+          <Text style={{ ...typography.small, color: colors.textSecondary }}>
+            {player.position === 'Goalkeeper' ? 'GK' : player.position === 'Defence' ? 'DEF' : player.position === 'Midfield' ? 'MID' : player.position === 'Offence' ? 'FWD' : player.position}
+          </Text>
+        )}
+      </View>
+    </Pressable>
+  );
+}
+
+function LineupSection({ matchDetail, match, colors, spacing, typography, navigation }: { matchDetail: MatchDetail | null; match: any; colors: any; spacing: any; typography: any; navigation: any }) {
+  if (!matchDetail) {
+    return (
+      <View style={{ alignItems: 'center', paddingVertical: spacing.xxl }}>
+        <LoadingSpinner fullScreen={false} />
+      </View>
+    );
+  }
+
+  const hasLineup = matchDetail.homeLineup.length > 0 || matchDetail.awayLineup.length > 0;
+
+  if (!hasLineup) {
+    return (
+      <View style={{ alignItems: 'center', paddingVertical: spacing.xxl, paddingHorizontal: spacing.xl }}>
+        <Ionicons name="people-outline" size={40} color={colors.textSecondary} />
+        <Text style={{ ...typography.bodyBold, color: colors.foreground, marginTop: spacing.md }}>
+          Lineups not available
+        </Text>
+        <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.xs }}>
+          Lineups are usually available close to kickoff
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.sm }}>
+      {/* Formations */}
+      {(matchDetail.homeFormation || matchDetail.awayFormation) && (
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.md }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+            <TeamLogo uri={match.homeTeam.crest} size={20} />
+            <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 14 }}>
+              {matchDetail.homeFormation || '—'}
+            </Text>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+            <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 14 }}>
+              {matchDetail.awayFormation || '—'}
+            </Text>
+            <TeamLogo uri={match.awayTeam.crest} size={20} />
+          </View>
+        </View>
+      )}
+
+      {/* Home Starting XI */}
+      <View style={{ marginBottom: spacing.md }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm }}>
+          <TeamLogo uri={match.homeTeam.crest} size={18} />
+          <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 14 }}>
+            {match.homeTeam.shortName}
+          </Text>
+          <Text style={{ ...typography.caption, color: colors.textSecondary }}>Starting XI</Text>
+        </View>
+        {matchDetail.homeLineup.map((p) => (
+          <PlayerRow key={p.id} player={p} colors={colors} spacing={spacing} typography={typography} onPress={() => navigation.navigate('PersonDetail', { personId: p.id, personName: p.name, role: 'player' })} />
+        ))}
+        {matchDetail.homeCoach && (
+          <Pressable onPress={() => navigation.navigate('PersonDetail', { personId: matchDetail.homeCoach!.id, personName: matchDetail.homeCoach!.name, role: 'manager' })} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.xs + 2, gap: spacing.sm, marginTop: spacing.xs }}>
+              <Text style={{ width: 24, textAlign: 'center', ...typography.caption, color: colors.textSecondary }}>
+                <Ionicons name="person" size={12} color={colors.textSecondary} />
+              </Text>
+              <Text style={{ ...typography.body, color: colors.textSecondary, fontSize: 14, fontStyle: 'italic' }}>
+                {matchDetail.homeCoach.name} (Coach)
+              </Text>
+            </View>
+          </Pressable>
+        )}
+      </View>
+
+      {/* Home Bench */}
+      {matchDetail.homeBench.length > 0 && (
+        <View style={{ marginBottom: spacing.lg }}>
+          <Text style={{ ...typography.caption, color: colors.textSecondary, fontWeight: '600', marginBottom: spacing.xs }}>
+            Substitutes
+          </Text>
+          {matchDetail.homeBench.map((p) => (
+            <PlayerRow key={p.id} player={p} colors={colors} spacing={spacing} typography={typography} onPress={() => navigation.navigate('PersonDetail', { personId: p.id, personName: p.name, role: 'player' })} />
+          ))}
+        </View>
+      )}
+
+      <View style={{ height: 1, backgroundColor: colors.border, marginBottom: spacing.md }} />
+
+      {/* Away Starting XI */}
+      <View style={{ marginBottom: spacing.md }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm }}>
+          <TeamLogo uri={match.awayTeam.crest} size={18} />
+          <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 14 }}>
+            {match.awayTeam.shortName}
+          </Text>
+          <Text style={{ ...typography.caption, color: colors.textSecondary }}>Starting XI</Text>
+        </View>
+        {matchDetail.awayLineup.map((p) => (
+          <PlayerRow key={p.id} player={p} colors={colors} spacing={spacing} typography={typography} onPress={() => navigation.navigate('PersonDetail', { personId: p.id, personName: p.name, role: 'player' })} />
+        ))}
+        {matchDetail.awayCoach && (
+          <Pressable onPress={() => navigation.navigate('PersonDetail', { personId: matchDetail.awayCoach!.id, personName: matchDetail.awayCoach!.name, role: 'manager' })} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.xs + 2, gap: spacing.sm, marginTop: spacing.xs }}>
+              <Text style={{ width: 24, textAlign: 'center', ...typography.caption, color: colors.textSecondary }}>
+                <Ionicons name="person" size={12} color={colors.textSecondary} />
+              </Text>
+              <Text style={{ ...typography.body, color: colors.textSecondary, fontSize: 14, fontStyle: 'italic' }}>
+                {matchDetail.awayCoach.name} (Coach)
+              </Text>
+            </View>
+          </Pressable>
+        )}
+      </View>
+
+      {/* Away Bench */}
+      {matchDetail.awayBench.length > 0 && (
+        <View style={{ marginBottom: spacing.md }}>
+          <Text style={{ ...typography.caption, color: colors.textSecondary, fontWeight: '600', marginBottom: spacing.xs }}>
+            Substitutes
+          </Text>
+          {matchDetail.awayBench.map((p) => (
+            <PlayerRow key={p.id} player={p} colors={colors} spacing={spacing} typography={typography} onPress={() => navigation.navigate('PersonDetail', { personId: p.id, personName: p.name, role: 'player' })} />
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
+
+/* ─── Info Section ─── */
+
+function StatRow({ label, home, away, colors, spacing, typography, isPossession }: {
+  label: string; home: number; away: number; colors: any; spacing: any; typography: any; isPossession?: boolean;
+}) {
+  const homeHigher = home > away;
+  const awayHigher = away > home;
+
+  if (isPossession) {
+    const homePct = home || 50;
+    const awayPct = away || 50;
+    return (
+      <View style={{ marginBottom: spacing.md }}>
+        <Text style={{ ...typography.small, color: colors.textSecondary, textAlign: 'center', marginBottom: spacing.xs }}>
+          Ball Possession
+        </Text>
+        <View style={{ flexDirection: 'row', gap: 2, alignItems: 'center' }}>
+          <View style={{
+            flex: homePct, backgroundColor: colors.primary, borderTopLeftRadius: 20, borderBottomLeftRadius: 20,
+            paddingVertical: 8, paddingHorizontal: 12, alignItems: homePct > 15 ? 'flex-start' : 'center',
+          }}>
+            <Text style={{ fontSize: 13, fontWeight: '700', color: '#14181c' }}>{homePct}%</Text>
+          </View>
+          <View style={{
+            flex: awayPct, backgroundColor: '#3b82f6', borderTopRightRadius: 20, borderBottomRightRadius: 20,
+            paddingVertical: 8, paddingHorizontal: 12, alignItems: awayPct > 15 ? 'flex-end' : 'center',
+          }}>
+            <Text style={{ fontSize: 13, fontWeight: '700', color: '#fff' }}>{awayPct}%</Text>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: spacing.sm, gap: spacing.sm }}>
+      <View style={{
+        minWidth: 36, alignItems: 'center',
+        ...(homeHigher ? { backgroundColor: colors.primary, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4 } : {}),
+      }}>
+        <Text style={{
+          fontSize: 14, fontWeight: homeHigher ? '700' : '400',
+          color: homeHigher ? '#14181c' : colors.foreground,
+        }}>
+          {home}
+        </Text>
+      </View>
+      <Text style={{ ...typography.small, color: colors.textSecondary, flex: 1, textAlign: 'center' }}>
+        {label}
+      </Text>
+      <View style={{
+        minWidth: 36, alignItems: 'center',
+        ...(awayHigher ? { backgroundColor: '#3b82f6', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4 } : {}),
+      }}>
+        <Text style={{
+          fontSize: 14, fontWeight: awayHigher ? '700' : '400',
+          color: awayHigher ? '#fff' : colors.foreground,
+        }}>
+          {away}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+function InfoSection({ matchDetail, match, colors, spacing, typography, borderRadius, navigation }: { matchDetail: MatchDetail | null; match: any; colors: any; spacing: any; typography: any; borderRadius: any; navigation: any }) {
+  if (!matchDetail) {
+    return (
+      <View style={{ alignItems: 'center', paddingVertical: spacing.xxl }}>
+        <LoadingSpinner fullScreen={false} />
+      </View>
+    );
+  }
+
+  const { stats } = matchDetail;
+
+  const infoRows: { label: string; value: string }[] = [
+    { label: 'Competition', value: match.competition.name },
+    { label: 'Matchday', value: match.matchday ? `${match.matchday}` : '—' },
+    { label: 'Date', value: formatFullDate(match.kickoff) },
+    { label: 'Kick-off', value: formatMatchTime(match.kickoff) },
+    { label: 'Venue', value: match.venue || '—' },
+    ...(matchDetail.attendance ? [{ label: 'Attendance', value: matchDetail.attendance.toLocaleString() }] : []),
+    { label: 'Referee', value: matchDetail.referee || '—' },
+  ];
+
+  return (
+    <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.sm }}>
+      {/* Match Stats — always shown as template, uses real data when available */}
+      <View style={{ backgroundColor: colors.card, borderRadius: borderRadius.lg, padding: spacing.md, borderWidth: 1, borderColor: colors.border, marginBottom: spacing.lg }}>
+        <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 15, textAlign: 'center', marginBottom: spacing.md }}>
+          Match Stats
+        </Text>
+
+        {/* Team headers */}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm }}>
+          <Pressable onPress={() => navigation.navigate('TeamDetail', { teamId: match.homeTeam.id, teamName: match.homeTeam.name, teamCrest: match.homeTeam.crest })} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, opacity: pressed ? 0.7 : 1 })}>
+            <TeamLogo uri={match.homeTeam.crest} size={18} />
+            <Text style={{ ...typography.caption, color: colors.textSecondary }}>{match.homeTeam.shortName}</Text>
+          </Pressable>
+          <Pressable onPress={() => navigation.navigate('TeamDetail', { teamId: match.awayTeam.id, teamName: match.awayTeam.name, teamCrest: match.awayTeam.crest })} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, opacity: pressed ? 0.7 : 1 })}>
+            <Text style={{ ...typography.caption, color: colors.textSecondary }}>{match.awayTeam.shortName}</Text>
+            <TeamLogo uri={match.awayTeam.crest} size={18} />
+          </Pressable>
+        </View>
+
+        <StatRow label="Ball Possession" home={stats?.ballPossession[0] ?? 0} away={stats?.ballPossession[1] ?? 0} colors={colors} spacing={spacing} typography={typography} isPossession />
+        <StatRow label="Expected Goals (xG)" home={0} away={0} colors={colors} spacing={spacing} typography={typography} />
+        <StatRow label="Total Shots" home={stats?.shots[0] ?? 0} away={stats?.shots[1] ?? 0} colors={colors} spacing={spacing} typography={typography} />
+        <StatRow label="Shots on Target" home={stats?.shotsOnTarget[0] ?? 0} away={stats?.shotsOnTarget[1] ?? 0} colors={colors} spacing={spacing} typography={typography} />
+        <StatRow label="Big Chances" home={0} away={0} colors={colors} spacing={spacing} typography={typography} />
+        <StatRow label="Big Chances Missed" home={0} away={0} colors={colors} spacing={spacing} typography={typography} />
+        <StatRow label="Corners" home={stats?.corners[0] ?? 0} away={stats?.corners[1] ?? 0} colors={colors} spacing={spacing} typography={typography} />
+      </View>
+
+      {/* Goals */}
+      {matchDetail.goals.length > 0 && (
+        <View style={{ marginBottom: spacing.lg }}>
+          <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 15, marginBottom: spacing.sm }}>
+            Goals
+          </Text>
+          {matchDetail.goals.map((goal, i) => {
+            const isHome = goal.team.id === match.homeTeam.id;
+            return (
+              <View
+                key={i}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingVertical: spacing.xs + 2,
+                  gap: spacing.sm,
+                }}
+              >
+                <View style={{ width: 30, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 13 }}>⚽</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Pressable onPress={() => navigation.navigate('PersonDetail', { personId: goal.scorer.id, personName: goal.scorer.name, role: 'player' })}>
+                    <Text style={{ ...typography.body, color: colors.foreground, fontSize: 14 }}>
+                      {goal.scorer.name}
+                      <Text style={{ color: colors.textSecondary }}> {goal.minute}'</Text>
+                    </Text>
+                  </Pressable>
+                  {goal.assist && (
+                    <Pressable onPress={() => navigation.navigate('PersonDetail', { personId: goal.assist!.id, personName: goal.assist!.name, role: 'player' })}>
+                      <Text style={{ ...typography.small, color: colors.textSecondary }}>
+                        Assist: {goal.assist.name}
+                      </Text>
+                    </Pressable>
+                  )}
+                </View>
+                <TeamLogo uri={isHome ? match.homeTeam.crest : match.awayTeam.crest} size={18} />
+              </View>
+            );
+          })}
+        </View>
+      )}
+
+      {/* Match Information */}
+      <View style={{ backgroundColor: colors.card, borderRadius: borderRadius.lg, padding: spacing.md, borderWidth: 1, borderColor: colors.border, marginBottom: spacing.lg }}>
+        <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 15, textAlign: 'center', marginBottom: spacing.md }}>
+          Match Information
+        </Text>
+        {infoRows.map((row) => {
+          const isCompetition = row.label === 'Competition';
+          const Container = isCompetition ? Pressable : View;
+          const containerProps = isCompetition
+            ? { onPress: () => navigation.navigate('LeagueDetail', { competitionCode: match.competition.code, competitionName: match.competition.name, competitionEmblem: match.competition.emblem }) }
+            : {};
+          return (
+            <Container
+              key={row.label}
+              {...containerProps}
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                paddingVertical: spacing.sm,
+                borderBottomWidth: 1,
+                borderBottomColor: colors.border,
+              }}
+            >
+              <Text style={{ ...typography.body, color: colors.textSecondary, fontSize: 14 }}>
+                {row.label}
+              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, flex: 1, justifyContent: 'flex-end', marginLeft: spacing.md }}>
+                <Text style={{ ...typography.body, color: isCompetition ? colors.primary : colors.foreground, fontSize: 14, fontWeight: '500', textAlign: 'right' }}>
+                  {row.value}
+                </Text>
+                {isCompetition && <Ionicons name="chevron-forward" size={14} color={colors.primary} />}
+              </View>
+            </Container>
+          );
+        })}
+      </View>
     </View>
   );
 }
