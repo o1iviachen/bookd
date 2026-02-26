@@ -46,8 +46,9 @@ export function WatchedByScreen({ route, navigation }: any) {
     pagerRef.current?.setPage(index);
   }, []);
 
-  const handlePageSelected = useCallback((e: any) => {
-    setActiveTabIndex(e.nativeEvent.position);
+  const handlePageScroll = useCallback((e: any) => {
+    const { position, offset } = e.nativeEvent;
+    setActiveTabIndex(Math.round(position + offset));
   }, []);
 
 
@@ -111,7 +112,7 @@ export function WatchedByScreen({ route, navigation }: any) {
         ref={pagerRef}
         style={{ flex: 1 }}
         initialPage={initialIndex}
-        onPageSelected={handlePageSelected}
+        onPageScroll={handlePageScroll}
       >
         {TABS.map((tab, tabIdx) => {
           const tabWatchers = tabIdx === 1

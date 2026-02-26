@@ -1,0 +1,80 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── Public read collections (synced by Cloud Functions) ───
+    // These are read-only for clients; only Cloud Functions (admin SDK) can write.
+
+    match /matches/{matchId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /matchDetails/{matchId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /standings/{standingId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /competitions/{competitionId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /teams/{teamId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /players/{playerId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // ─── User profiles ───
+    match /users/{userId} {
+      allow read: if true;
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow update: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // ─── Reviews ───
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null;
+      allow delete: if request.auth != null && request.auth.uid == resource.data.userId;
+
+      // Votes subcollection
+      match /votes/{voteId} {
+        allow read: if true;
+        allow write: if request.auth != null;
+      }
+    }
+
+    // ─── Comments ───
+    match /comments/{commentId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+
+    // ─── Lists ───
+    match /lists/{listId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+
+    // ─── Notifications ───
+    match /notifications/{notifId} {
+      allow read: if request.auth != null && request.auth.uid == resource.data.recipientId;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && request.auth.uid == resource.data.recipientId;
+    }
+  }
+}

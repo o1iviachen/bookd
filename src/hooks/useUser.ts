@@ -36,11 +36,11 @@ export function useUnfollowUser() {
   });
 }
 
-export function useSearchUsers(queryStr: string) {
+export function useSearchUsers(queryStr: string, active = true) {
   return useQuery({
     queryKey: ['search', 'users', queryStr],
     queryFn: () => searchUsers(queryStr),
-    enabled: queryStr.length >= 2,
+    enabled: queryStr.length >= 2 && active,
     staleTime: 30 * 1000,
   });
 }

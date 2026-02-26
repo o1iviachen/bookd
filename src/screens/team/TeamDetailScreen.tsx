@@ -140,7 +140,7 @@ export function TeamDetailScreen({ route, navigation }: any) {
         ref={pagerRef}
         style={{ flex: 1 }}
         initialPage={0}
-        onPageSelected={(e) => setActiveTabIndex(e.nativeEvent.position)}
+        onPageScroll={(e: any) => setActiveTabIndex(Math.round(e.nativeEvent.position + e.nativeEvent.offset))}
       >
         {/* ─── Matches Tab ─── */}
         <View key="matches" style={{ flex: 1 }}>

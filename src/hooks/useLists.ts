@@ -16,6 +16,7 @@ import {
   getCommentsForList,
   createListComment,
   deleteListComment,
+  searchLists,
 } from '../services/firestore/lists';
 
 export function useListsForUser(userId: string) {
@@ -183,6 +184,15 @@ export function useCreateListComment() {
       queryClient.invalidateQueries({ queryKey: ['listComments', params.listId] });
       queryClient.invalidateQueries({ queryKey: ['lists'] });
     },
+  });
+}
+
+export function useSearchLists(queryStr: string, active = true) {
+  return useQuery({
+    queryKey: ['searchLists', queryStr],
+    queryFn: () => searchLists(queryStr),
+    enabled: queryStr.length >= 2 && active,
+    staleTime: 2 * 60 * 1000,
   });
 }
 

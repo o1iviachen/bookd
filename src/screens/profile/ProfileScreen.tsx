@@ -47,7 +47,7 @@ export function ProfileScreen() {
     .map((q) => q.data as Match);
 
   // Recent activity: fetch match data for the user's most recent reviews
-  const recentReviews = (reviews || []).slice(0, 4);
+  const recentReviews = (reviews || []).slice(0, 3);
   const recentMatchIds = [...new Set(recentReviews.map((r) => r.matchId))];
   const recentMatchQueries = useQueries({
     queries: recentMatchIds.map((id) => ({
@@ -85,8 +85,8 @@ export function ProfileScreen() {
   // Get crests for followed teams
   const followedTeamCrests = (profile?.followedTeamIds || []).map((id) => {
     const team = POPULAR_TEAMS.find((t) => t.id === id);
-    return team ? { name: team.name, crest: team.crest } : null;
-  }).filter(Boolean) as { name: string; crest: string }[];
+    return team ? { id: team.id, name: team.name, crest: team.crest } : null;
+  }).filter(Boolean) as { id: string; name: string; crest: string }[];
 
   const navLinks: { label: string; count: number | string; icon: keyof typeof Ionicons.glyphMap }[] = [
     { label: 'Games', count: `${reviews?.length || 0} this year`, icon: 'football-outline' },
@@ -126,7 +126,12 @@ export function ProfileScreen() {
         {followedTeamCrests.length > 0 && (
           <View style={{ flexDirection: 'row', justifyContent: 'center', gap: spacing.sm, marginTop: spacing.sm }}>
             {followedTeamCrests.map((club) => (
-              <TeamLogo key={club.name} uri={club.crest} size={28} />
+              <Pressable
+                key={club.id}
+                onPress={() => navigation.navigate('TeamDetail', { teamId: Number(club.id), teamName: club.name, teamCrest: club.crest })}
+              >
+                <TeamLogo uri={club.crest} size={28} />
+              </Pressable>
             ))}
           </View>
         )}

@@ -230,6 +230,28 @@ export async function deleteReview(reviewId: string): Promise<void> {
   await deleteDoc(doc(db, 'reviews', reviewId));
 }
 
+// Search reviews by text content, username, or matchLabel
+export async function searchReviews(queryStr: string): Promise<Review[]> {
+  if (queryStr.length < 2) return [];
+  // Fetch recent reviews and filter client-side (Firestore has no text search)
+  const q = query(
+    collection(db, 'reviews'),
+    orderBy('createdAt', 'desc'),
+    limit(100)
+  );
+  const snapshot = await getDocs(q);
+  const qLower = queryStr.toLowerCase();
+  return snapshot.docs
+    .map((d) => docToReview(d))
+    .filter((r) =>
+      r.text.toLowerCase().includes(qLower) ||
+      r.username.toLowerCase().includes(qLower) ||
+      (r.matchLabel && r.matchLabel.toLowerCase().includes(qLower)) ||
+      r.tags.some((t) => t.toLowerCase().includes(qLower))
+    )
+    .slice(0, 20);
+}
+
 export async function getAvgRatingsForMatches(matchIds: number[]): Promise<Map<number, number>> {
   const result = new Map<number, number>();
   if (matchIds.length === 0) return result;

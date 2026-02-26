@@ -236,3 +236,23 @@ export async function updateMatchOrder(listId: string, matchIds: number[]): Prom
 export async function deleteList(listId: string): Promise<void> {
   await deleteDoc(doc(db, 'lists', listId));
 }
+
+// Search lists by name, description, or username
+export async function searchLists(queryStr: string): Promise<MatchList[]> {
+  if (queryStr.length < 2) return [];
+  const q = query(
+    collection(db, 'lists'),
+    orderBy('createdAt', 'desc'),
+    limit(100)
+  );
+  const snapshot = await getDocs(q);
+  const qLower = queryStr.toLowerCase();
+  return snapshot.docs
+    .map(docToList)
+    .filter((l) =>
+      l.name.toLowerCase().includes(qLower) ||
+      l.description.toLowerCase().includes(qLower) ||
+      l.username.toLowerCase().includes(qLower)
+    )
+    .slice(0, 20);
+}

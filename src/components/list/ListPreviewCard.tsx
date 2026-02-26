@@ -8,8 +8,10 @@ import { getMatchById } from '../../services/matchService';
 import { useListComments, useListLikedBy } from '../../hooks/useLists';
 import { useUserProfile } from '../../hooks/useUser';
 import { MatchPosterCard } from '../match/MatchPosterCard';
+import { TeamLogo } from '../match/TeamLogo';
 import { MatchList } from '../../types/list';
 import { Match } from '../../types/match';
+import { POPULAR_TEAMS } from '../../utils/constants';
 
 const PREVIEW_COUNT = 5;
 const POSTER_WIDTH = 70;
@@ -32,6 +34,10 @@ export function ListPreviewCard({ list, onPress, onMatchPress }: ListPreviewCard
   const isLiked = !!(user && likedBy?.includes(user.uid));
   const displayName = authorProfile?.displayName || authorProfile?.username || list.username;
   const displayUsername = authorProfile?.username || list.username;
+  const authorTeamCrests = (authorProfile?.followedTeamIds || []).slice(0, 3).map((id) => {
+    const team = POPULAR_TEAMS.find((t) => t.id === String(id));
+    return team ? { id: team.id, crest: team.crest } : null;
+  }).filter(Boolean) as { id: string; crest: string }[];
 
   // Fetch first few matches for poster previews
   const previewIds = list.matchIds.slice(0, PREVIEW_COUNT);
@@ -68,12 +74,20 @@ export function ListPreviewCard({ list, onPress, onMatchPress }: ListPreviewCard
             {list.description}
           </Text>
         ) : null}
-        <Text style={{ ...typography.small, color: colors.textSecondary, marginTop: 4 }}>
-          <Text style={{ fontWeight: '600', color: colors.foreground }}>{displayName}</Text>
-          {' '}
-          <Text>@{displayUsername}</Text>
-          {' · '}{list.matchIds.length} {list.matchIds.length === 1 ? 'match' : 'matches'}
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
+          <Text style={{ ...typography.small, color: colors.foreground, fontWeight: '600' }} numberOfLines={1}>
+            {displayName}
+          </Text>
+          <Text style={{ ...typography.small, color: colors.textSecondary }} numberOfLines={1}>
+            @{displayUsername}
+          </Text>
+          {authorTeamCrests.map((t) => (
+            <TeamLogo key={t.id} uri={t.crest} size={14} />
+          ))}
+          <Text style={{ ...typography.small, color: colors.textSecondary }}>
+            · {list.matchIds.length} {list.matchIds.length === 1 ? 'match' : 'matches'}
+          </Text>
+        </View>
       </Pressable>
 
       {/* Poster row — each poster taps to that match */}

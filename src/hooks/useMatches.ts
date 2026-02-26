@@ -1,10 +1,28 @@
-import { useQuery, keepPreviousData } from '@tanstack/react-query';
+import { useEffect } from 'react';
+import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { getMatchesByDate, getMatchById, getMatchesByDateRange } from '../services/matchService';
-import { getMatchDetail } from '../services/footballApi';
+import { getMatchDetail, searchMatchesQuery } from '../services/footballApi';
+import { addDays } from 'date-fns';
 
 export function useMatchesByDate(date: Date) {
   const dateKey = date.toISOString().split('T')[0];
   const isToday = dateKey === new Date().toISOString().split('T')[0];
+  const queryClient = useQueryClient();
+
+  // Prefetch adjacent dates so swiping feels instant
+  useEffect(() => {
+    const prefetch = (d: Date) => {
+      const key = d.toISOString().split('T')[0];
+      queryClient.prefetchQuery({
+        queryKey: ['matches', key],
+        queryFn: () => getMatchesByDate(d),
+        staleTime: 10 * 60 * 1000,
+      });
+    };
+    prefetch(addDays(date, -1));
+    prefetch(addDays(date, 1));
+  }, [dateKey, queryClient]);
+
   return useQuery({
     queryKey: ['matches', dateKey],
     queryFn: () => getMatchesByDate(date),
@@ -49,5 +67,14 @@ export function useMatchesRange(from: Date, to: Date) {
     queryFn: () => getMatchesByDateRange(from, to),
     staleTime: 5 * 60 * 1000,
     retry: 2,
+  });
+}
+
+export function useSearchMatches(queryStr: string, active = true) {
+  return useQuery({
+    queryKey: ['searchMatches', queryStr],
+    queryFn: () => searchMatchesQuery(queryStr),
+    enabled: queryStr.length >= 2 && active,
+    staleTime: 2 * 60 * 1000,
   });
 }

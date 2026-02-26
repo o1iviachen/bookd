@@ -58,8 +58,9 @@ export function MatchesScreen() {
     if (idx >= 0) pagerRef.current?.setPageWithoutAnimation(idx);
   }, [dates]);
 
-  const handlePageSelected = useCallback((e: any) => {
-    const idx = e.nativeEvent.position;
+  const handlePageScroll = useCallback((e: any) => {
+    const { position, offset } = e.nativeEvent;
+    const idx = Math.round(position + offset);
     if (idx >= 0 && idx < dates.length) {
       setSelectedDate(dates[idx]);
     }
@@ -150,6 +151,11 @@ export function MatchesScreen() {
               fontSize: 14,
             }}
           />
+          {searchQuery.length > 0 && (
+            <Pressable onPress={() => setSearchQuery('')}>
+              <Ionicons name="close" size={18} color={colors.textSecondary} />
+            </Pressable>
+          )}
         </View>
 
         <DatePicker selectedDate={selectedDate} onDateChange={handleDateChange} />
@@ -159,7 +165,7 @@ export function MatchesScreen() {
         ref={pagerRef}
         style={{ flex: 1 }}
         initialPage={selectedPageIndex >= 0 ? selectedPageIndex : DATE_RANGE}
-        onPageSelected={handlePageSelected}
+        onPageScroll={handlePageScroll}
       >
         {dates.map((date, pageIdx) => (
           <View key={date.toISOString()} style={{ flex: 1 }}>
@@ -238,17 +244,17 @@ export function MatchesScreen() {
                   )}
 
                   {/* Followed leagues */}
-                  {followedLeagueEntries.map(([league, leagueMatches]) => (
+                  {followedLeagueEntries.map(([code, leagueMatches]) => (
                     <LeagueSection
-                      key={league}
-                      leagueName={league}
+                      key={code}
+                      leagueName={leagueMatches[0]?.competition.name || code}
                       leagueEmblem={leagueMatches[0]?.competition.emblem}
                       leagueCode={leagueMatches[0]?.competition.code}
                       matches={leagueMatches}
                       onMatchPress={(id) => navigation.navigate('MatchDetail', { matchId: id })}
                       onLeaguePress={() => navigation.navigate('LeagueDetail', {
                         competitionCode: leagueMatches[0]?.competition.code,
-                        competitionName: league,
+                        competitionName: leagueMatches[0]?.competition.name || code,
                         competitionEmblem: leagueMatches[0]?.competition.emblem,
                       })}
                       defaultExpanded={true}
@@ -256,17 +262,17 @@ export function MatchesScreen() {
                   ))}
 
                   {/* Other leagues */}
-                  {otherLeagueEntries.map(([league, leagueMatches]) => (
+                  {otherLeagueEntries.map(([code, leagueMatches]) => (
                     <LeagueSection
-                      key={league}
-                      leagueName={league}
+                      key={code}
+                      leagueName={leagueMatches[0]?.competition.name || code}
                       leagueEmblem={leagueMatches[0]?.competition.emblem}
                       leagueCode={leagueMatches[0]?.competition.code}
                       matches={leagueMatches}
                       onMatchPress={(id) => navigation.navigate('MatchDetail', { matchId: id })}
                       onLeaguePress={() => navigation.navigate('LeagueDetail', {
                         competitionCode: leagueMatches[0]?.competition.code,
-                        competitionName: league,
+                        competitionName: leagueMatches[0]?.competition.name || code,
                         competitionEmblem: leagueMatches[0]?.competition.emblem,
                       })}
                       defaultExpanded={false}

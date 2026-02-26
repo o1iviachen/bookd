@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useCallback } from 'react';
-import { View, Text, Pressable, Share, ScrollView } from 'react-native';
+import { View, Text, Pressable, Share, ScrollView, useWindowDimensions } from 'react-native';
 import PagerView from 'react-native-pager-view';
 import { Select } from '../../components/ui/Select';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -27,7 +27,7 @@ import { RatingChart } from '../../components/profile/RatingChart';
 import { formatFullDate, formatMatchTime } from '../../utils/formatDate';
 import { getStadiumImageUrl } from '../../utils/stadiumImages';
 import { MatchesStackParamList } from '../../types/navigation';
-import { MatchDetail, MatchPlayer } from '../../services/footballApi';
+import { MatchDetail, MatchPlayer, MatchGoal, MatchBooking, MatchSubstitution } from '../../services/footballApi';
 import { User } from '../../types/user';
 
 type MatchTab = 'reviews' | 'lineup' | 'info';
@@ -58,8 +58,9 @@ export function MatchDetailScreen({ route, navigation }: Props) {
     pagerRef.current?.setPage(index);
   }, []);
 
-  const handlePageSelected = useCallback((e: any) => {
-    setActiveTabIndex(e.nativeEvent.position);
+  const handlePageScroll = useCallback((e: any) => {
+    const { position, offset } = e.nativeEvent;
+    setActiveTabIndex(Math.round(position + offset));
   }, []);
 
   const { data: match, isLoading } = useMatch(matchId);
@@ -308,7 +309,7 @@ export function MatchDetailScreen({ route, navigation }: Props) {
         ref={pagerRef}
         style={{ flex: 1 }}
         initialPage={0}
-        onPageSelected={handlePageSelected}
+        onPageScroll={handlePageScroll}
       >
         {/* ─── Reviews Page ─── */}
         <View key="reviews" style={{ flex: 1 }}>
@@ -657,23 +658,272 @@ function ReviewsSection({ reviews, userId, profile, colors, spacing, typography,
   );
 }
 
-/* ─── Lineup Section ─── */
+/* ─── Lineup Section — Formation Pitch Diagram ─── */
 
-function PlayerRow({ player, colors, spacing, typography, onPress }: { player: MatchPlayer; colors: any; spacing: any; typography: any; onPress?: () => void }) {
+/** Parse "4-3-3" → [4, 3, 3] */
+function parseFormation(formation: string): number[] {
+  return formation.split('-').map(Number).filter((n) => !isNaN(n) && n > 0);
+}
+
+/** Build player events lookup: playerId → { goals, yellowCard, redCard, subbedOut minute } */
+function buildPlayerEvents(
+  goals: MatchGoal[],
+  bookings: MatchBooking[],
+  substitutions: MatchSubstitution[],
+) {
+  const map = new Map<number, { goals: number; yellowCard: boolean; redCard: boolean; subbedOutMin: number | null }>();
+
+  const getOrCreate = (id: number) => {
+    if (!map.has(id)) map.set(id, { goals: 0, yellowCard: false, redCard: false, subbedOutMin: null });
+    return map.get(id)!;
+  };
+
+  for (const g of goals) {
+    getOrCreate(g.scorer.id).goals++;
+  }
+  for (const b of bookings) {
+    const entry = getOrCreate(b.player.id);
+    if (b.card === 'YELLOW') entry.yellowCard = true;
+    else if (b.card === 'RED' || b.card === 'YELLOW_RED') entry.redCard = true;
+  }
+  for (const s of substitutions) {
+    const entry = getOrCreate(s.playerOut.id);
+    if (entry.subbedOutMin === null) entry.subbedOutMin = s.minute;
+  }
+
+  return map;
+}
+
+/** Assign players to formation rows. Player 0 = GK, then fill rows from back to front. */
+function assignPlayersToRows(players: MatchPlayer[], formation: number[]): MatchPlayer[][] {
+  const rows: MatchPlayer[][] = [];
+  // GK is always first player
+  rows.push([players[0]]);
+  let idx = 1;
+  for (const count of formation) {
+    rows.push(players.slice(idx, idx + count));
+    idx += count;
+  }
+  return rows;
+}
+
+function PitchPlayerDot({
+  player, x, y, teamColor, events, onPress,
+}: {
+  player: MatchPlayer;
+  x: number; y: number;
+  teamColor: string;
+  events: { goals: number; yellowCard: boolean; redCard: boolean; subbedOutMin: number | null } | undefined;
+  onPress: () => void;
+}) {
+  const DOT_SIZE = 36;
+  const TOUCH_WIDTH = 56;
+  // Show last name only (or first word if single name)
+  const nameParts = player.name.split(' ');
+  const displayName = nameParts.length > 1 ? nameParts[nameParts.length - 1] : player.name;
+
+  const hasEvents = events && (events.goals > 0 || events.yellowCard || events.redCard || events.subbedOutMin !== null);
+
   return (
-    <Pressable onPress={onPress} disabled={!onPress} style={({ pressed }) => ({ opacity: pressed && onPress ? 0.7 : 1 })}>
+    <Pressable
+      onPress={onPress}
+      style={{
+        position: 'absolute',
+        left: x - TOUCH_WIDTH / 2,
+        top: y - DOT_SIZE / 2,
+        alignItems: 'center',
+        width: TOUCH_WIDTH,
+      }}
+    >
+      {/* Player circle + event badges */}
+      <View style={{ width: DOT_SIZE, height: DOT_SIZE }}>
+        <View style={{
+          width: DOT_SIZE,
+          height: DOT_SIZE,
+          borderRadius: DOT_SIZE / 2,
+          backgroundColor: teamColor,
+          alignItems: 'center',
+          justifyContent: 'center',
+          borderWidth: 2,
+          borderColor: 'rgba(255,255,255,0.5)',
+        }}>
+          <Text style={{ fontSize: 13, fontWeight: '800', color: '#fff' }}>
+            {player.shirtNumber ?? ''}
+          </Text>
+        </View>
+        {/* Goal — top left, overlapping circle */}
+        {events && events.goals > 0 && (
+          <View style={{ position: 'absolute', top: -1, left: -1 }}>
+            <Text style={{ fontSize: 11 }}>⚽</Text>
+          </View>
+        )}
+        {/* Card — bottom left */}
+        {events?.yellowCard && (
+          <View style={{ position: 'absolute', bottom: -1, left: -1, width: 7, height: 10, backgroundColor: '#facc15', borderRadius: 1, borderWidth: 0.5, borderColor: 'rgba(0,0,0,0.3)' }} />
+        )}
+        {events?.redCard && (
+          <View style={{ position: 'absolute', bottom: -1, left: -1, width: 7, height: 10, backgroundColor: '#ef4444', borderRadius: 1, borderWidth: 0.5, borderColor: 'rgba(0,0,0,0.3)' }} />
+        )}
+        {/* Sub — top right */}
+        {events?.subbedOutMin !== null && events?.subbedOutMin !== undefined && (
+          <View style={{ position: 'absolute', top: -5, right: -5, width: 15, height: 15, borderRadius: 8, backgroundColor: 'rgba(239,68,68,0.9)', alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ fontSize: 9, color: '#fff', fontWeight: '700' }}>↓</Text>
+          </View>
+        )}
+      </View>
+      {/* Player name */}
+      <Text style={{ fontSize: 9, fontWeight: '700', color: '#fff', textAlign: 'center', marginTop: 2, textShadowColor: 'rgba(0,0,0,0.9)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 }} numberOfLines={1}>
+        {displayName}
+      </Text>
+    </Pressable>
+  );
+}
+
+function FormationPitch({
+  matchDetail, match, navigation, pitchWidth,
+}: {
+  matchDetail: MatchDetail;
+  match: any;
+  navigation: any;
+  pitchWidth: number;
+}) {
+  const pitchHeight = pitchWidth * 1.7;
+  const halfHeight = pitchHeight / 2;
+  const padX = 24;
+  // Asymmetric: top only needs dot radius (18) clearance, bottom needs dot+name (32)
+  const topPad = 22;      // home GK y — dot top is 4px from edge
+  const bottomPad = 36;   // away GK y — name bottom is 4px from edge
+  const centerPad = 40;   // push strikers further from center line
+
+  const homeFormation = matchDetail.homeFormation ? parseFormation(matchDetail.homeFormation) : [];
+  const awayFormation = matchDetail.awayFormation ? parseFormation(matchDetail.awayFormation) : [];
+
+  const playerEvents = useMemo(() =>
+    buildPlayerEvents(matchDetail.goals, matchDetail.bookings, matchDetail.substitutions),
+    [matchDetail.goals, matchDetail.bookings, matchDetail.substitutions]
+  );
+
+  const homeRows = homeFormation.length > 0 ? assignPlayersToRows(matchDetail.homeLineup, homeFormation) : [];
+  const awayRows = awayFormation.length > 0 ? assignPlayersToRows(matchDetail.awayLineup, awayFormation) : [];
+
+  // Calculate x,y for a player in a row
+  // Home: GK at y=topPad, forwards at y=halfHeight-centerPad
+  // Away: GK at y=pitchHeight-bottomPad, forwards at y=halfHeight+centerPad
+  const getPlayerPos = (
+    rowIndex: number, playerIndexInRow: number, playersInRow: number,
+    totalRows: number, isHome: boolean,
+  ) => {
+    const usableWidth = pitchWidth - padX * 2;
+    const x = padX + (usableWidth / (playersInRow + 1)) * (playerIndexInRow + 1);
+
+    if (isHome) {
+      const yStart = topPad;
+      const yEnd = halfHeight - centerPad;
+      const step = totalRows > 1 ? (yEnd - yStart) / (totalRows - 1) : 0;
+      const y = yStart + step * rowIndex;
+      return { x, y };
+    } else {
+      const yStart = pitchHeight - bottomPad; // GK near bottom (accounts for name text)
+      const yEnd = halfHeight + centerPad;     // forwards near center
+      const step = totalRows > 1 ? (yStart - yEnd) / (totalRows - 1) : 0;
+      const y = yStart - step * rowIndex;
+      return { x, y };
+    }
+  };
+
+  // Pitch markings
+  const lineColor = 'rgba(255,255,255,0.25)';
+  const penaltyBoxWidth = pitchWidth * 0.55;
+  const penaltyBoxHeight = pitchHeight * 0.11;
+  const goalBoxWidth = pitchWidth * 0.28;
+  const goalBoxHeight = pitchHeight * 0.045;
+  const circleSize = pitchWidth * 0.22;
+
+  return (
+    <View style={{ width: pitchWidth, height: pitchHeight, borderRadius: 12, overflow: 'hidden', backgroundColor: '#1b7340' }}>
+      {/* Pitch markings */}
+      <View style={{ position: 'absolute', top: halfHeight, left: 0, right: 0, height: 1, backgroundColor: lineColor }} />
+      <View style={{ position: 'absolute', top: halfHeight - circleSize / 2, left: pitchWidth / 2 - circleSize / 2, width: circleSize, height: circleSize, borderRadius: circleSize / 2, borderWidth: 1, borderColor: lineColor }} />
+      <View style={{ position: 'absolute', top: halfHeight - 3, left: pitchWidth / 2 - 3, width: 6, height: 6, borderRadius: 3, backgroundColor: lineColor }} />
+      <View style={{ position: 'absolute', top: 0, left: (pitchWidth - penaltyBoxWidth) / 2, width: penaltyBoxWidth, height: penaltyBoxHeight, borderWidth: 1, borderTopWidth: 0, borderColor: lineColor }} />
+      <View style={{ position: 'absolute', top: 0, left: (pitchWidth - goalBoxWidth) / 2, width: goalBoxWidth, height: goalBoxHeight, borderWidth: 1, borderTopWidth: 0, borderColor: lineColor }} />
+      <View style={{ position: 'absolute', bottom: 0, left: (pitchWidth - penaltyBoxWidth) / 2, width: penaltyBoxWidth, height: penaltyBoxHeight, borderWidth: 1, borderBottomWidth: 0, borderColor: lineColor }} />
+      <View style={{ position: 'absolute', bottom: 0, left: (pitchWidth - goalBoxWidth) / 2, width: goalBoxWidth, height: goalBoxHeight, borderWidth: 1, borderBottomWidth: 0, borderColor: lineColor }} />
+      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderWidth: 2, borderColor: lineColor, borderRadius: 12 }} />
+
+      {/* Home team logo — top left */}
+      <View style={{ position: 'absolute', top: 10, left: 12 }}>
+        <TeamLogo uri={match.homeTeam.crest} size={24} />
+      </View>
+      {/* Away team logo — bottom right */}
+      <View style={{ position: 'absolute', bottom: 10, right: 12 }}>
+        <TeamLogo uri={match.awayTeam.crest} size={24} />
+      </View>
+
+      {/* Home players (top half) */}
+      {homeRows.map((row, rowIdx) =>
+        row.map((player, pIdx) => {
+          const pos = getPlayerPos(rowIdx, pIdx, row.length, homeRows.length, true);
+          return (
+            <PitchPlayerDot
+              key={`h-${player.id}`}
+              player={player}
+              x={pos.x}
+              y={pos.y}
+              teamColor="rgba(20,20,30,0.65)"
+              events={playerEvents.get(player.id)}
+              onPress={() => navigation.navigate('PersonDetail', { personId: player.id, personName: player.name, role: 'player' })}
+            />
+          );
+        })
+      )}
+
+      {/* Away players (bottom half) */}
+      {awayRows.map((row, rowIdx) =>
+        row.map((player, pIdx) => {
+          const pos = getPlayerPos(rowIdx, pIdx, row.length, awayRows.length, false);
+          return (
+            <PitchPlayerDot
+              key={`a-${player.id}`}
+              player={player}
+              x={pos.x}
+              y={pos.y}
+              teamColor="rgba(255,255,255,0.2)"
+              events={playerEvents.get(player.id)}
+              onPress={() => navigation.navigate('PersonDetail', { personId: player.id, personName: player.name, role: 'player' })}
+            />
+          );
+        })
+      )}
+    </View>
+  );
+}
+
+function BenchPlayerRow({ player, substitution, colors, spacing, typography, onPress }: {
+  player: MatchPlayer;
+  substitution?: MatchSubstitution;
+  colors: any; spacing: any; typography: any;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
       <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.xs + 2, gap: spacing.sm }}>
         {player.shirtNumber !== null && (
           <Text style={{ width: 24, textAlign: 'center', ...typography.caption, color: colors.textSecondary }}>
             {player.shirtNumber}
           </Text>
         )}
-        <Text style={{ ...typography.body, color: colors.foreground, fontSize: 14, flex: 1 }}>
+        <Text style={{ ...typography.body, color: colors.foreground, fontSize: 14, flex: 1 }} numberOfLines={1}>
           {player.name}
         </Text>
-        {player.position && (
+        {substitution && (
+          <Text style={{ fontSize: 11, color: colors.textSecondary }}>
+            ↔ {substitution.minute}'
+          </Text>
+        )}
+        {player.position && !substitution && (
           <Text style={{ ...typography.small, color: colors.textSecondary }}>
-            {player.position === 'Goalkeeper' ? 'GK' : player.position === 'Defence' ? 'DEF' : player.position === 'Midfield' ? 'MID' : player.position === 'Offence' ? 'FWD' : player.position}
+            {player.position === 'Goalkeeper' ? 'GK' : player.position === 'Defender' ? 'DEF' : player.position === 'Midfielder' ? 'MID' : player.position === 'Forward' ? 'FWD' : player.position}
           </Text>
         )}
       </View>
@@ -682,6 +932,9 @@ function PlayerRow({ player, colors, spacing, typography, onPress }: { player: M
 }
 
 function LineupSection({ matchDetail, match, colors, spacing, typography, navigation }: { matchDetail: MatchDetail | null; match: any; colors: any; spacing: any; typography: any; navigation: any }) {
+  const { width: screenWidth } = useWindowDimensions();
+  const pitchWidth = screenWidth - spacing.md * 2;
+
   if (!matchDetail) {
     return (
       <View style={{ alignItems: 'center', paddingVertical: spacing.xxl }}>
@@ -706,101 +959,124 @@ function LineupSection({ matchDetail, match, colors, spacing, typography, naviga
     );
   }
 
+  // Build substitution lookup for bench players
+  const subsByPlayerIn = new Map<number, MatchSubstitution>();
+  for (const s of matchDetail.substitutions) {
+    subsByPlayerIn.set(s.playerIn.id, s);
+  }
+
   return (
     <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.sm }}>
-      {/* Formations */}
-      {(matchDetail.homeFormation || matchDetail.awayFormation) && (
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.md }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-            <TeamLogo uri={match.homeTeam.crest} size={20} />
-            <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 14 }}>
-              {matchDetail.homeFormation || '—'}
-            </Text>
-          </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-            <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 14 }}>
-              {matchDetail.awayFormation || '—'}
-            </Text>
-            <TeamLogo uri={match.awayTeam.crest} size={20} />
-          </View>
-        </View>
+      {/* Formation Pitch Diagram */}
+      {matchDetail.homeFormation && matchDetail.awayFormation && (
+        <FormationPitch
+          matchDetail={matchDetail}
+          match={match}
+          navigation={navigation}
+          pitchWidth={pitchWidth}
+        />
       )}
 
-      {/* Home Starting XI */}
-      <View style={{ marginBottom: spacing.md }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm }}>
-          <TeamLogo uri={match.homeTeam.crest} size={18} />
-          <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 14 }}>
-            {match.homeTeam.shortName}
-          </Text>
-          <Text style={{ ...typography.caption, color: colors.textSecondary }}>Starting XI</Text>
-        </View>
-        {matchDetail.homeLineup.map((p) => (
-          <PlayerRow key={p.id} player={p} colors={colors} spacing={spacing} typography={typography} onPress={() => navigation.navigate('PersonDetail', { personId: p.id, personName: p.name, role: 'player' })} />
-        ))}
-        {matchDetail.homeCoach && (
-          <Pressable onPress={() => navigation.navigate('PersonDetail', { personId: matchDetail.homeCoach!.id, personName: matchDetail.homeCoach!.name, role: 'manager' })} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.xs + 2, gap: spacing.sm, marginTop: spacing.xs }}>
-              <Text style={{ width: 24, textAlign: 'center', ...typography.caption, color: colors.textSecondary }}>
-                <Ionicons name="person" size={12} color={colors.textSecondary} />
-              </Text>
-              <Text style={{ ...typography.body, color: colors.textSecondary, fontSize: 14, fontStyle: 'italic' }}>
-                {matchDetail.homeCoach.name} (Coach)
-              </Text>
+      {/* Fallback: if no formation data but we have lineups, show as list */}
+      {(!matchDetail.homeFormation || !matchDetail.awayFormation) && hasLineup && (
+        <>
+          {/* Home Starting XI */}
+          <View style={{ marginBottom: spacing.md }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm }}>
+              <TeamLogo uri={match.homeTeam.crest} size={18} />
+              <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 14 }}>{match.homeTeam.shortName}</Text>
+              <Text style={{ ...typography.caption, color: colors.textSecondary }}>Starting XI</Text>
             </View>
-          </Pressable>
-        )}
-      </View>
+            {matchDetail.homeLineup.map((p) => (
+              <BenchPlayerRow key={p.id} player={p} colors={colors} spacing={spacing} typography={typography} onPress={() => navigation.navigate('PersonDetail', { personId: p.id, personName: p.name, role: 'player' })} />
+            ))}
+          </View>
+          <View style={{ height: 1, backgroundColor: colors.border, marginBottom: spacing.md }} />
+          {/* Away Starting XI */}
+          <View style={{ marginBottom: spacing.md }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm }}>
+              <TeamLogo uri={match.awayTeam.crest} size={18} />
+              <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 14 }}>{match.awayTeam.shortName}</Text>
+              <Text style={{ ...typography.caption, color: colors.textSecondary }}>Starting XI</Text>
+            </View>
+            {matchDetail.awayLineup.map((p) => (
+              <BenchPlayerRow key={p.id} player={p} colors={colors} spacing={spacing} typography={typography} onPress={() => navigation.navigate('PersonDetail', { personId: p.id, personName: p.name, role: 'player' })} />
+            ))}
+          </View>
+        </>
+      )}
 
-      {/* Home Bench */}
+      {/* Home Substitutes */}
       {matchDetail.homeBench.length > 0 && (
-        <View style={{ marginBottom: spacing.lg }}>
-          <Text style={{ ...typography.caption, color: colors.textSecondary, fontWeight: '600', marginBottom: spacing.xs }}>
-            Substitutes
-          </Text>
+        <View style={{ marginTop: spacing.lg }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm }}>
+            <TeamLogo uri={match.homeTeam.crest} size={18} />
+            <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 14 }}>
+              {match.homeTeam.shortName}
+            </Text>
+            <Text style={{ ...typography.caption, color: colors.textSecondary }}>Substitutes</Text>
+          </View>
           {matchDetail.homeBench.map((p) => (
-            <PlayerRow key={p.id} player={p} colors={colors} spacing={spacing} typography={typography} onPress={() => navigation.navigate('PersonDetail', { personId: p.id, personName: p.name, role: 'player' })} />
+            <BenchPlayerRow
+              key={p.id}
+              player={p}
+              substitution={subsByPlayerIn.get(p.id)}
+              colors={colors}
+              spacing={spacing}
+              typography={typography}
+              onPress={() => navigation.navigate('PersonDetail', { personId: p.id, personName: p.name, role: 'player' })}
+            />
           ))}
+          {matchDetail.homeCoach && (
+            <Pressable onPress={() => navigation.navigate('PersonDetail', { personId: matchDetail.homeCoach!.id, personName: matchDetail.homeCoach!.name, role: 'manager' })} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.xs + 2, gap: spacing.sm, marginTop: spacing.xs }}>
+                <Text style={{ width: 24, textAlign: 'center', ...typography.caption, color: colors.textSecondary }}>
+                  <Ionicons name="person" size={12} color={colors.textSecondary} />
+                </Text>
+                <Text style={{ ...typography.body, color: colors.textSecondary, fontSize: 14, fontStyle: 'italic' }}>
+                  {matchDetail.homeCoach.name} (Coach)
+                </Text>
+              </View>
+            </Pressable>
+          )}
         </View>
       )}
 
-      <View style={{ height: 1, backgroundColor: colors.border, marginBottom: spacing.md }} />
+      <View style={{ height: 1, backgroundColor: colors.border, marginVertical: spacing.md }} />
 
-      {/* Away Starting XI */}
-      <View style={{ marginBottom: spacing.md }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm }}>
-          <TeamLogo uri={match.awayTeam.crest} size={18} />
-          <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 14 }}>
-            {match.awayTeam.shortName}
-          </Text>
-          <Text style={{ ...typography.caption, color: colors.textSecondary }}>Starting XI</Text>
-        </View>
-        {matchDetail.awayLineup.map((p) => (
-          <PlayerRow key={p.id} player={p} colors={colors} spacing={spacing} typography={typography} onPress={() => navigation.navigate('PersonDetail', { personId: p.id, personName: p.name, role: 'player' })} />
-        ))}
-        {matchDetail.awayCoach && (
-          <Pressable onPress={() => navigation.navigate('PersonDetail', { personId: matchDetail.awayCoach!.id, personName: matchDetail.awayCoach!.name, role: 'manager' })} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.xs + 2, gap: spacing.sm, marginTop: spacing.xs }}>
-              <Text style={{ width: 24, textAlign: 'center', ...typography.caption, color: colors.textSecondary }}>
-                <Ionicons name="person" size={12} color={colors.textSecondary} />
-              </Text>
-              <Text style={{ ...typography.body, color: colors.textSecondary, fontSize: 14, fontStyle: 'italic' }}>
-                {matchDetail.awayCoach.name} (Coach)
-              </Text>
-            </View>
-          </Pressable>
-        )}
-      </View>
-
-      {/* Away Bench */}
+      {/* Away Substitutes */}
       {matchDetail.awayBench.length > 0 && (
         <View style={{ marginBottom: spacing.md }}>
-          <Text style={{ ...typography.caption, color: colors.textSecondary, fontWeight: '600', marginBottom: spacing.xs }}>
-            Substitutes
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm }}>
+            <TeamLogo uri={match.awayTeam.crest} size={18} />
+            <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 14 }}>
+              {match.awayTeam.shortName}
+            </Text>
+            <Text style={{ ...typography.caption, color: colors.textSecondary }}>Substitutes</Text>
+          </View>
           {matchDetail.awayBench.map((p) => (
-            <PlayerRow key={p.id} player={p} colors={colors} spacing={spacing} typography={typography} onPress={() => navigation.navigate('PersonDetail', { personId: p.id, personName: p.name, role: 'player' })} />
+            <BenchPlayerRow
+              key={p.id}
+              player={p}
+              substitution={subsByPlayerIn.get(p.id)}
+              colors={colors}
+              spacing={spacing}
+              typography={typography}
+              onPress={() => navigation.navigate('PersonDetail', { personId: p.id, personName: p.name, role: 'player' })}
+            />
           ))}
+          {matchDetail.awayCoach && (
+            <Pressable onPress={() => navigation.navigate('PersonDetail', { personId: matchDetail.awayCoach!.id, personName: matchDetail.awayCoach!.name, role: 'manager' })} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.xs + 2, gap: spacing.sm, marginTop: spacing.xs }}>
+                <Text style={{ width: 24, textAlign: 'center', ...typography.caption, color: colors.textSecondary }}>
+                  <Ionicons name="person" size={12} color={colors.textSecondary} />
+                </Text>
+                <Text style={{ ...typography.body, color: colors.textSecondary, fontSize: 14, fontStyle: 'italic' }}>
+                  {matchDetail.awayCoach.name} (Coach)
+                </Text>
+              </View>
+            </Pressable>
+          )}
         </View>
       )}
     </View>
@@ -895,32 +1171,43 @@ function InfoSection({ matchDetail, match, colors, spacing, typography, borderRa
 
   return (
     <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.sm }}>
-      {/* Match Stats — always shown as template, uses real data when available */}
-      <View style={{ backgroundColor: colors.card, borderRadius: borderRadius.lg, padding: spacing.md, borderWidth: 1, borderColor: colors.border, marginBottom: spacing.lg }}>
-        <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 15, textAlign: 'center', marginBottom: spacing.md }}>
-          Match Stats
-        </Text>
+      {/* Match Stats */}
+      {stats ? (
+        <View style={{ backgroundColor: colors.card, borderRadius: borderRadius.lg, padding: spacing.md, borderWidth: 1, borderColor: colors.border, marginBottom: spacing.lg }}>
+          <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 15, textAlign: 'center', marginBottom: spacing.md }}>
+            Match Stats
+          </Text>
 
-        {/* Team headers */}
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm }}>
-          <Pressable onPress={() => navigation.navigate('TeamDetail', { teamId: match.homeTeam.id, teamName: match.homeTeam.name, teamCrest: match.homeTeam.crest })} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, opacity: pressed ? 0.7 : 1 })}>
-            <TeamLogo uri={match.homeTeam.crest} size={18} />
-            <Text style={{ ...typography.caption, color: colors.textSecondary }}>{match.homeTeam.shortName}</Text>
-          </Pressable>
-          <Pressable onPress={() => navigation.navigate('TeamDetail', { teamId: match.awayTeam.id, teamName: match.awayTeam.name, teamCrest: match.awayTeam.crest })} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, opacity: pressed ? 0.7 : 1 })}>
-            <Text style={{ ...typography.caption, color: colors.textSecondary }}>{match.awayTeam.shortName}</Text>
-            <TeamLogo uri={match.awayTeam.crest} size={18} />
-          </Pressable>
+          {/* Team headers */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm }}>
+            <Pressable onPress={() => navigation.navigate('TeamDetail', { teamId: match.homeTeam.id, teamName: match.homeTeam.name, teamCrest: match.homeTeam.crest })} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, opacity: pressed ? 0.7 : 1 })}>
+              <TeamLogo uri={match.homeTeam.crest} size={18} />
+              <Text style={{ ...typography.caption, color: colors.textSecondary }}>{match.homeTeam.shortName}</Text>
+            </Pressable>
+            <Pressable onPress={() => navigation.navigate('TeamDetail', { teamId: match.awayTeam.id, teamName: match.awayTeam.name, teamCrest: match.awayTeam.crest })} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, opacity: pressed ? 0.7 : 1 })}>
+              <Text style={{ ...typography.caption, color: colors.textSecondary }}>{match.awayTeam.shortName}</Text>
+              <TeamLogo uri={match.awayTeam.crest} size={18} />
+            </Pressable>
+          </View>
+
+          <StatRow label="Ball Possession" home={stats.ballPossession[0]} away={stats.ballPossession[1]} colors={colors} spacing={spacing} typography={typography} isPossession />
+          <StatRow label="Total Shots" home={stats.shots[0]} away={stats.shots[1]} colors={colors} spacing={spacing} typography={typography} />
+          <StatRow label="Shots on Target" home={stats.shotsOnTarget[0]} away={stats.shotsOnTarget[1]} colors={colors} spacing={spacing} typography={typography} />
+          <StatRow label="Corners" home={stats.corners[0]} away={stats.corners[1]} colors={colors} spacing={spacing} typography={typography} />
+          <StatRow label="Fouls" home={stats.fouls[0]} away={stats.fouls[1]} colors={colors} spacing={spacing} typography={typography} />
+          <StatRow label="Offsides" home={stats.offsides[0]} away={stats.offsides[1]} colors={colors} spacing={spacing} typography={typography} />
+          <StatRow label="Yellow Cards" home={stats.yellowCards[0]} away={stats.yellowCards[1]} colors={colors} spacing={spacing} typography={typography} />
+          <StatRow label="Red Cards" home={stats.redCards[0]} away={stats.redCards[1]} colors={colors} spacing={spacing} typography={typography} />
+          <StatRow label="Saves" home={stats.saves[0]} away={stats.saves[1]} colors={colors} spacing={spacing} typography={typography} />
         </View>
-
-        <StatRow label="Ball Possession" home={stats?.ballPossession[0] ?? 0} away={stats?.ballPossession[1] ?? 0} colors={colors} spacing={spacing} typography={typography} isPossession />
-        <StatRow label="Expected Goals (xG)" home={0} away={0} colors={colors} spacing={spacing} typography={typography} />
-        <StatRow label="Total Shots" home={stats?.shots[0] ?? 0} away={stats?.shots[1] ?? 0} colors={colors} spacing={spacing} typography={typography} />
-        <StatRow label="Shots on Target" home={stats?.shotsOnTarget[0] ?? 0} away={stats?.shotsOnTarget[1] ?? 0} colors={colors} spacing={spacing} typography={typography} />
-        <StatRow label="Big Chances" home={0} away={0} colors={colors} spacing={spacing} typography={typography} />
-        <StatRow label="Big Chances Missed" home={0} away={0} colors={colors} spacing={spacing} typography={typography} />
-        <StatRow label="Corners" home={stats?.corners[0] ?? 0} away={stats?.corners[1] ?? 0} colors={colors} spacing={spacing} typography={typography} />
-      </View>
+      ) : (
+        <View style={{ alignItems: 'center', paddingVertical: spacing.lg, marginBottom: spacing.lg }}>
+          <Ionicons name="stats-chart-outline" size={36} color={colors.textSecondary} />
+          <Text style={{ ...typography.body, color: colors.textSecondary, marginTop: spacing.sm }}>
+            Match stats not available yet
+          </Text>
+        </View>
+      )}
 
       {/* Goals */}
       {matchDetail.goals.length > 0 && (

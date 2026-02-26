@@ -18,6 +18,7 @@ import { ActionMenu } from '../../components/ui/ActionMenu';
 import { LikedByModal } from '../../components/ui/LikedByModal';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { TeamLogo } from '../../components/match/TeamLogo';
+import { POPULAR_TEAMS } from '../../utils/constants';
 import { useAuth } from '../../context/AuthContext';
 import { formatRelativeTime, formatMatchDate } from '../../utils/formatDate';
 import { Comment } from '../../services/firestore/comments';
@@ -69,9 +70,9 @@ export function ReviewDetailScreen({ route, navigation }: any) {
   });
 
   const commentAuthorMap = useMemo(() => {
-    const map = new Map<string, { username: string; displayName: string; avatar: string | null }>();
+    const map = new Map<string, { username: string; displayName: string; avatar: string | null; followedTeamIds: string[] }>();
     commentAuthorQueries.forEach((q) => {
-      if (q.data) map.set(q.data.id, { username: q.data.username, displayName: q.data.displayName || q.data.username, avatar: q.data.avatar });
+      if (q.data) map.set(q.data.id, { username: q.data.username, displayName: q.data.displayName || q.data.username, avatar: q.data.avatar, followedTeamIds: q.data.followedTeamIds || [] });
     });
     return map;
   }, [commentAuthorQueries]);
@@ -252,6 +253,10 @@ export function ReviewDetailScreen({ route, navigation }: any) {
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
                   <Text style={{ ...typography.bodyBold, color: colors.foreground }} numberOfLines={1}>{authorDisplayName}</Text>
                   <Text style={{ ...typography.small, color: colors.textSecondary }} numberOfLines={1}>@{authorUsername}</Text>
+                  {(authorProfile?.followedTeamIds || []).slice(0, 3).map((id) => {
+                    const team = POPULAR_TEAMS.find((t) => t.id === String(id));
+                    return team ? <TeamLogo key={team.id} uri={team.crest} size={14} /> : null;
+                  })}
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: 2 }}>
                   <StarRating rating={review.rating} size={16} />
@@ -498,7 +503,7 @@ function CommentRow({
   typography: any;
   isReply: boolean;
   navigation: any;
-  authorMap: Map<string, { username: string; displayName: string; avatar: string | null }>;
+  authorMap: Map<string, { username: string; displayName: string; avatar: string | null; followedTeamIds: string[] }>;
 }) {
   const isLiked = userId ? comment.likedBy.includes(userId) : false;
   const isOwn = userId === comment.userId;
@@ -507,6 +512,10 @@ function CommentRow({
   const displayName = currentAuthor?.displayName || currentAuthor?.username || comment.username;
   const displayUsername = currentAuthor?.username || comment.username;
   const displayAvatar = currentAuthor?.avatar ?? comment.userAvatar;
+  const teamCrests = (currentAuthor?.followedTeamIds || []).slice(0, 3).map((id) => {
+    const team = POPULAR_TEAMS.find((t) => t.id === String(id));
+    return team ? { id: team.id, crest: team.crest } : null;
+  }).filter(Boolean) as { id: string; crest: string }[];
 
   return (
     <View
@@ -530,6 +539,9 @@ function CommentRow({
           <Text style={{ ...typography.small, color: colors.textSecondary, fontSize: isReply ? 11 : 12 }}>
             @{displayUsername}
           </Text>
+          {teamCrests.map((t) => (
+            <TeamLogo key={t.id} uri={t.crest} size={14} />
+          ))}
           <Text style={{ ...typography.small, color: colors.textSecondary }}>
             {formatRelativeTime(comment.createdAt)}
           </Text>

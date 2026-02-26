@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
-import { View, Text, ScrollView, Pressable, LayoutChangeEvent, useWindowDimensions } from 'react-native';
+import { View, Text, ScrollView, Pressable, LayoutChangeEvent } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
@@ -65,13 +65,13 @@ export function LeagueDetailScreen({ route, navigation }: any) {
   const { data: standings, isLoading: standingsLoading } = useQuery({
     queryKey: ['standings', competitionCode],
     queryFn: () => getCompetitionStandings(competitionCode),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 15 * 60 * 1000,
   });
 
   const { data: allFixtures, isLoading: fixturesLoading } = useQuery({
     queryKey: ['leagueFixtures', competitionCode],
     queryFn: () => getCompetitionMatchesByCode(competitionCode),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 15 * 60 * 1000,
   });
 
   // Filter out empty fixtures (TBD teams)
@@ -117,6 +117,64 @@ export function LeagueDetailScreen({ route, navigation }: any) {
     }
     return map;
   }, [knockoutFixtures]);
+
+  // Build full bracket with TBD placeholder rounds for missing stages
+  const { bracketTopHalf, bracketCenter, bracketBottomHalf, bracketThirdPlace } = useMemo(() => {
+    // Expected total ties per standard round
+    const EXPECTED_TOTAL: Record<string, number> = {
+      LAST_16: 8, QUARTER_FINALS: 4, SEMI_FINALS: 2,
+    };
+
+    const stagesWithData = BRACKET_ORDER.filter((s) => knockoutByStage.has(s));
+    if (stagesWithData.length === 0) {
+      return { bracketTopHalf: [], bracketCenter: null, bracketBottomHalf: [], bracketThirdPlace: null };
+    }
+
+    const firstStage = stagesWithData[0];
+    const firstIdx = BRACKET_ORDER.indexOf(firstStage);
+    const finalIdx = BRACKET_ORDER.indexOf('FINAL');
+
+    // Build all pre-final rounds (from earliest data stage to semi-finals)
+    const allRounds: { stage: string; ties: Tie[] }[] = [];
+    for (let i = firstIdx; i < finalIdx; i++) {
+      const stage = BRACKET_ORDER[i];
+      if (knockoutByStage.has(stage)) {
+        allRounds.push({ stage, ties: groupIntoTies(knockoutByStage.get(stage)!) });
+      } else {
+        const expected = EXPECTED_TOTAL[stage];
+        if (expected) {
+          // Create TBD placeholder ties
+          const tbdTies: Tie[] = Array.from({ length: expected }, () => ({
+            matches: [], aggHome: 0, aggAway: 0, winner: '',
+          }));
+          allRounds.push({ stage, ties: tbdTies });
+        }
+      }
+    }
+
+    // Final
+    const center = knockoutByStage.has('FINAL')
+      ? { stage: 'FINAL', ties: groupIntoTies(knockoutByStage.get('FINAL')!) }
+      : null;
+
+    // Third place
+    const thirdPlace = knockoutByStage.has('THIRD_PLACE')
+      ? groupIntoTies(knockoutByStage.get('THIRD_PLACE')!)
+      : null;
+
+    // Split each round's ties into top/bottom halves
+    const topHalf = allRounds.map((r) => ({
+      stage: r.stage,
+      ties: r.ties.slice(0, Math.ceil(r.ties.length / 2)),
+    }));
+
+    const bottomHalf = [...allRounds].reverse().map((r) => ({
+      stage: r.stage,
+      ties: r.ties.slice(Math.ceil(r.ties.length / 2)),
+    }));
+
+    return { bracketTopHalf: topHalf, bracketCenter: center, bracketBottomHalf: bottomHalf, bracketThirdPlace: thirdPlace };
+  }, [knockoutByStage]);
 
   // Find the "current" matchday
   const currentMatchday = useMemo(() => {
@@ -276,7 +334,7 @@ export function LeagueDetailScreen({ route, navigation }: any) {
         ref={pagerRef}
         style={{ flex: 1 }}
         initialPage={0}
-        onPageSelected={(e) => setActiveTabIndex(e.nativeEvent.position)}
+        onPageScroll={(e: any) => setActiveTabIndex(Math.round(e.nativeEvent.position + e.nativeEvent.offset))}
       >
         {/* ─── Table Tab ─── */}
         <View key="table" style={{ flex: 1 }}>
@@ -407,17 +465,200 @@ export function LeagueDetailScreen({ route, navigation }: any) {
               <Ionicons name="trophy-outline" size={40} color={colors.textSecondary} />
               <Text style={{ ...typography.body, color: colors.textSecondary, marginTop: spacing.sm }}>No knockout matches yet</Text>
             </View>
-          ) : (
-            <KnockoutBracket
-              knockoutByStage={knockoutByStage}
-              colors={colors}
-              spacing={spacing}
-              typography={typography}
-              borderRadius={borderRadius}
-              isDark={isDark}
-              navigation={navigation}
-            />
-          )}
+          ) : (() => {
+            const lineColor = colors.border;
+            const pad = spacing.sm;
+
+            // All cards use the same width based on the widest row
+            const maxCardsPerRow = Math.max(...bracketTopHalf.map((r) => r.ties.length), 1);
+            const cardWidthPct = `${100 / maxCardsPerRow}%` as const;
+
+            const renderBracketRow = (ties: Tie[], stage: string, isFinal: boolean, keyPrefix: string) => (
+              <View key={`${keyPrefix}-${stage}`}>
+                <BracketRoundLabel stage={stage} isFinal={isFinal} colors={colors} typography={typography} />
+                <View style={{ flexDirection: 'row', paddingHorizontal: pad, justifyContent: 'center' }}>
+                  {ties.map((tie, tieIdx) => (
+                    <View key={tieIdx} style={{ width: cardWidthPct, paddingHorizontal: 3 }}>
+                      <BracketTieCard tie={tie} colors={colors} typography={typography} borderRadius={borderRadius} navigation={navigation} isFinal={isFinal} />
+                    </View>
+                  ))}
+                </View>
+              </View>
+            );
+
+            // Wraps a connector in a centered container spanning N card slots
+            const renderConnector = (numSlots: number, connector: React.ReactNode) => (
+              <View style={{ flexDirection: 'row', justifyContent: 'center', paddingHorizontal: pad }}>
+                <View style={{ width: `${(numSlots / maxCardsPerRow) * 100}%` }}>
+                  {connector}
+                </View>
+              </View>
+            );
+
+            return (
+              <ScrollView indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingTop: spacing.md, paddingBottom: 60 }} nestedScrollEnabled>
+                {/* ── Top half: converging DOWN ── */}
+                {bracketTopHalf.map((round, idx) => {
+                  const nextRound = bracketTopHalf[idx + 1];
+                  const curCount = round.ties.length;
+                  const nextCount = nextRound?.ties.length;
+
+                  return (
+                    <React.Fragment key={`top-${round.stage}`}>
+                      {renderBracketRow(round.ties, round.stage, false, 'top')}
+                      {nextRound && curCount > 1 && nextCount !== undefined && nextCount < curCount &&
+                        renderConnector(curCount, <MergeConnector numPairs={Math.floor(curCount / 2)} lineColor={lineColor} pad={0} />)}
+                      {nextRound && curCount > 1 && nextCount !== undefined && nextCount === curCount &&
+                        renderConnector(curCount, <StraightConnector numLines={curCount} lineColor={lineColor} pad={0} />)}
+                      {nextRound && curCount === 1 && (
+                        <View style={{ alignItems: 'center', paddingVertical: 4 }}>
+                          <View style={{ width: 2, height: 16, backgroundColor: lineColor }} />
+                        </View>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+
+                {/* Merge connector from last top row into Final */}
+                {bracketTopHalf.length > 0 && (() => {
+                  const lastTop = bracketTopHalf[bracketTopHalf.length - 1];
+                  return lastTop.ties.length > 1
+                    ? renderConnector(lastTop.ties.length, <MergeConnector numPairs={Math.floor(lastTop.ties.length / 2)} lineColor={lineColor} pad={0} />)
+                    : (
+                      <View style={{ alignItems: 'center', paddingVertical: 4 }}>
+                        <View style={{ width: 2, height: 16, backgroundColor: lineColor }} />
+                      </View>
+                    );
+                })()}
+
+                {/* ── Center: Final ── */}
+                {(() => {
+                  const finalTie = bracketCenter?.ties[0];
+                  const finalMatch = finalTie?.matches[0];
+                  const hasTeams = finalMatch && finalMatch.homeTeam && finalMatch.awayTeam;
+                  const isFinished = finalTie ? finalTie.matches.every((m) => m.status === 'FINISHED') : false;
+
+                  return (
+                    <View style={{ alignItems: 'center', marginVertical: spacing.sm }}>
+                      <Ionicons name="trophy" size={32} color={colors.primary} style={{ marginBottom: 4 }} />
+                      <Text style={{ ...typography.caption, fontWeight: '700', color: colors.primary, letterSpacing: 1.5, fontSize: 11, marginBottom: spacing.sm }}>
+                        FINAL
+                      </Text>
+
+                      <Pressable
+                        onPress={hasTeams ? () => navigation.navigate('MatchDetail', { matchId: finalMatch.id }) : undefined}
+                        disabled={!hasTeams}
+                        style={({ pressed }) => ({
+                          backgroundColor: colors.card,
+                          borderRadius: borderRadius.md,
+                          borderWidth: 1.5,
+                          borderColor: `${colors.primary}50`,
+                          paddingHorizontal: spacing.lg,
+                          paddingVertical: spacing.md,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: spacing.md,
+                          opacity: pressed ? 0.7 : 1,
+                        })}
+                      >
+                        {/* Home / Left team */}
+                        <View style={{ alignItems: 'center', width: 56 }}>
+                          {hasTeams ? (
+                            <>
+                              <TeamLogo uri={finalMatch.homeTeam.crest} size={32} />
+                              <Text style={{ ...typography.caption, color: colors.foreground, fontWeight: '600', marginTop: 4, textAlign: 'center' }} numberOfLines={1}>
+                                {finalMatch.homeTeam.shortName}
+                              </Text>
+                            </>
+                          ) : (
+                            <>
+                              <Ionicons name="shield-outline" size={30} color={colors.textSecondary} style={{ opacity: 0.35 }} />
+                              <Text style={{ ...typography.caption, color: colors.textSecondary, opacity: 0.5, marginTop: 4 }}>TBD</Text>
+                            </>
+                          )}
+                        </View>
+
+                        {/* Score or VS */}
+                        <View style={{ alignItems: 'center', minWidth: 40 }}>
+                          {isFinished && hasTeams ? (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                              <Text style={{ fontSize: 20, fontWeight: '800', color: (finalMatch.homeScore ?? 0) >= (finalMatch.awayScore ?? 0) ? colors.foreground : colors.textSecondary }}>
+                                {finalMatch.homeScore}
+                              </Text>
+                              <Text style={{ fontSize: 14, color: colors.textSecondary, fontWeight: '300' }}>-</Text>
+                              <Text style={{ fontSize: 20, fontWeight: '800', color: (finalMatch.awayScore ?? 0) >= (finalMatch.homeScore ?? 0) ? colors.foreground : colors.textSecondary }}>
+                                {finalMatch.awayScore}
+                              </Text>
+                            </View>
+                          ) : (
+                            <Text style={{ fontSize: 14, fontWeight: '600', color: colors.textSecondary }}>vs</Text>
+                          )}
+                        </View>
+
+                        {/* Away / Right team */}
+                        <View style={{ alignItems: 'center', width: 56 }}>
+                          {hasTeams ? (
+                            <>
+                              <TeamLogo uri={finalMatch.awayTeam.crest} size={32} />
+                              <Text style={{ ...typography.caption, color: colors.foreground, fontWeight: '600', marginTop: 4, textAlign: 'center' }} numberOfLines={1}>
+                                {finalMatch.awayTeam.shortName}
+                              </Text>
+                            </>
+                          ) : (
+                            <>
+                              <Ionicons name="shield-outline" size={30} color={colors.textSecondary} style={{ opacity: 0.35 }} />
+                              <Text style={{ ...typography.caption, color: colors.textSecondary, opacity: 0.5, marginTop: 4 }}>TBD</Text>
+                            </>
+                          )}
+                        </View>
+                      </Pressable>
+                    </View>
+                  );
+                })()}
+
+                {/* Fan-out connector from Final into first bottom row */}
+                {bracketBottomHalf.length > 0 && (() => {
+                  const firstBottom = bracketBottomHalf[0];
+                  return firstBottom.ties.length > 1
+                    ? renderConnector(firstBottom.ties.length, <FanOutConnector numPairs={Math.floor(firstBottom.ties.length / 2)} lineColor={lineColor} pad={0} />)
+                    : (
+                      <View style={{ alignItems: 'center', paddingVertical: 4 }}>
+                        <View style={{ width: 2, height: 16, backgroundColor: lineColor }} />
+                      </View>
+                    );
+                })()}
+
+                {/* ── Bottom half: expanding DOWN (mirrored) ── */}
+                {bracketBottomHalf.map((round, idx) => {
+                  const nextRound = bracketBottomHalf[idx + 1];
+                  const curCount = round.ties.length;
+                  const nextCount = nextRound?.ties.length;
+
+                  return (
+                    <React.Fragment key={`bottom-${round.stage}`}>
+                      {renderBracketRow(round.ties, round.stage, false, 'bottom')}
+                      {nextRound && nextCount !== undefined && nextCount > curCount &&
+                        renderConnector(nextCount, <FanOutConnector numPairs={Math.floor(nextCount / 2)} lineColor={lineColor} pad={0} />)}
+                      {nextRound && nextCount !== undefined && nextCount === curCount &&
+                        renderConnector(curCount, <StraightConnector numLines={curCount} lineColor={lineColor} pad={0} />)}
+                      {nextRound && curCount === 1 && nextCount !== undefined && nextCount === 1 && (
+                        <View style={{ alignItems: 'center', paddingVertical: 4 }}>
+                          <View style={{ width: 2, height: 16, backgroundColor: lineColor }} />
+                        </View>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+
+                {/* Third place */}
+                {bracketThirdPlace && bracketThirdPlace.length > 0 && (
+                  <View style={{ marginTop: spacing.lg }}>
+                    {renderBracketRow(bracketThirdPlace, 'THIRD_PLACE', false, 'third')}
+                  </View>
+                )}
+              </ScrollView>
+            );
+          })()}
         </View>
       </PagerView>
     </SafeAreaView>
@@ -485,26 +726,8 @@ function groupIntoTies(matches: Match[]): Tie[] {
   });
 }
 
-/* ─── Visual Knockout Bracket ─── */
+/* ─── Bracket constants ─── */
 
-const CARD_W = 110;
-const CARD_H = 82;
-const CONNECTOR_W = 28;
-const CARD_GAP = 10;
-
-const SHORT_STAGE_LABELS: Record<string, string> = {
-  PLAYOFF_ROUND_1: 'PO R1',
-  PLAYOFF_ROUND_2: 'PO R2',
-  PLAYOFFS: 'Playoffs',
-  LAST_32: 'R32',
-  LAST_16: 'R16',
-  QUARTER_FINALS: 'QF',
-  SEMI_FINALS: 'SF',
-  THIRD_PLACE: '3rd',
-  FINAL: 'Final',
-};
-
-// Bracket stages in order from earliest to latest (no THIRD_PLACE — shown separately)
 const BRACKET_ORDER = [
   'PLAYOFF_ROUND_1',
   'PLAYOFF_ROUND_2',
@@ -516,241 +739,140 @@ const BRACKET_ORDER = [
   'FINAL',
 ];
 
-interface BracketRound {
-  stage: string;
-  ties: Tie[];
-}
+/* ─── Bracket Round Label ─── */
 
-function KnockoutBracket({
-  knockoutByStage,
-  colors,
-  spacing,
-  typography,
-  borderRadius,
-  isDark,
-  navigation,
-}: {
-  knockoutByStage: Map<string, Match[]>;
-  colors: any;
-  spacing: any;
-  typography: any;
-  borderRadius: any;
-  isDark: boolean;
-  navigation: any;
-}) {
-  const { width: screenWidth } = useWindowDimensions();
-  const bracketScrollRef = useRef<ScrollView>(null);
-  const bracketWidth = useRef(0);
-
-  // Build rounds from data
-  const rounds: BracketRound[] = useMemo(() => {
-    return BRACKET_ORDER
-      .filter((stage) => knockoutByStage.has(stage))
-      .map((stage) => ({
-        stage,
-        ties: groupIntoTies(knockoutByStage.get(stage)!),
-      }));
-  }, [knockoutByStage]);
-
-  // Separate Final from other rounds
-  const finalRound = rounds.find((r) => r.stage === 'FINAL');
-  const nonFinalRounds = rounds.filter((r) => r.stage !== 'FINAL');
-
-  // Split non-final rounds' ties into left and right halves
-  const leftRounds: BracketRound[] = useMemo(() => {
-    return nonFinalRounds.map((round) => ({
-      stage: round.stage,
-      ties: round.ties.slice(0, Math.ceil(round.ties.length / 2)),
-    }));
-  }, [nonFinalRounds]);
-
-  const rightRounds: BracketRound[] = useMemo(() => {
-    return nonFinalRounds.map((round) => ({
-      stage: round.stage,
-      ties: round.ties.slice(Math.ceil(round.ties.length / 2)),
-    }));
-  }, [nonFinalRounds]);
-
-  // Left side has at most half the ties of the biggest round
-  const maxLeftTies = Math.max(...leftRounds.map((r) => r.ties.length), 1);
-  const bracketHeight = maxLeftTies * CARD_H + (maxLeftTies - 1) * CARD_GAP + 40;
-
-  const lineColor = colors.border;
-
+function BracketRoundLabel({ stage, isFinal, colors, typography }: { stage: string; isFinal: boolean; colors: any; typography: any }) {
   return (
-    <ScrollView
-      ref={bracketScrollRef}
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      indicatorStyle={isDark ? 'white' : 'default'}
-      onContentSizeChange={(w) => {
-        bracketWidth.current = w;
-        if (w > screenWidth) {
-          bracketScrollRef.current?.scrollTo({ x: (w - screenWidth) / 2, animated: false });
-        }
-      }}
-      contentContainerStyle={{
-        paddingVertical: spacing.lg,
-        paddingHorizontal: spacing.md,
-        alignItems: 'center',
-      }}
-    >
-      <View style={{ flexDirection: 'row', alignItems: 'center', height: bracketHeight }}>
-        {/* ─── Left side: earliest round on far left → later rounds toward center ─── */}
-        {leftRounds.map((round, roundIdx) => (
-          <React.Fragment key={`left-${round.stage}`}>
-            <View style={{ alignItems: 'center' }}>
-              <View style={{ height: bracketHeight, justifyContent: 'space-around' }}>
-                {round.ties.map((tie, tieIdx) => (
-                  <BracketCard
-                    key={`left-${round.stage}-${tieIdx}`}
-                    tie={tie}
-                    colors={colors}
-                    spacing={spacing}
-                    typography={typography}
-                    borderRadius={borderRadius}
-                    navigation={navigation}
-                  />
-                ))}
-              </View>
-              <Text style={{ fontSize: 9, fontWeight: '600', color: colors.textSecondary, letterSpacing: 0.5, marginTop: 6 }}>
-                {SHORT_STAGE_LABELS[round.stage] || round.stage}
-              </Text>
-            </View>
-            {/* Connector lines to next round */}
-            {roundIdx < leftRounds.length - 1 && (
-              <BracketConnector
-                count={round.ties.length}
-                height={bracketHeight}
-                side="left"
-                lineColor={lineColor}
-              />
-            )}
-            {/* Connector from last left round to final */}
-            {roundIdx === leftRounds.length - 1 && finalRound && (
-              <BracketConnector
-                count={round.ties.length}
-                height={bracketHeight}
-                side="left"
-                lineColor={lineColor}
-              />
-            )}
-          </React.Fragment>
-        ))}
-
-        {/* ─── Center: Final + Trophy ─── */}
-        {finalRound && (
-          <View style={{ alignItems: 'center', marginHorizontal: 4 }}>
-            <Ionicons name="trophy" size={32} color={colors.primary} style={{ marginBottom: 6 }} />
-            <BracketCard
-              tie={finalRound.ties[0]}
-              colors={colors}
-              spacing={spacing}
-              typography={typography}
-              borderRadius={borderRadius}
-              navigation={navigation}
-            />
-            <View style={{ backgroundColor: `${colors.primary}30`, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 2, marginTop: 6 }}>
-              <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, letterSpacing: 1 }}>
-                FINAL
-              </Text>
-            </View>
-          </View>
-        )}
-        {!finalRound && (
-          <View style={{ alignItems: 'center', marginHorizontal: 4 }}>
-            <Ionicons name="trophy-outline" size={32} color={colors.textSecondary} style={{ marginBottom: 6 }} />
-            <TbdCard colors={colors} borderRadius={borderRadius} />
-            <View style={{ backgroundColor: colors.muted, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 2, marginTop: 6 }}>
-              <Text style={{ fontSize: 9, fontWeight: '800', color: colors.textSecondary, letterSpacing: 1 }}>
-                FINAL
-              </Text>
-            </View>
-          </View>
-        )}
-
-        {/* ─── Right side: later rounds near center → earliest on far right ─── */}
-        {[...rightRounds].reverse().map((round, roundIdx) => (
-          <React.Fragment key={`right-${round.stage}`}>
-            {/* Connector from final to first right round */}
-            {roundIdx === 0 && finalRound && (
-              <BracketConnector
-                count={round.ties.length}
-                height={bracketHeight}
-                side="right"
-                lineColor={lineColor}
-              />
-            )}
-            {roundIdx === 0 && !finalRound && (
-              <BracketConnector
-                count={round.ties.length}
-                height={bracketHeight}
-                side="right"
-                lineColor={lineColor}
-              />
-            )}
-            {roundIdx > 0 && (
-              <BracketConnector
-                count={[...rightRounds].reverse()[roundIdx - 1].ties.length}
-                height={bracketHeight}
-                side="right"
-                lineColor={lineColor}
-              />
-            )}
-            <View style={{ alignItems: 'center' }}>
-              <View style={{ height: bracketHeight, justifyContent: 'space-around' }}>
-                {round.ties.map((tie, tieIdx) => (
-                  <BracketCard
-                    key={`right-${round.stage}-${tieIdx}`}
-                    tie={tie}
-                    colors={colors}
-                    spacing={spacing}
-                    typography={typography}
-                    borderRadius={borderRadius}
-                    navigation={navigation}
-                  />
-                ))}
-              </View>
-              <Text style={{ fontSize: 9, fontWeight: '600', color: colors.textSecondary, letterSpacing: 0.5, marginTop: 6 }}>
-                {SHORT_STAGE_LABELS[round.stage] || round.stage}
-              </Text>
-            </View>
-          </React.Fragment>
-        ))}
-      </View>
-    </ScrollView>
+    <View style={{ alignItems: 'center', marginBottom: 6 }}>
+      {isFinal && <Ionicons name="trophy" size={28} color={colors.primary} style={{ marginBottom: 4 }} />}
+      <Text style={{
+        ...typography.caption,
+        fontWeight: '700',
+        color: isFinal ? colors.primary : colors.textSecondary,
+        letterSpacing: 1,
+        textTransform: 'uppercase',
+        fontSize: 11,
+      }}>
+        {STAGE_LABELS[stage] || stage}
+      </Text>
+    </View>
   );
 }
 
-/* ─── Bracket Match Card ─── */
+/* ─── Merge Connector (2→1, converging) ─── */
 
-function BracketCard({
+function MergeConnector({ numPairs, lineColor, pad }: { numPairs: number; lineColor: string; pad: number }) {
+  return (
+    <View style={{ flexDirection: 'row', paddingHorizontal: pad }}>
+      {Array.from({ length: numPairs }).map((_, i) => (
+        <View key={i} style={{ flex: 1 }}>
+          <View style={{ flexDirection: 'row', height: 12 }}>
+            <View style={{ flex: 1, alignItems: 'center' }}>
+              <View style={{ width: 2, height: 12, backgroundColor: lineColor }} />
+            </View>
+            <View style={{ flex: 1, alignItems: 'center' }}>
+              <View style={{ width: 2, height: 12, backgroundColor: lineColor }} />
+            </View>
+          </View>
+          <View style={{ height: 2, marginHorizontal: '25%', backgroundColor: lineColor }} />
+          <View style={{ alignItems: 'center', height: 12 }}>
+            <View style={{ width: 2, height: 12, backgroundColor: lineColor }} />
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/* ─── Fan-Out Connector (1→2, expanding) ─── */
+
+function FanOutConnector({ numPairs, lineColor, pad }: { numPairs: number; lineColor: string; pad: number }) {
+  return (
+    <View style={{ flexDirection: 'row', paddingHorizontal: pad }}>
+      {Array.from({ length: numPairs }).map((_, i) => (
+        <View key={i} style={{ flex: 1 }}>
+          <View style={{ alignItems: 'center', height: 12 }}>
+            <View style={{ width: 2, height: 12, backgroundColor: lineColor }} />
+          </View>
+          <View style={{ height: 2, marginHorizontal: '25%', backgroundColor: lineColor }} />
+          <View style={{ flexDirection: 'row', height: 12 }}>
+            <View style={{ flex: 1, alignItems: 'center' }}>
+              <View style={{ width: 2, height: 12, backgroundColor: lineColor }} />
+            </View>
+            <View style={{ flex: 1, alignItems: 'center' }}>
+              <View style={{ width: 2, height: 12, backgroundColor: lineColor }} />
+            </View>
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/* ─── Straight Connector (N→N, same count) ─── */
+
+function StraightConnector({ numLines, lineColor, pad }: { numLines: number; lineColor: string; pad: number }) {
+  return (
+    <View style={{ flexDirection: 'row', paddingHorizontal: pad }}>
+      {Array.from({ length: numLines }).map((_, i) => (
+        <View key={i} style={{ flex: 1, alignItems: 'center', height: 20 }}>
+          <View style={{ width: 2, height: 20, backgroundColor: lineColor }} />
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/* ─── Bracket Tie Card ─── */
+
+function BracketTieCard({
   tie,
   colors,
-  spacing,
   typography,
   borderRadius,
   navigation,
+  isFinal,
 }: {
   tie: Tie;
   colors: any;
-  spacing: any;
   typography: any;
   borderRadius: any;
   navigation: any;
+  isFinal: boolean;
 }) {
-  const m = tie.matches[0]; // show first leg info (or only match)
+  // TBD placeholder card
+  if (tie.matches.length === 0) {
+    return (
+      <View style={{
+        backgroundColor: colors.card,
+        borderRadius: borderRadius.sm,
+        borderWidth: 1,
+        borderColor: colors.border,
+        borderStyle: 'dashed',
+        overflow: 'hidden',
+      }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, paddingVertical: 5 }}>
+          <Ionicons name="shield-outline" size={16} color={colors.textSecondary} style={{ opacity: 0.4 }} />
+          <Text style={{ flex: 1, marginLeft: 5, fontSize: 11, color: colors.textSecondary, opacity: 0.6 }}>TBD</Text>
+        </View>
+        <View style={{ height: 1, backgroundColor: colors.border, opacity: 0.5 }} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, paddingVertical: 5 }}>
+          <Ionicons name="shield-outline" size={16} color={colors.textSecondary} style={{ opacity: 0.4 }} />
+          <Text style={{ flex: 1, marginLeft: 5, fontSize: 11, color: colors.textSecondary, opacity: 0.6 }}>TBD</Text>
+        </View>
+      </View>
+    );
+  }
+
+  const m = tie.matches[0];
   const isFinished = tie.matches.every((match) => match.status === 'FINISHED');
   const isTwoLegged = tie.matches.length === 2;
-
-  // For two-legged: show aggregate. For single: show match score.
-  const homeTeam = m.homeTeam;
-  const awayTeam = m.awayTeam;
   const showAgg = isTwoLegged && isFinished;
 
+  const homeTeam = m.homeTeam;
+  const awayTeam = m.awayTeam;
   const homeScore = showAgg ? tie.aggHome : m.homeScore;
   const awayScore = showAgg ? tie.aggAway : m.awayScore;
-
   const homeWon = isFinished && (homeScore ?? 0) > (awayScore ?? 0);
   const awayWon = isFinished && (awayScore ?? 0) > (homeScore ?? 0);
 
@@ -758,170 +880,57 @@ function BracketCard({
     <Pressable
       onPress={() => navigation.navigate('MatchDetail', { matchId: m.id })}
       style={({ pressed }) => ({
-        width: CARD_W,
         backgroundColor: colors.card,
-        borderRadius: borderRadius.md,
+        borderRadius: borderRadius.sm,
         borderWidth: 1,
-        borderColor: colors.border,
-        padding: 6,
+        borderColor: isFinal ? `${colors.primary}40` : colors.border,
+        overflow: 'hidden',
         opacity: pressed ? 0.7 : 1,
       })}
     >
-      {/* Team crests */}
-      <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 12, marginBottom: 4 }}>
-        <TeamLogo uri={homeTeam.crest} size={26} />
-        <TeamLogo uri={awayTeam.crest} size={26} />
-      </View>
-
-      {/* Team names */}
-      <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, marginBottom: 2 }}>
-        <Text style={{ fontSize: 10, fontWeight: homeWon ? '700' : '500', color: homeWon ? colors.foreground : colors.textSecondary, textAlign: 'center' }} numberOfLines={1}>
+      {/* Home team */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, paddingVertical: 5 }}>
+        <TeamLogo uri={homeTeam.crest} size={18} />
+        <Text style={{
+          flex: 1, marginLeft: 5, fontSize: 11,
+          fontWeight: homeWon ? '700' : '400',
+          color: homeWon ? colors.foreground : isFinished && awayWon ? colors.textSecondary : colors.foreground,
+        }} numberOfLines={1}>
           {homeTeam.shortName}
         </Text>
-        <Text style={{ fontSize: 10, fontWeight: awayWon ? '700' : '500', color: awayWon ? colors.foreground : colors.textSecondary, textAlign: 'center' }} numberOfLines={1}>
-          {awayTeam.shortName}
-        </Text>
-      </View>
-
-      {/* Score */}
-      {isFinished ? (
-        <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 4 }}>
-          <Text style={{ fontSize: 14, fontWeight: '700', color: homeWon ? colors.primary : colors.foreground }}>
+        {isFinished && (
+          <Text style={{ fontSize: 13, fontWeight: '700', color: homeWon ? colors.primary : colors.textSecondary, minWidth: 14, textAlign: 'right' }}>
             {homeScore}
           </Text>
-          <Text style={{ fontSize: 10, color: colors.textSecondary }}>-</Text>
-          <Text style={{ fontSize: 14, fontWeight: '700', color: awayWon ? colors.primary : colors.foreground }}>
+        )}
+      </View>
+
+      <View style={{ height: 1, backgroundColor: colors.border }} />
+
+      {/* Away team */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, paddingVertical: 5 }}>
+        <TeamLogo uri={awayTeam.crest} size={18} />
+        <Text style={{
+          flex: 1, marginLeft: 5, fontSize: 11,
+          fontWeight: awayWon ? '700' : '400',
+          color: awayWon ? colors.foreground : isFinished && homeWon ? colors.textSecondary : colors.foreground,
+        }} numberOfLines={1}>
+          {awayTeam.shortName}
+        </Text>
+        {isFinished ? (
+          <Text style={{ fontSize: 13, fontWeight: '700', color: awayWon ? colors.primary : colors.textSecondary, minWidth: 14, textAlign: 'right' }}>
             {awayScore}
           </Text>
-        </View>
-      ) : (
-        <Text style={{ fontSize: 10, color: colors.textSecondary, textAlign: 'center' }}>vs</Text>
-      )}
+        ) : (
+          <Text style={{ fontSize: 9, color: colors.textSecondary }}>vs</Text>
+        )}
+      </View>
 
-      {/* Agg label for two-legged */}
       {showAgg && (
-        <Text style={{ fontSize: 8, color: colors.textSecondary, textAlign: 'center', marginTop: 1 }}>
-          agg
-        </Text>
+        <View style={{ borderTopWidth: 1, borderTopColor: colors.border, paddingVertical: 2, alignItems: 'center' }}>
+          <Text style={{ fontSize: 9, color: colors.textSecondary }}>Agg {homeScore}-{awayScore}</Text>
+        </View>
       )}
     </Pressable>
-  );
-}
-
-/* ─── TBD Placeholder Card ─── */
-
-function TbdCard({ colors, borderRadius }: { colors: any; borderRadius: any }) {
-  return (
-    <View style={{
-      width: CARD_W,
-      height: CARD_H,
-      backgroundColor: colors.card,
-      borderRadius: borderRadius.md,
-      borderWidth: 1,
-      borderColor: colors.border,
-      justifyContent: 'center',
-      alignItems: 'center',
-    }}>
-      <View style={{ flexDirection: 'row', gap: 16 }}>
-        <Ionicons name="shield-outline" size={24} color={colors.textSecondary} />
-        <Ionicons name="shield-outline" size={24} color={colors.textSecondary} />
-      </View>
-    </View>
-  );
-}
-
-/* ─── Bracket Connector Lines ─── */
-
-function BracketConnector({
-  count,
-  height,
-  side,
-  lineColor,
-}: {
-  count: number;
-  height: number;
-  side: 'left' | 'right';
-  lineColor: string;
-}) {
-  // Each pair of ties connects to one slot in the next round
-  // Draw bracket arms: for each pair, top arm goes down, bottom arm goes up, they meet
-  const slotHeight = height / count;
-  const lineWidth = 2;
-
-  const isLeft = side === 'left';
-
-  return (
-    <View style={{ width: CONNECTOR_W, height }}>
-      {Array.from({ length: count }).map((_, i) => {
-        const pairIdx = Math.floor(i / 2);
-        const isTop = i % 2 === 0;
-        const isOdd = count % 2 === 1 && i === count - 1; // last item in odd count
-
-        if (isOdd) {
-          // Straight horizontal line for unpaired tie
-          return (
-            <View
-              key={i}
-              style={{
-                position: 'absolute',
-                top: slotHeight * i + slotHeight / 2 - lineWidth / 2,
-                left: 0,
-                right: 0,
-                height: lineWidth,
-                backgroundColor: lineColor,
-              }}
-            />
-          );
-        }
-
-        // Bracket arm
-        const topY = slotHeight * (pairIdx * 2) + slotHeight / 2;
-        const bottomY = slotHeight * (pairIdx * 2 + 1) + slotHeight / 2;
-        const midY = (topY + bottomY) / 2;
-
-        if (!isTop) return null; // We draw the full bracket pair from the top element
-
-        return (
-          <React.Fragment key={i}>
-            {/* Horizontal arm from top match */}
-            <View style={{
-              position: 'absolute',
-              top: topY - lineWidth / 2,
-              [isLeft ? 'left' : 'right']: 0,
-              width: CONNECTOR_W / 2,
-              height: lineWidth,
-              backgroundColor: lineColor,
-            }} />
-            {/* Vertical connector */}
-            <View style={{
-              position: 'absolute',
-              top: topY,
-              [isLeft ? 'left' : 'right']: CONNECTOR_W / 2 - lineWidth / 2,
-              width: lineWidth,
-              height: bottomY - topY,
-              backgroundColor: lineColor,
-            }} />
-            {/* Horizontal arm from bottom match */}
-            <View style={{
-              position: 'absolute',
-              top: bottomY - lineWidth / 2,
-              [isLeft ? 'left' : 'right']: 0,
-              width: CONNECTOR_W / 2,
-              height: lineWidth,
-              backgroundColor: lineColor,
-            }} />
-            {/* Horizontal line from midpoint to next round */}
-            <View style={{
-              position: 'absolute',
-              top: midY - lineWidth / 2,
-              [isLeft ? 'left' : 'right']: CONNECTOR_W / 2,
-              width: CONNECTOR_W / 2,
-              height: lineWidth,
-              backgroundColor: lineColor,
-            }} />
-          </React.Fragment>
-        );
-      })}
-    </View>
   );
 }

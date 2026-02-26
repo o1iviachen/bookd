@@ -1,18 +1,26 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, Pressable, TextInput as RNTextInput, LayoutAnimation, useWindowDimensions } from 'react-native';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { View, Text, ScrollView, Pressable, TextInput as RNTextInput, LayoutAnimation, useWindowDimensions, Keyboard, NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../../context/ThemeContext';
 import { useSearchUsers } from '../../hooks/useUser';
-import { useMatchesByDate } from '../../hooks/useMatches';
+import { useSearchMatches } from '../../hooks/useMatches';
+import { useSearchTeams, useSearchPlayers } from '../../hooks/useTeams';
+import { useSearchReviews } from '../../hooks/useReviews';
+import { useSearchLists } from '../../hooks/useLists';
 import { Avatar } from '../../components/ui/Avatar';
 import { MatchPosterCard } from '../../components/match/MatchPosterCard';
+import { ReviewCard } from '../../components/review/ReviewCard';
+import { ListPreviewCard } from '../../components/list/ListPreviewCard';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { SearchStackParamList } from '../../types/navigation';
-import { POPULAR_TEAMS } from '../../utils/constants';
 import { TeamLogo } from '../../components/match/TeamLogo';
+
+const RECENT_SEARCHES_KEY = 'bookd_recent_searches';
+const MAX_RECENT_SEARCHES = 10;
 
 type Nav = NativeStackNavigationProp<SearchStackParamList, 'Search'>;
 type Category = 'matches' | 'teams' | 'players' | 'members' | 'reviews' | 'lists';
@@ -25,28 +33,71 @@ export function SearchScreen() {
   const navigation = useNavigation<Nav>();
   const { width: screenWidth } = useWindowDimensions();
   const [queryStr, setQueryStr] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [activeCategory, setActiveCategory] = useState<Category>('matches');
+  const [visibleCounts, setVisibleCounts] = useState<Record<Category, number>>({
+    matches: 30, teams: 30, players: 30, members: 30, reviews: 30, lists: 30,
+  });
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const recentSearchesRef = useRef<string[]>([]);
+  const inputRef = useRef<RNTextInput>(null);
+
+  // Load recent searches on mount
+  useEffect(() => {
+    AsyncStorage.getItem(RECENT_SEARCHES_KEY).then((val) => {
+      if (val) {
+        const parsed = JSON.parse(val);
+        setRecentSearches(parsed);
+        recentSearchesRef.current = parsed;
+      }
+    });
+  }, []);
+
+  // Save a search term to recents (uses ref to avoid effect dependency loops)
+  const saveRecentSearch = useCallback(async (term: string) => {
+    const trimmed = term.trim();
+    if (trimmed.length < 2) return;
+    const current = recentSearchesRef.current;
+    const updated = [trimmed, ...current.filter((s) => s.toLowerCase() !== trimmed.toLowerCase())].slice(0, MAX_RECENT_SEARCHES);
+    recentSearchesRef.current = updated;
+    setRecentSearches(updated);
+    await AsyncStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(updated));
+  }, []);
+
+  // Debounce search query by 300ms to prevent excessive queries and keep UI responsive
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQuery(queryStr);
+      if (queryStr.trim().length >= 2) saveRecentSearch(queryStr);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [queryStr]);
+
+  const PAGE_SIZE = 30;
+  const loadingMore = useRef(false);
+
+  const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
+    const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
+    if (distanceFromBottom < 300 && !loadingMore.current) {
+      loadingMore.current = true;
+      LayoutAnimation.configureNext(LayoutAnimation.create(300, LayoutAnimation.Types.easeInEaseOut, LayoutAnimation.Properties.opacity));
+      setVisibleCounts((prev) => ({ ...prev, [activeCategory]: prev[activeCategory] + PAGE_SIZE }));
+      setTimeout(() => { loadingMore.current = false; }, 800);
+    }
+  }, [activeCategory]);
 
   const GAP = spacing.sm;
   const HORIZONTAL_PADDING = spacing.md;
   const CARD_WIDTH = (screenWidth - HORIZONTAL_PADDING * 2 - GAP * (NUM_COLUMNS - 1)) / NUM_COLUMNS;
 
-  const { data: users, isLoading: usersLoading } = useSearchUsers(queryStr);
-  const { data: todayMatches } = useMatchesByDate(new Date());
-
-  const matchResults = (() => {
-    if (!queryStr || queryStr.length < 2 || !todayMatches) return [];
-    const q = queryStr.toLowerCase();
-    return todayMatches.filter(
-      (m) =>
-        m.homeTeam.name.toLowerCase().includes(q) ||
-        m.awayTeam.name.toLowerCase().includes(q) ||
-        m.homeTeam.shortName.toLowerCase().includes(q) ||
-        m.awayTeam.shortName.toLowerCase().includes(q) ||
-        m.competition.name.toLowerCase().includes(q)
-    );
-  })();
+  const { data: users, isLoading: usersLoading } = useSearchUsers(debouncedQuery, activeCategory === 'members');
+  const { data: matchResults, isLoading: matchesLoading, isFetching: matchesFetching } = useSearchMatches(debouncedQuery, activeCategory === 'matches');
+  const { data: teamResults, isLoading: teamsLoading } = useSearchTeams(debouncedQuery);
+  const { data: playerResults, isLoading: playersLoading, isFetching: playersFetching } = useSearchPlayers(debouncedQuery, activeCategory === 'players');
+  const { data: reviewResults, isLoading: reviewsLoading, isFetching: reviewsFetching } = useSearchReviews(debouncedQuery, activeCategory === 'reviews');
+  const { data: listResults, isLoading: listsLoading, isFetching: listsFetching } = useSearchLists(debouncedQuery, activeCategory === 'lists');
 
   const categories: { key: Category; label: string }[] = [
     { key: 'matches', label: 'Matches' },
@@ -79,7 +130,7 @@ export function SearchScreen() {
             placeholder="Find matches, teams, players and managers..."
             placeholderTextColor={colors.textSecondary}
             value={queryStr}
-            onChangeText={setQueryStr}
+            onChangeText={(t) => { setQueryStr(t); setVisibleCounts({ matches: 30, teams: 30, players: 30, members: 30, reviews: 30, lists: 30 }); }}
             onFocus={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setIsSearching(true); }}
             onBlur={() => { if (!queryStr) { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setIsSearching(false); } }}
             autoCapitalize="none"
@@ -93,7 +144,7 @@ export function SearchScreen() {
             }}
           />
           {queryStr.length > 0 && (
-            <Pressable onPress={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setQueryStr(''); setIsSearching(false); }}>
+            <Pressable onPress={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setQueryStr(''); setIsSearching(false); Keyboard.dismiss(); }}>
               <Ionicons name="close" size={18} color={colors.textSecondary} />
             </Pressable>
           )}
@@ -101,7 +152,7 @@ export function SearchScreen() {
 
         {/* Category tabs */}
         {isSearching && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.sm }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" style={{ marginBottom: spacing.sm }}>
             <View style={{ flexDirection: 'row', gap: spacing.sm }}>
               {categories.map((cat) => (
                 <Pressable
@@ -130,7 +181,7 @@ export function SearchScreen() {
         )}
       </View>
 
-      <ScrollView indicatorStyle={isDark ? 'white' : 'default'} style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 100 }}>
+      <ScrollView indicatorStyle={isDark ? 'white' : 'default'} style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 100 }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" onScroll={handleScroll} scrollEventThrottle={400}>
         {/* Default browse view */}
         {!isSearching && (
           <View style={{ paddingVertical: spacing.lg, paddingHorizontal: spacing.md }}>
@@ -187,26 +238,75 @@ export function SearchScreen() {
           </View>
         )}
 
-        {/* Empty search prompt */}
+        {/* Recent searches or empty prompt */}
         {isSearching && !queryStr && (
-          <View style={{ alignItems: 'center', paddingTop: spacing.xxl * 2 }}>
-            <Text style={{ ...typography.body, color: colors.textSecondary }}>Start typing to search...</Text>
-          </View>
+          recentSearches.length > 0 ? (
+            <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.md }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm }}>
+                <Text style={{ ...typography.h4, color: colors.foreground }}>Recent Searches</Text>
+                <Pressable
+                  onPress={async () => {
+                    setRecentSearches([]);
+                    recentSearchesRef.current = [];
+                    await AsyncStorage.removeItem(RECENT_SEARCHES_KEY);
+                  }}
+                  hitSlop={8}
+                >
+                  <Text style={{ ...typography.caption, color: colors.textSecondary }}>Clear All</Text>
+                </Pressable>
+              </View>
+              {recentSearches.map((term, i) => (
+                <Pressable
+                  key={`${term}-${i}`}
+                  onPress={() => {
+                    setQueryStr(term);
+                    setIsSearching(true);
+                  }}
+                  style={({ pressed }) => ({
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    paddingVertical: spacing.sm + 2,
+                    borderBottomWidth: 1,
+                    borderBottomColor: colors.border,
+                    opacity: pressed ? 0.7 : 1,
+                  })}
+                >
+                  <Ionicons name="time-outline" size={18} color={colors.textSecondary} style={{ marginRight: spacing.sm }} />
+                  <Text style={{ ...typography.body, color: colors.foreground, flex: 1, fontSize: 15 }}>{term}</Text>
+                  <Pressable
+                    onPress={async (e) => {
+                      e.stopPropagation();
+                      const updated = recentSearches.filter((_, idx) => idx !== i);
+                      recentSearchesRef.current = updated;
+                      setRecentSearches(updated);
+                      await AsyncStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(updated));
+                    }}
+                    hitSlop={8}
+                  >
+                    <Ionicons name="close" size={16} color={colors.textSecondary} />
+                  </Pressable>
+                </Pressable>
+              ))}
+            </View>
+          ) : (
+            <View style={{ alignItems: 'center', paddingTop: spacing.xxl * 2 }}>
+              <Text style={{ ...typography.body, color: colors.textSecondary }}>Start typing to search...</Text>
+            </View>
+          )
         )}
 
-        {/* Matches results — 4-column poster grid */}
-        {isSearching && queryStr.length >= 2 && activeCategory === 'matches' && (
+        {/* Matches results — poster grid */}
+        {isSearching && debouncedQuery.length >= 2 && activeCategory === 'matches' && (
           <View style={{ paddingHorizontal: HORIZONTAL_PADDING, paddingTop: spacing.md }}>
-            <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: spacing.sm }}>
-              Matches ({matchResults.length})
-            </Text>
-            {matchResults.length === 0 ? (
+            {matchesLoading || matchesFetching ? (
+              <View style={{ marginTop: spacing.xl }}><LoadingSpinner fullScreen={false} /></View>
+            ) : !matchResults || matchResults.length === 0 ? (
               <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.xl }}>
                 No matches found
               </Text>
             ) : (
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: GAP }}>
-                {matchResults.map((match) => (
+                {matchResults.slice(0, visibleCounts.matches).map((match) => (
                   <MatchPosterCard
                     key={match.id}
                     match={match}
@@ -220,24 +320,22 @@ export function SearchScreen() {
         )}
 
         {/* Teams results */}
-        {isSearching && queryStr.length >= 2 && activeCategory === 'teams' && (() => {
-          const q = queryStr.toLowerCase();
-          const teamResults = POPULAR_TEAMS.filter(
-            (t) => t.name.toLowerCase().includes(q) || t.league.toLowerCase().includes(q)
-          );
-          return teamResults.length === 0 ? (
-            <View style={{ alignItems: 'center', paddingTop: spacing.xxl * 2, paddingHorizontal: spacing.xl }}>
-              <Ionicons name="shield-outline" size={48} color={colors.textSecondary} />
-              <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.md }}>
-                No teams found
-              </Text>
-            </View>
-          ) : (
-            <View style={{ paddingHorizontal: spacing.md }}>
-              {teamResults.map((team) => (
+        {isSearching && debouncedQuery.length >= 2 && activeCategory === 'teams' && (
+          <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.xs }}>
+            {teamsLoading ? (
+              <View style={{ marginTop: spacing.md }}><LoadingSpinner fullScreen={false} /></View>
+            ) : !teamResults || teamResults.length === 0 ? (
+              <View style={{ alignItems: 'center', paddingTop: spacing.lg, paddingHorizontal: spacing.xl }}>
+                <Ionicons name="shield-outline" size={48} color={colors.textSecondary} />
+                <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.md }}>
+                  No teams found
+                </Text>
+              </View>
+            ) : (
+              teamResults.slice(0, visibleCounts.teams).map((team) => (
                 <Pressable
                   key={team.id}
-                  onPress={() => navigation.navigate('TeamDetail', { teamId: Number(team.id), teamName: team.name, teamCrest: team.crest })}
+                  onPress={() => navigation.navigate('TeamDetail', { teamId: team.id, teamName: team.name, teamCrest: team.crest })}
                   style={({ pressed }) => ({
                     flexDirection: 'row',
                     alignItems: 'center',
@@ -248,42 +346,76 @@ export function SearchScreen() {
                     opacity: pressed ? 0.7 : 1,
                   })}
                 >
-                  <TeamLogo uri={team.crest} size={36} />
+                  <TeamLogo uri={team.crest} size={28} />
+                  <Text style={{ ...typography.body, color: colors.foreground, fontSize: 15, flex: 1 }}>{team.name}</Text>
+                  <Ionicons name="chevron-forward" size={14} color={colors.textSecondary} />
+                </Pressable>
+              ))
+            )}
+          </View>
+        )}
+
+        {/* Players and Managers results */}
+        {isSearching && debouncedQuery.length >= 2 && activeCategory === 'players' && (
+          <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.xs }}>
+            {playersLoading || playersFetching ? (
+              <View style={{ marginTop: spacing.md }}><LoadingSpinner fullScreen={false} /></View>
+            ) : !playerResults || playerResults.length === 0 ? (
+              <View style={{ alignItems: 'center', paddingTop: spacing.lg, paddingHorizontal: spacing.xl }}>
+                <Ionicons name="people-outline" size={48} color={colors.textSecondary} />
+                <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.md }}>
+                  No players found
+                </Text>
+              </View>
+            ) : (
+              playerResults.slice(0, visibleCounts.players).map((player) => (
+                <Pressable
+                  key={player.id}
+                  onPress={() => navigation.navigate('PersonDetail', { personId: player.id, personName: player.name, role: player.position === 'Coach' ? 'manager' : 'player' })}
+                  style={({ pressed }) => ({
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: spacing.sm,
+                    paddingVertical: spacing.sm + 2,
+                    borderBottomWidth: 1,
+                    borderBottomColor: colors.border,
+                    opacity: pressed ? 0.7 : 1,
+                  })}
+                >
+                  <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.muted, alignItems: 'center', justifyContent: 'center' }}>
+                    <Ionicons name={player.position === 'Coach' ? 'person' : 'football'} size={16} color={colors.textSecondary} />
+                  </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={{ ...typography.body, color: colors.foreground, fontSize: 15 }}>{team.name}</Text>
-                    <Text style={{ ...typography.caption, color: colors.textSecondary }}>{team.league}</Text>
+                    <Text style={{ ...typography.body, color: colors.foreground, fontSize: 15 }}>{player.name}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+                      {player.position && (
+                        <Text style={{ ...typography.caption, color: colors.textSecondary }}>{player.position}</Text>
+                      )}
+                      {player.currentTeam && (
+                        <Text style={{ ...typography.caption, color: colors.textSecondary }}>
+                          {player.position ? ' · ' : ''}{player.currentTeam.name}
+                        </Text>
+                      )}
+                    </View>
                   </View>
                   <Ionicons name="chevron-forward" size={14} color={colors.textSecondary} />
                 </Pressable>
-              ))}
-            </View>
-          );
-        })()}
-
-        {/* Players and Managers results */}
-        {isSearching && queryStr.length >= 2 && activeCategory === 'players' && (
-          <View style={{ alignItems: 'center', paddingTop: spacing.xxl * 2, paddingHorizontal: spacing.xl }}>
-            <Ionicons name="people-outline" size={48} color={colors.textSecondary} />
-            <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.md }}>
-              Player and manager search coming soon
-            </Text>
+              ))
+            )}
           </View>
         )}
 
         {/* Members results */}
-        {isSearching && queryStr.length >= 2 && activeCategory === 'members' && (
-          <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.md }}>
-            <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: spacing.sm }}>
-              Members ({users?.length || 0})
-            </Text>
+        {isSearching && debouncedQuery.length >= 2 && activeCategory === 'members' && (
+          <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.xs }}>
             {usersLoading ? (
-              <View style={{ marginTop: spacing.xl }}><LoadingSpinner fullScreen={false} /></View>
+              <View style={{ marginTop: spacing.md }}><LoadingSpinner fullScreen={false} /></View>
             ) : !users || users.length === 0 ? (
-              <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.xl }}>
+              <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.lg }}>
                 No members found
               </Text>
             ) : (
-              users.map((u) => (
+              users.slice(0, visibleCounts.members).map((u) => (
                 <Pressable
                   key={u.id}
                   onPress={() => navigation.navigate('UserProfile', { userId: u.id })}
@@ -307,22 +439,54 @@ export function SearchScreen() {
         )}
 
         {/* Reviews results */}
-        {isSearching && queryStr.length >= 2 && activeCategory === 'reviews' && (
-          <View style={{ alignItems: 'center', paddingTop: spacing.xxl * 2, paddingHorizontal: spacing.xl }}>
-            <Ionicons name="reorder-three-outline" size={48} color={colors.textSecondary} />
-            <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.md }}>
-              Review search coming soon
-            </Text>
+        {isSearching && debouncedQuery.length >= 2 && activeCategory === 'reviews' && (
+          <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.xs }}>
+            {reviewsLoading || reviewsFetching ? (
+              <View style={{ marginTop: spacing.md }}><LoadingSpinner fullScreen={false} /></View>
+            ) : !reviewResults || reviewResults.length === 0 ? (
+              <View style={{ alignItems: 'center', paddingTop: spacing.lg, paddingHorizontal: spacing.xl }}>
+                <Ionicons name="chatbubble-outline" size={48} color={colors.textSecondary} />
+                <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.md }}>
+                  No reviews found
+                </Text>
+              </View>
+            ) : (
+              <View style={{ marginHorizontal: -spacing.md }}>
+                {reviewResults.slice(0, visibleCounts.reviews).map((review) => (
+                  <View key={review.id} style={{ paddingHorizontal: spacing.md }}>
+                    <ReviewCard
+                      review={review}
+                      onPress={() => navigation.navigate('ReviewDetail', { reviewId: review.id })}
+                    />
+                  </View>
+                ))}
+              </View>
+            )}
           </View>
         )}
 
         {/* Lists results */}
-        {isSearching && queryStr.length >= 2 && activeCategory === 'lists' && (
-          <View style={{ alignItems: 'center', paddingTop: spacing.xxl * 2, paddingHorizontal: spacing.xl }}>
-            <Ionicons name="list-outline" size={48} color={colors.textSecondary} />
-            <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.md }}>
-              List search coming soon
-            </Text>
+        {isSearching && debouncedQuery.length >= 2 && activeCategory === 'lists' && (
+          <View style={{ paddingTop: spacing.xs }}>
+            {listsLoading || listsFetching ? (
+              <View style={{ marginTop: spacing.md }}><LoadingSpinner fullScreen={false} /></View>
+            ) : !listResults || listResults.length === 0 ? (
+              <View style={{ alignItems: 'center', paddingTop: spacing.lg, paddingHorizontal: spacing.xl }}>
+                <Ionicons name="list-outline" size={48} color={colors.textSecondary} />
+                <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.md }}>
+                  No lists found
+                </Text>
+              </View>
+            ) : (
+              listResults.slice(0, visibleCounts.lists).map((list) => (
+                <ListPreviewCard
+                  key={list.id}
+                  list={list}
+                  onPress={() => navigation.navigate('ListDetail', { listId: list.id })}
+                  onMatchPress={(matchId) => navigation.navigate('MatchDetail', { matchId })}
+                />
+              ))
+            )}
           </View>
         )}
       </ScrollView>

@@ -48,8 +48,9 @@ export function FeedScreen() {
     pagerRef.current?.setPage(index);
   }, []);
 
-  const handlePageSelected = useCallback((e: any) => {
-    setActiveTabIndex(e.nativeEvent.position);
+  const handlePageScroll = useCallback((e: any) => {
+    const { position, offset } = e.nativeEvent;
+    setActiveTabIndex(Math.round(position + offset));
   }, []);
 
   const today = useMemo(() => new Date(), [todayKey]);
@@ -166,7 +167,7 @@ export function FeedScreen() {
         ref={pagerRef}
         style={{ flex: 1 }}
         initialPage={0}
-        onPageSelected={handlePageSelected}
+        onPageScroll={handlePageScroll}
       >
         {/* ─── Matches Page ─── */}
         <View key="matches" style={{ flex: 1 }}>
@@ -272,16 +273,16 @@ export function FeedScreen() {
 
                 {/* Per-league carousels (followed leagues only) */}
                 {Array.from(grouped.entries()).length > 0 ? (
-                  Array.from(grouped.entries()).map(([league, leagueMatches], index) => (
+                  Array.from(grouped.entries()).map(([code, leagueMatches], index) => (
                     <View
-                      key={league}
+                      key={code}
                       style={{
                         backgroundColor: index % 2 === 0 ? `${colors.accent}40` : 'transparent',
                         paddingVertical: spacing.md,
                       }}
                     >
                       <LeagueCarousel
-                        title={league}
+                        title={leagueMatches[0]?.competition.name || code}
                         matches={leagueMatches.slice(0, 10)}
                         onMatchPress={(id) => navigation.navigate('MatchDetail', { matchId: id })}
                         onMorePress={() => {

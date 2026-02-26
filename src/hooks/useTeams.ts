@@ -1,5 +1,6 @@
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { getTeamDetail, getTeamMatches } from '../services/footballApi';
+import { getTeamDetail, getTeamMatches, getAllTeams, searchPlayersQuery } from '../services/footballApi';
 
 export function useTeamDetail(teamId: number) {
   return useQuery({
@@ -19,4 +20,40 @@ export function useTeamMatches(teamId: number) {
     staleTime: 10 * 60 * 1000,
     retry: 1,
   });
+}
+
+// Fetch all teams ONCE when search is active, cache for 10 minutes
+export function useSearchTeams(query: string) {
+  const enabled = query.length >= 2;
+  const { data: allTeams, isLoading } = useQuery({
+    queryKey: ['allTeams'],
+    queryFn: getAllTeams,
+    staleTime: 10 * 60 * 1000,
+    enabled,
+  });
+
+  const data = useMemo(() => {
+    if (!allTeams || !enabled) return [];
+    const q = query.toLowerCase();
+    return allTeams
+      .filter((t) =>
+        t.name?.toLowerCase().includes(q) ||
+        t.shortName?.toLowerCase().includes(q)
+      )
+      .slice(0, 30);
+  }, [allTeams, query, enabled]);
+
+  return { data, isLoading: isLoading && enabled };
+}
+
+// Search players via Firestore prefix query — fast, no bulk fetch
+export function useSearchPlayers(query: string, active = true) {
+  const { data, isLoading, isFetching } = useQuery({
+    queryKey: ['searchPlayers', query],
+    queryFn: () => searchPlayersQuery(query),
+    enabled: query.length >= 2 && active,
+    staleTime: 2 * 60 * 1000,
+  });
+
+  return { data: data || [], isLoading: isLoading && query.length >= 2, isFetching };
 }

@@ -11,6 +11,7 @@ import {
   getAvgRatingsForMatches,
   getReviewUpvoterIds,
   getReviewsUpvotedByUser,
+  searchReviews,
 } from '../services/firestore/reviews';
 import { ReviewMedia } from '../types/review';
 import { useAuth } from '../context/AuthContext';
@@ -154,5 +155,14 @@ export function useDeleteReview() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['reviews'] });
     },
+  });
+}
+
+export function useSearchReviews(queryStr: string, active = true) {
+  return useQuery({
+    queryKey: ['searchReviews', queryStr],
+    queryFn: () => searchReviews(queryStr),
+    enabled: queryStr.length >= 2 && active,
+    staleTime: 2 * 60 * 1000,
   });
 }

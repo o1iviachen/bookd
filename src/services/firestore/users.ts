@@ -30,7 +30,7 @@ function docToUser(docSnap: any): User {
     favoriteTeams: data.favoriteTeams || [],
     clubAffiliations: data.clubAffiliations || [],
     followedLeagues: data.followedLeagues || [],
-    followedTeamIds: data.followedTeamIds || [],
+    followedTeamIds: (data.followedTeamIds || []).map(String),
     favoriteMatchIds: data.favoriteMatchIds || [],
     watchedMatchIds: data.watchedMatchIds || [],
     likedMatchIds: data.likedMatchIds || [],

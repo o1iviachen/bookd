@@ -11,6 +11,8 @@ import { StarRating } from '../ui/StarRating';
 import { VoteButtons } from './VoteButtons';
 import { Review } from '../../types/review';
 import { formatRelativeTime } from '../../utils/formatDate';
+import { TeamLogo } from '../match/TeamLogo';
+import { POPULAR_TEAMS } from '../../utils/constants';
 
 interface ReviewCardProps {
   review: Review;
@@ -28,6 +30,10 @@ export function ReviewCard({ review, onPress, commentCount }: ReviewCardProps) {
   const displayUsername = authorProfile?.username || review.username;
   const displayAvatar = authorProfile?.avatar ?? review.userAvatar;
   const reviewerLikedMatch = authorProfile?.likedMatchIds?.some((id) => String(id) === String(review.matchId)) || false;
+  const authorTeamCrests = (authorProfile?.followedTeamIds || []).slice(0, 3).map((id) => {
+    const team = POPULAR_TEAMS.find((t) => t.id === String(id));
+    return team ? { id: team.id, crest: team.crest } : null;
+  }).filter(Boolean) as { id: string; crest: string }[];
 
   const handleLike = () => {
     if (!user) return;
@@ -59,6 +65,9 @@ export function ReviewCard({ review, onPress, commentCount }: ReviewCardProps) {
             <Text style={{ ...typography.small, color: colors.textSecondary }} numberOfLines={1}>
               @{displayUsername}
             </Text>
+            {authorTeamCrests.length > 0 && authorTeamCrests.map((t) => (
+              <TeamLogo key={t.id} uri={t.crest} size={14} />
+            ))}
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: 2 }}>
             <StarRating rating={review.rating} size={12} />

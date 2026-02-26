@@ -17,7 +17,9 @@ import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { ScreenHeader } from '../../components/ui/ScreenHeader';
 import { ActionMenu } from '../../components/ui/ActionMenu';
 import { LikedByModal } from '../../components/ui/LikedByModal';
+import { TeamLogo } from '../../components/match/TeamLogo';
 import { formatRelativeTime } from '../../utils/formatDate';
+import { POPULAR_TEAMS } from '../../utils/constants';
 import { Match } from '../../types/match';
 import { User } from '../../types/user';
 
@@ -139,9 +141,9 @@ export function ListDetailScreen({ route, navigation }: any) {
     })),
   });
   const commentAuthorMap = useMemo(() => {
-    const map = new Map<string, { username: string; displayName: string; avatar: string | null }>();
+    const map = new Map<string, { username: string; displayName: string; avatar: string | null; followedTeamIds: string[] }>();
     commentAuthorQueries.forEach((q) => {
-      if (q.data) map.set(q.data.id, { username: q.data.username, displayName: q.data.displayName || q.data.username, avatar: q.data.avatar });
+      if (q.data) map.set(q.data.id, { username: q.data.username, displayName: q.data.displayName || q.data.username, avatar: q.data.avatar, followedTeamIds: q.data.followedTeamIds || [] });
     });
     return map;
   }, [commentAuthorQueries]);
@@ -229,9 +231,16 @@ export function ListDetailScreen({ route, navigation }: any) {
               </View>
             )}
           </View>
-          <Text style={{ ...typography.caption, color: colors.textSecondary, marginTop: spacing.xs }}>
-            by <Text style={{ fontWeight: '600', color: colors.foreground }}>{listAuthorName}</Text> @{listAuthorUsername} &middot; {formatRelativeTime(list.createdAt)}
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: spacing.xs, flexWrap: 'wrap' }}>
+            <Text style={{ ...typography.caption, color: colors.textSecondary }}>by</Text>
+            <Text style={{ ...typography.caption, color: colors.foreground, fontWeight: '600' }}>{listAuthorName}</Text>
+            <Text style={{ ...typography.caption, color: colors.textSecondary }}>@{listAuthorUsername}</Text>
+            {(listAuthorProfile?.followedTeamIds || []).slice(0, 3).map((id) => {
+              const team = POPULAR_TEAMS.find((t) => t.id === String(id));
+              return team ? <TeamLogo key={team.id} uri={team.crest} size={14} /> : null;
+            })}
+            <Text style={{ ...typography.caption, color: colors.textSecondary }}>&middot; {formatRelativeTime(list.createdAt)}</Text>
+          </View>
           {list.description ? (
             <Text style={{ ...typography.body, color: colors.textSecondary, marginTop: spacing.sm }}>
               {list.description}
@@ -368,6 +377,10 @@ export function ListDetailScreen({ route, navigation }: any) {
               const cDisplayName = cAuthor?.displayName || cAuthor?.username || comment.username;
               const cDisplayUsername = cAuthor?.username || comment.username;
               const cDisplayAvatar = cAuthor?.avatar ?? comment.userAvatar;
+              const cTeamCrests = (cAuthor?.followedTeamIds || []).slice(0, 3).map((id) => {
+                const team = POPULAR_TEAMS.find((t) => t.id === String(id));
+                return team ? { id: team.id, crest: team.crest } : null;
+              }).filter(Boolean) as { id: string; crest: string }[];
               return (
                 <View key={comment.id} style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md }}>
                   <Pressable onPress={() => navigation.navigate('UserProfile', { userId: comment.userId })}>
@@ -383,6 +396,9 @@ export function ListDetailScreen({ route, navigation }: any) {
                       <Text style={{ ...typography.small, color: colors.textSecondary }}>
                         @{cDisplayUsername}
                       </Text>
+                      {cTeamCrests.map((t) => (
+                        <TeamLogo key={t.id} uri={t.crest} size={14} />
+                      ))}
                       <Text style={{ ...typography.small, color: colors.textSecondary }}>
                         {formatRelativeTime(comment.createdAt)}
                       </Text>
