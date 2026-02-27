@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, KeyboardAvoidingView, Platform, ScrollView, Dimensions, Pressable, Keyboard } from 'react-native';
+import { View, Text, KeyboardAvoidingView, Platform, ScrollView, Dimensions, Pressable, Keyboard, TextInput as RNTextInput } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -20,6 +20,9 @@ export function SignUpScreen({ navigation }: Props) {
   const { colors, spacing, typography } = theme;
 
   const scrollRef = useRef<ScrollView>(null);
+  const emailRef = useRef<RNTextInput>(null);
+  const passwordRef = useRef<RNTextInput>(null);
+  const confirmPasswordRef = useRef<RNTextInput>(null);
 
   useEffect(() => {
     const event = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
@@ -144,28 +147,42 @@ export function SignUpScreen({ navigation }: Props) {
             value={username}
             onChangeText={setUsername}
             autoCapitalize="none"
+            returnKeyType="next"
+            onSubmitEditing={() => emailRef.current?.focus()}
+            blurOnSubmit={false}
           />
           <TextInput
+            ref={emailRef}
             label="Email"
             placeholder="you@example.com"
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"
             keyboardType="email-address"
+            returnKeyType="next"
+            onSubmitEditing={() => passwordRef.current?.focus()}
+            blurOnSubmit={false}
           />
           <TextInput
+            ref={passwordRef}
             label="Password"
             placeholder="At least 6 characters"
             value={password}
             onChangeText={setPassword}
             secureTextEntry
+            returnKeyType="next"
+            onSubmitEditing={() => confirmPasswordRef.current?.focus()}
+            blurOnSubmit={false}
           />
           <TextInput
+            ref={confirmPasswordRef}
             label="Confirm Password"
             placeholder="Repeat your password"
             value={confirmPassword}
             onChangeText={setConfirmPassword}
             secureTextEntry
+            returnKeyType="go"
+            onSubmitEditing={handleSignUp}
           />
 
           <Button

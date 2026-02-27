@@ -36,11 +36,12 @@ interface ReviewEntry {
   matchReviewCount: number;
 }
 
-export function ReviewsScreen({ navigation }: any) {
+export function ReviewsScreen({ route, navigation }: any) {
   const { theme, isDark } = useTheme();
-  const { colors, spacing, typography, borderRadius } = theme;
+  const { colors, spacing, typography } = theme;
   const { user } = useAuth();
-  const { data: reviews, isLoading } = useReviewsForUser(user?.uid || '');
+  const targetUserId = route.params?.userId || user?.uid || '';
+  const { data: reviews, isLoading } = useReviewsForUser(targetUserId);
 
   const matchIds = useMemo(
     () => [...new Set((reviews || []).map((r) => r.matchId))],
@@ -172,8 +173,8 @@ export function ReviewsScreen({ navigation }: any) {
         <FlatList indicatorStyle={isDark ? 'white' : 'default'}
           data={filtered}
           keyExtractor={(item) => item.review.id}
-          contentContainerStyle={{ paddingHorizontal: spacing.md, paddingBottom: 60 }}
-          renderItem={({ item }) => (
+          contentContainerStyle={{ paddingBottom: 60 }}
+          renderItem={({ item, index }) => (
             <View>
               {/* Match info line */}
               {item.match && (
@@ -186,6 +187,7 @@ export function ReviewsScreen({ navigation }: any) {
                     gap: spacing.sm,
                     paddingTop: spacing.md,
                     paddingBottom: spacing.xs,
+                    paddingHorizontal: spacing.md,
                   }}
                 >
                   <TeamLogo uri={item.match.homeTeam.crest} size={16} />
@@ -207,6 +209,7 @@ export function ReviewsScreen({ navigation }: any) {
               <ReviewCard
                 review={item.review}
                 onPress={() => navigation.navigate('ReviewDetail', { reviewId: item.review.id })}
+                isLast={index === filtered.length - 1}
               />
             </View>
           )}

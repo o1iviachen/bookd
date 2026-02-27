@@ -533,18 +533,16 @@ export async function enrichPlayersFromSquads(batchLimit = 50, offset = 0): Prom
         const p = entry.player;
         if (!p?.id) continue;
 
-        // Use firstname + lastname (e.g. "Lionel Messi", not the full legal "Lionel Andrés Messi Cuccittini")
-        const fullName = (p.firstname && p.lastname)
-          ? `${p.firstname} ${p.lastname}`
-          : p.name || `${p.firstname || ''} ${p.lastname || ''}`.trim();
+        // Prefer p.name — it's the common/display name from API-Football (e.g. "Cristiano Ronaldo")
+        // firstname + lastname gives the full legal name (e.g. "Cristiano Ronaldo dos Santos Aveiro")
+        const fullName = p.name
+          || ((p.firstname && p.lastname) ? `${p.firstname} ${p.lastname}` : `${p.firstname || ''} ${p.lastname || ''}`.trim());
         // Derive position from statistics if available
         const pos = entry.statistics?.[0]?.games?.position || null;
 
         const playerRef = db.collection(COLLECTIONS.PLAYERS).doc(String(p.id));
-        // Use lastname for searchName when available (more accurate than extracting from full name)
-        const searchName = p.lastname
-          ? p.lastname.toLowerCase()
-          : extractSearchName(fullName);
+        // Always extract searchName from the display name (handles particles properly)
+        const searchName = extractSearchName(fullName);
         batch.set(playerRef, {
           id: p.id,
           name: fullName,

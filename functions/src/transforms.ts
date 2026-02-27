@@ -218,8 +218,17 @@ export function transformFixtureDetails(
     comments: e.comments,
   }));
 
+  // Collect all player/coach IDs for efficient per-player queries (array-contains)
+  const playerIds: number[] = [];
+  for (const arr of [homeLineupData?.startXI, homeLineupData?.substitutes, awayLineupData?.startXI, awayLineupData?.substitutes]) {
+    if (arr) for (const p of arr) if (p.player?.id) playerIds.push(p.player.id);
+  }
+  if (homeLineupData?.coach?.id) playerIds.push(homeLineupData.coach.id);
+  if (awayLineupData?.coach?.id) playerIds.push(awayLineupData.coach.id);
+
   return {
     matchId: fixtureId,
+    playerIds,
     homeLineup: homeLineupData ? mapPlayers(homeLineupData.startXI) : [],
     homeBench: homeLineupData ? mapPlayers(homeLineupData.substitutes) : [],
     awayLineup: awayLineupData ? mapPlayers(awayLineupData.startXI) : [],

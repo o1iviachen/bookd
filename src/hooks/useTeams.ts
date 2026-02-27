@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { getTeamDetail, getTeamMatches, getAllTeams, searchPlayersQuery } from '../services/footballApi';
+import { getTeamDetail, getTeamMatches, getAllTeams, searchPlayersQuery, getMatchesForPerson, PersonMatchAppearance } from '../services/footballApi';
 
 export function useTeamDetail(teamId: number) {
   return useQuery({
@@ -23,8 +23,8 @@ export function useTeamMatches(teamId: number) {
 }
 
 // Fetch all teams ONCE when search is active, cache for 10 minutes
-export function useSearchTeams(query: string) {
-  const enabled = query.length >= 2;
+export function useSearchTeams(query: string, active = true) {
+  const enabled = query.length >= 2 && active;
   const { data: allTeams, isLoading } = useQuery({
     queryKey: ['allTeams'],
     queryFn: getAllTeams,
@@ -44,6 +44,17 @@ export function useSearchTeams(query: string) {
   }, [allTeams, query, enabled]);
 
   return { data, isLoading: isLoading && enabled };
+}
+
+// Fetch matches where a person appeared in the squad (lineup/bench/coach)
+export function usePersonMatches(personId: number) {
+  return useQuery({
+    queryKey: ['personMatches', personId],
+    queryFn: () => getMatchesForPerson(personId),
+    enabled: !!personId,
+    staleTime: 10 * 60 * 1000,
+    retry: 1,
+  });
 }
 
 // Search players via Firestore prefix query — fast, no bulk fetch

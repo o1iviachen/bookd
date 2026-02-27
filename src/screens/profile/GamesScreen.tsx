@@ -38,12 +38,13 @@ interface MatchEntry {
   totalReviews: number;
 }
 
-export function GamesScreen({ navigation }: any) {
+export function GamesScreen({ route, navigation }: any) {
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography } = theme;
   const { user } = useAuth();
+  const targetUserId = route.params?.userId || user?.uid || '';
   const { width: screenWidth } = useWindowDimensions();
-  const { data: reviews, isLoading } = useReviewsForUser(user?.uid || '');
+  const { data: reviews, isLoading } = useReviewsForUser(targetUserId);
 
   // Unique match IDs from reviews (declared early for useAvgRatings)
   const matchIds = useMemo(

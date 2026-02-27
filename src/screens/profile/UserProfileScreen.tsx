@@ -2,7 +2,7 @@ import React, { useCallback } from 'react';
 import { View, Text, ScrollView, Pressable, Linking, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useQueries } from '@tanstack/react-query';
+import { useQueries, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useUserProfile, useFollowUser, useUnfollowUser } from '../../hooks/useUser';
@@ -29,11 +29,12 @@ export function UserProfileScreen({ route, navigation }: any) {
   const { data: currentProfile } = useUserProfile(currentUser?.uid || '');
   const { data: reviews } = useReviewsForUser(userId);
   const { data: lists } = useListsForUser(userId);
+  const queryClient = useQueryClient();
   const followMutation = useFollowUser();
   const unfollowMutation = useUnfollowUser();
 
-  const isFollowing = currentProfile?.following.includes(userId) || false;
   const isOwnProfile = currentUser?.uid === userId;
+  const isFollowing = currentProfile?.following?.includes(userId) || false;
 
   // Favourite matches
   const favoriteMatchIds = profile?.favoriteMatchIds || [];
@@ -80,11 +81,34 @@ export function UserProfileScreen({ route, navigation }: any) {
     }
   }, [reviews, navigation]);
 
-  const handleFollowToggle = () => {
-    if (!currentUser) return;
+  const handleFollowToggle = async () => {
+    if (!currentUser || followMutation.isPending || unfollowMutation.isPending) return;
+
+    // Wait for any in-flight refetches to finish cancelling so they can't
+    // overwrite the cache updates below
+    await queryClient.cancelQueries({ queryKey: ['user', currentUser.uid] });
+    await queryClient.cancelQueries({ queryKey: ['user', userId] });
+
     if (isFollowing) {
+      // Update both caches — button, counts, and all derived state update together
+      queryClient.setQueryData(['user', currentUser.uid], (old: any) => {
+        if (!old) return old;
+        return { ...old, following: (old.following || []).filter((id: string) => id !== userId) };
+      });
+      queryClient.setQueryData(['user', userId], (old: any) => {
+        if (!old) return old;
+        return { ...old, followers: (old.followers || []).filter((id: string) => id !== currentUser.uid) };
+      });
       unfollowMutation.mutate({ currentUserId: currentUser.uid, targetUserId: userId });
     } else {
+      queryClient.setQueryData(['user', currentUser.uid], (old: any) => {
+        if (!old) return old;
+        return { ...old, following: [...new Set([...(old.following || []), userId])] };
+      });
+      queryClient.setQueryData(['user', userId], (old: any) => {
+        if (!old) return old;
+        return { ...old, followers: [...new Set([...(old.followers || []), currentUser.uid])] };
+      });
       followMutation.mutate({
         currentUserId: currentUser.uid,
         targetUserId: userId,
@@ -101,13 +125,13 @@ export function UserProfileScreen({ route, navigation }: any) {
     return team ? { id: team.id, name: team.name, crest: team.crest } : null;
   }).filter(Boolean) as { id: string; name: string; crest: string }[];
 
-  const navLinks: { label: string; count: number | string; icon: keyof typeof Ionicons.glyphMap }[] = [
-    { label: 'Games', count: `${reviews?.length || 0} this year`, icon: 'football-outline' },
-    { label: 'Diary', count: reviews?.length || 0, icon: 'book-outline' },
-    { label: 'Reviews', count: reviews?.length || 0, icon: 'reorder-three-outline' },
-    { label: 'Lists', count: lists?.length || 0, icon: 'list-outline' },
-    { label: 'Likes', count: profile?.likedMatchIds?.length || 0, icon: 'heart-outline' },
-    { label: 'Tags', count: new Set((reviews || []).flatMap((r) => r.tags)).size, icon: 'pricetag-outline' },
+  const navLinks: { label: string; count: number | string; icon: keyof typeof Ionicons.glyphMap; screen: string }[] = [
+    { label: 'Games', count: `${reviews?.length || 0} this year`, icon: 'football-outline', screen: 'Games' },
+    { label: 'Diary', count: reviews?.length || 0, icon: 'book-outline', screen: 'Diary' },
+    { label: 'Reviews', count: reviews?.length || 0, icon: 'reorder-three-outline', screen: 'Reviews' },
+    { label: 'Lists', count: lists?.length || 0, icon: 'list-outline', screen: 'MyLists' },
+    { label: 'Likes', count: profile?.likedMatchIds?.length || 0, icon: 'heart-outline', screen: 'Likes' },
+    { label: 'Tags', count: new Set((reviews || []).flatMap((r) => r.tags)).size, icon: 'pricetag-outline', screen: 'Tags' },
   ];
 
   return (
@@ -266,9 +290,10 @@ export function UserProfileScreen({ route, navigation }: any) {
         <View style={{ marginTop: spacing.md, paddingHorizontal: spacing.md }}>
           <View style={{ backgroundColor: colors.card, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' }}>
             {navLinks.map((link, i) => (
-              <View
+              <Pressable
                 key={link.label}
-                style={{
+                onPress={() => navigation.navigate(link.screen, { userId })}
+                style={({ pressed }) => ({
                   flexDirection: 'row',
                   alignItems: 'center',
                   justifyContent: 'space-between',
@@ -276,11 +301,15 @@ export function UserProfileScreen({ route, navigation }: any) {
                   paddingHorizontal: spacing.md,
                   borderTopWidth: i > 0 ? 1 : 0,
                   borderTopColor: colors.border,
-                }}
+                  backgroundColor: pressed ? colors.accent : 'transparent',
+                })}
               >
                 <Text style={{ ...typography.body, color: colors.foreground }}>{link.label}</Text>
-                <Text style={{ ...typography.caption, color: colors.textSecondary }}>{link.count}</Text>
-              </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+                  <Text style={{ ...typography.caption, color: colors.textSecondary }}>{link.count}</Text>
+                  <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+                </View>
+              </Pressable>
             ))}
           </View>
         </View>

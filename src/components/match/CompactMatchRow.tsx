@@ -28,6 +28,8 @@ export function CompactMatchRow({ match, onPress }: CompactMatchRowProps) {
         paddingVertical: spacing.sm + 2,
         paddingHorizontal: spacing.md,
         backgroundColor: pressed ? colors.accent : 'transparent',
+        borderLeftWidth: isLive ? 3 : 0,
+        borderLeftColor: isLive ? '#00e054' : 'transparent',
       })}
     >
       <TeamLogo uri={match.homeTeam.crest} size={24} />
@@ -59,7 +61,10 @@ export function CompactMatchRow({ match, onPress }: CompactMatchRowProps) {
           </Text>
         )}
         {isLive && (
-          <Text style={{ ...typography.small, color: colors.primary }}>LIVE</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 1 }}>
+            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#00e054' }} />
+            <Text style={{ fontSize: 10, fontWeight: '700', color: '#00e054' }}>LIVE</Text>
+          </View>
         )}
       </View>
 

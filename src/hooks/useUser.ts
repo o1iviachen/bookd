@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getUserProfile, updateUserProfile } from '../services/firestore/users';
 import { followUser, unfollowUser, searchUsers } from '../services/firestore/users';
-import { toggleWatchedMatch, toggleLikedMatch, markMatchWatched, addCustomTag, removeCustomTag } from '../services/firestore/users';
+import { toggleWatchedMatch, toggleLikedMatch, markMatchWatched, addCustomTag, removeCustomTag, getFollowedTeamIdsForUsers } from '../services/firestore/users';
 
 export function useUserProfile(userId: string) {
   return useQuery({
@@ -17,7 +17,7 @@ export function useFollowUser() {
   return useMutation({
     mutationFn: (params: { currentUserId: string; targetUserId: string; senderInfo?: { username: string; avatar: string | null } }) =>
       followUser(params.currentUserId, params.targetUserId, params.senderInfo),
-    onSuccess: (_, params) => {
+    onSettled: (_data, _err, params) => {
       queryClient.invalidateQueries({ queryKey: ['user', params.currentUserId] });
       queryClient.invalidateQueries({ queryKey: ['user', params.targetUserId] });
     },
@@ -29,10 +29,21 @@ export function useUnfollowUser() {
   return useMutation({
     mutationFn: (params: { currentUserId: string; targetUserId: string }) =>
       unfollowUser(params.currentUserId, params.targetUserId),
-    onSuccess: (_, params) => {
+    onSettled: (_data, _err, params) => {
       queryClient.invalidateQueries({ queryKey: ['user', params.currentUserId] });
       queryClient.invalidateQueries({ queryKey: ['user', params.targetUserId] });
     },
+  });
+}
+
+// Batch fetch followed team IDs for a set of user IDs (e.g. reviewers)
+export function useReviewerTeamIds(userIds: string[]) {
+  const key = userIds.slice().sort().join(',');
+  return useQuery({
+    queryKey: ['reviewerTeamIds', key],
+    queryFn: () => getFollowedTeamIdsForUsers(userIds),
+    enabled: userIds.length > 0,
+    staleTime: 5 * 60 * 1000,
   });
 }
 

@@ -23,9 +23,11 @@ import { CreateListScreen } from '../screens/list/CreateListScreen';
 import { EditListScreen } from '../screens/list/EditListScreen';
 import { MatchDetailScreen } from '../screens/matches/MatchDetailScreen';
 import { WatchedByScreen } from '../screens/matches/WatchedByScreen';
+import { UserMatchReviewsScreen } from '../screens/matches/UserMatchReviewsScreen';
 import { CreateReviewScreen } from '../screens/review/CreateReviewScreen';
 import { ReviewDetailScreen } from '../screens/review/ReviewDetailScreen';
 import { NotificationSettingsScreen } from '../screens/settings/NotificationSettingsScreen';
+import { LeagueDetailScreen } from '../screens/league/LeagueDetailScreen';
 import { TeamDetailScreen } from '../screens/team/TeamDetailScreen';
 import { PersonDetailScreen } from '../screens/person/PersonDetailScreen';
 import { useTheme } from '../context/ThemeContext';
@@ -64,9 +66,11 @@ export function ProfileStack() {
       <Stack.Screen name="EditList" component={EditListScreen} />
       <Stack.Screen name="MatchDetail" component={MatchDetailScreen} />
       <Stack.Screen name="WatchedBy" component={WatchedByScreen} />
+      <Stack.Screen name="UserMatchReviews" component={UserMatchReviewsScreen} />
       <Stack.Screen name="CreateReview" component={CreateReviewScreen} />
       <Stack.Screen name="ReviewDetail" component={ReviewDetailScreen} />
       <Stack.Screen name="NotificationSettings" component={NotificationSettingsScreen} />
+      <Stack.Screen name="LeagueDetail" component={LeagueDetailScreen} />
       <Stack.Screen name="TeamDetail" component={TeamDetailScreen} />
       <Stack.Screen name="PersonDetail" component={PersonDetailScreen} />
     </Stack.Navigator>

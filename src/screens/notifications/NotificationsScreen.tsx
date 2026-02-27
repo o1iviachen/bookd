@@ -175,7 +175,9 @@ export function NotificationsScreen({ navigation }: any) {
                     {formatRelativeTime(item.createdAt)}
                   </Text>
                 </View>
-                <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+                {!item.isRead && (
+                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#00e054', marginLeft: spacing.sm }} />
+                )}
               </Pressable>
             );
           }}

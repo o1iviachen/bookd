@@ -57,16 +57,16 @@ export async function syncMatchDetails(fixtureIds: number[], force = false): Pro
 
 /**
  * Finds recently finished matches that are missing details and syncs them.
- * Checks the last 7 days to catch any matches missed by previous failed syncs.
+ * Checks the last 30 days to catch any matches missed by previous failed syncs.
  */
 export async function syncMissingDetails(): Promise<number> {
-  const sevenDaysAgo = new Date();
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
   const matchesSnapshot = await db
     .collection(COLLECTIONS.MATCHES)
     .where('status', '==', 'FINISHED')
-    .where('kickoff', '>=', sevenDaysAgo.toISOString())
+    .where('kickoff', '>=', thirtyDaysAgo.toISOString())
     .get();
 
   const fixtureIds: number[] = [];

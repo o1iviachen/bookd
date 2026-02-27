@@ -1,11 +1,11 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { View, Text, ScrollView, Pressable, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useTheme } from '../../context/ThemeContext';
 import { usePersonDetail } from '../../hooks/usePeople';
-import { useTeamMatches } from '../../hooks/useTeams';
+import { usePersonMatches } from '../../hooks/useTeams';
 import { MatchPosterCard } from '../../components/match/MatchPosterCard';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 
@@ -21,19 +21,15 @@ export function PersonDetailScreen({ route, navigation }: any) {
 
   const { data: person, isLoading: personLoading } = usePersonDetail(personId);
 
-  // Fetch matches from the person's current team as a proxy
-  const currentTeamId = person?.currentTeam?.id;
-  const { data: teamMatches, isLoading: matchesLoading } = useTeamMatches(currentTeamId || 0);
+  // Fetch matches where this person appeared in the lineup/bench/coaching staff
+  const { data: personMatches, isLoading: matchesLoading } = usePersonMatches(personId);
 
   const POSTER_GAP = spacing.sm;
   const COLUMNS = 3;
   const POSTER_WIDTH = (screenWidth - spacing.md * 2 - POSTER_GAP * (COLUMNS - 1)) / COLUMNS;
 
-  // Sort matches by date descending
-  const sortedMatches = useMemo(() => {
-    if (!teamMatches) return [];
-    return [...teamMatches].sort((a, b) => new Date(b.kickoff).getTime() - new Date(a.kickoff).getTime());
-  }, [teamMatches]);
+  // Already sorted by date descending from the query
+  const sortedMatches = (personMatches || []).map((a) => a.match);
 
   const positionLabel = (pos: string | null) => {
     if (!pos) return null;
@@ -137,20 +133,13 @@ export function PersonDetailScreen({ route, navigation }: any) {
 
         {/* Matches section */}
         <View style={{ padding: spacing.md }}>
-          {currentTeamId && sortedMatches.length > 0 && (
+          {sortedMatches.length > 0 && (
             <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: spacing.sm }}>
               {sectionTitle}
             </Text>
           )}
 
-          {!currentTeamId && !personLoading ? (
-            <View style={{ alignItems: 'center', paddingVertical: spacing.xxl }}>
-              <Ionicons name="football-outline" size={48} color={colors.textSecondary} />
-              <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.md }}>
-                No current team found
-              </Text>
-            </View>
-          ) : matchesLoading ? (
+          {matchesLoading ? (
             <View style={{ paddingVertical: spacing.xxl }}><LoadingSpinner fullScreen={false} /></View>
           ) : sortedMatches.length === 0 ? (
             <View style={{ alignItems: 'center', paddingVertical: spacing.xxl }}>

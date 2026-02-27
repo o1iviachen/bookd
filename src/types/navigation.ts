@@ -11,69 +11,59 @@ export type OnboardingStackParamList = {
   OnboardingMatches: undefined;
 };
 
-export type FeedStackParamList = {
+// Shared screen params used across multiple stacks
+type SharedDetailScreenParams = {
+  MatchDetail: { matchId: number };
+  MatchLists: { matchId: number };
+  WatchedBy: { matchId: number; initialTab?: 'everyone' | 'friends' };
+  UserMatchReviews: { matchId: number; userId: string; username: string };
+  ListDetail: { listId: string };
+  ReviewDetail: { reviewId: string };
+  UserProfile: { userId: string };
+  LeagueDetail: { competitionCode: string; competitionName: string; competitionEmblem: string; initialTab?: 'table' | 'fixtures' };
+  TeamDetail: { teamId: number; teamName: string; teamCrest: string };
+  PersonDetail: { personId: number; personName: string; role: 'player' | 'manager' };
+};
+
+type ProfileSubScreenParams = {
+  Games: { userId: string };
+  Diary: { userId: string };
+  Reviews: { userId: string };
+  MyLists: { userId: string };
+  Likes: { userId: string };
+  Tags: { userId: string };
+  TagMatches: { tag: string; userId?: string };
+};
+
+export type FeedStackParamList = SharedDetailScreenParams & ProfileSubScreenParams & {
   Feed: undefined;
-  MatchDetail: { matchId: number };
-  MatchLists: { matchId: number };
-  WatchedBy: { matchId: number; initialTab?: 'everyone' | 'friends' };
-  ListDetail: { listId: string };
   CreateReview: { matchId: number; reviewId?: string };
-  ReviewDetail: { reviewId: string };
-  UserProfile: { userId: string };
   FollowList: { userIds: string[]; title: string };
-  LeagueDetail: { competitionCode: string; competitionName: string; competitionEmblem: string };
-  TeamDetail: { teamId: number; teamName: string; teamCrest: string };
-  PersonDetail: { personId: number; personName: string; role: 'player' | 'manager' };
 };
 
-export type MatchesStackParamList = {
+export type MatchesStackParamList = SharedDetailScreenParams & ProfileSubScreenParams & {
   Matches: undefined;
-  MatchDetail: { matchId: number };
-  MatchLists: { matchId: number };
-  WatchedBy: { matchId: number; initialTab?: 'everyone' | 'friends' };
-  ListDetail: { listId: string };
   CreateReview: { matchId: number; reviewId?: string };
-  ReviewDetail: { reviewId: string };
-  UserProfile: { userId: string };
-  LeagueDetail: { competitionCode: string; competitionName: string; competitionEmblem: string };
-  TeamDetail: { teamId: number; teamName: string; teamCrest: string };
-  PersonDetail: { personId: number; personName: string; role: 'player' | 'manager' };
 };
 
-export type SearchStackParamList = {
+export type SearchStackParamList = SharedDetailScreenParams & ProfileSubScreenParams & {
   Search: undefined;
-  MatchDetail: { matchId: number };
-  MatchLists: { matchId: number };
-  WatchedBy: { matchId: number; initialTab?: 'everyone' | 'friends' };
-  ListDetail: { listId: string };
   CreateReview: { matchId: number; reviewId?: string };
-  UserProfile: { userId: string };
   FollowList: { userIds: string[]; title: string };
-  ReviewDetail: { reviewId: string };
   BrowseByDate: undefined;
   BrowsePopular: undefined;
   BrowseHighestRated: undefined;
   BrowseFeaturedLists: undefined;
   NewHere: undefined;
   FAQ: undefined;
-  TeamDetail: { teamId: number; teamName: string; teamCrest: string };
-  PersonDetail: { personId: number; personName: string; role: 'player' | 'manager' };
 };
 
-export type ActivityStackParamList = {
+export type ActivityStackParamList = SharedDetailScreenParams & ProfileSubScreenParams & {
   Activity: undefined;
-  UserProfile: { userId: string };
-  ReviewDetail: { reviewId: string };
   FollowList: { userIds: string[]; title: string };
-  MatchDetail: { matchId: number };
-  MatchLists: { matchId: number };
-  WatchedBy: { matchId: number; initialTab?: 'everyone' | 'friends' };
-  ListDetail: { listId: string };
-  TeamDetail: { teamId: number; teamName: string; teamCrest: string };
-  PersonDetail: { personId: number; personName: string; role: 'player' | 'manager' };
 };
 
-export type ProfileStackParamList = {
+export type ProfileStackParamList = SharedDetailScreenParams & {
   Profile: undefined;
   EditProfile: undefined;
   Settings: undefined;
@@ -82,25 +72,18 @@ export type ProfileStackParamList = {
   FavouriteMatches: undefined;
   FollowedTeams: undefined;
   FollowedLeagues: undefined;
-  Diary: undefined;
-  Games: undefined;
-  Reviews: undefined;
-  Likes: undefined;
-  MyLists: undefined;
-  Tags: undefined;
-  TagMatches: { tag: string };
+  Games: { userId?: string };
+  Diary: { userId?: string };
+  Reviews: { userId?: string };
+  Likes: { userId?: string };
+  MyLists: { userId?: string };
+  Tags: { userId?: string };
+  TagMatches: { tag: string; userId?: string };
   FollowList: { userIds: string[]; title: string };
-  UserProfile: { userId: string };
-  ListDetail: { listId: string };
   CreateList: undefined;
   EditList: { listId: string };
-  MatchDetail: { matchId: number };
-  WatchedBy: { matchId: number; initialTab?: 'everyone' | 'friends' };
   CreateReview: { matchId: number; reviewId?: string };
-  ReviewDetail: { reviewId: string };
   NotificationSettings: undefined;
-  TeamDetail: { teamId: number; teamName: string; teamCrest: string };
-  PersonDetail: { personId: number; personName: string; role: 'player' | 'manager' };
 };
 
 export type MainTabsParamList = {

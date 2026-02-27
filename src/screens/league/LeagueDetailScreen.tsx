@@ -12,6 +12,9 @@ import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { formatFullDate } from '../../utils/formatDate';
 import { Match } from '../../types/match';
 
+// Competitions that have knockout rounds
+const CUP_COMPETITIONS = new Set(['CL', 'EL', 'ECL', 'FAC', 'EFL', 'WC', 'EURO']);
+
 // Knockout stages in bracket order
 const KNOCKOUT_STAGES = [
   'PLAYOFF_ROUND_1',
@@ -58,8 +61,9 @@ type Tab = 'table' | 'fixtures' | 'knockout';
 export function LeagueDetailScreen({ route, navigation }: any) {
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
-  const { competitionCode, competitionName, competitionEmblem } = route.params;
-  const [activeTabIndex, setActiveTabIndex] = useState(0);
+  const { competitionCode, competitionName, competitionEmblem, initialTab } = route.params;
+  const defaultTabIndex = initialTab === 'fixtures' ? 1 : 0;
+  const [activeTabIndex, setActiveTabIndex] = useState(defaultTabIndex);
   const pagerRef = useRef<PagerView>(null);
 
   const { data: standings, isLoading: standingsLoading } = useQuery({
@@ -209,11 +213,12 @@ export function LeagueDetailScreen({ route, navigation }: any) {
     }
   }, [activeTabIndex]);
 
-  // Build tabs — always include knockout so PagerView has a stable child count
+  // Build tabs — only include knockout for cup competitions
+  const isCup = CUP_COMPETITIONS.has(competitionCode);
   const tabs: { key: Tab; label: string }[] = [
     { key: 'table', label: 'Table' },
     { key: 'fixtures', label: 'Fixtures' },
-    { key: 'knockout', label: 'Knockout' },
+    ...(isCup ? [{ key: 'knockout' as Tab, label: 'Knockout' }] : []),
   ];
 
   // Shared fixture row component
@@ -239,24 +244,32 @@ export function LeagueDetailScreen({ route, navigation }: any) {
         </Text>
       </View>
 
-      {/* Score / vs */}
+      {/* Score / vs / live */}
       <View style={{ alignItems: 'center', paddingHorizontal: spacing.md, minWidth: 60 }}>
-        {match.status === 'FINISHED' ? (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Text style={{
-              ...typography.bodyBold, fontSize: 16,
-              color: (match.homeScore ?? 0) > (match.awayScore ?? 0) ? colors.foreground : colors.textSecondary,
-            }}>
-              {match.homeScore}
-            </Text>
-            <Text style={{ ...typography.caption, color: colors.textSecondary }}>-</Text>
-            <Text style={{
-              ...typography.bodyBold, fontSize: 16,
-              color: (match.awayScore ?? 0) > (match.homeScore ?? 0) ? colors.foreground : colors.textSecondary,
-            }}>
-              {match.awayScore}
-            </Text>
-          </View>
+        {match.status === 'FINISHED' || match.status === 'IN_PLAY' || match.status === 'PAUSED' ? (
+          <>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={{
+                ...typography.bodyBold, fontSize: 16,
+                color: (match.status === 'IN_PLAY' || match.status === 'PAUSED') ? '#00e054' : (match.homeScore ?? 0) > (match.awayScore ?? 0) ? colors.foreground : colors.textSecondary,
+              }}>
+                {match.homeScore}
+              </Text>
+              <Text style={{ ...typography.caption, color: (match.status === 'IN_PLAY' || match.status === 'PAUSED') ? '#00e054' : colors.textSecondary }}>-</Text>
+              <Text style={{
+                ...typography.bodyBold, fontSize: 16,
+                color: (match.status === 'IN_PLAY' || match.status === 'PAUSED') ? '#00e054' : (match.awayScore ?? 0) > (match.homeScore ?? 0) ? colors.foreground : colors.textSecondary,
+              }}>
+                {match.awayScore}
+              </Text>
+            </View>
+            {(match.status === 'IN_PLAY' || match.status === 'PAUSED') && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 }}>
+                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#00e054' }} />
+                <Text style={{ fontSize: 10, fontWeight: '700', color: '#00e054' }}>LIVE</Text>
+              </View>
+            )}
+          </>
         ) : (
           <Text style={{ ...typography.caption, color: colors.textSecondary }}>vs</Text>
         )}
@@ -333,7 +346,7 @@ export function LeagueDetailScreen({ route, navigation }: any) {
       <PagerView
         ref={pagerRef}
         style={{ flex: 1 }}
-        initialPage={0}
+        initialPage={defaultTabIndex}
         onPageScroll={(e: any) => setActiveTabIndex(Math.round(e.nativeEvent.position + e.nativeEvent.offset))}
       >
         {/* ─── Table Tab ─── */}
@@ -456,8 +469,8 @@ export function LeagueDetailScreen({ route, navigation }: any) {
           )}
         </View>
 
-        {/* ─── Knockout Tab ─── */}
-        <View key="knockout" style={{ flex: 1 }}>
+        {/* ─── Knockout Tab (cups only) ─── */}
+        {isCup && <View key="knockout" style={{ flex: 1 }}>
           {fixturesLoading ? (
             <LoadingSpinner />
           ) : knockoutFixtures.length === 0 ? (
@@ -659,7 +672,7 @@ export function LeagueDetailScreen({ route, navigation }: any) {
               </ScrollView>
             );
           })()}
-        </View>
+        </View>}
       </PagerView>
     </SafeAreaView>
   );

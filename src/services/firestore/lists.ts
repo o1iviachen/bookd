@@ -238,17 +238,26 @@ export async function deleteList(listId: string): Promise<void> {
 }
 
 // Search lists by name, description, or username
+// Uses client-side filtering since Firestore has no text search.
+let _listsCacheData: MatchList[] | null = null;
+let _listsCacheTs = 0;
+const LISTS_CACHE_TTL = 3 * 60 * 1000; // 3 minutes
+
 export async function searchLists(queryStr: string): Promise<MatchList[]> {
-  if (queryStr.length < 2) return [];
-  const q = query(
-    collection(db, 'lists'),
-    orderBy('createdAt', 'desc'),
-    limit(100)
-  );
-  const snapshot = await getDocs(q);
+  if (queryStr.length < 3) return [];
+  // Fetch lists once & cache in-memory to avoid re-fetching on every keystroke
+  if (!_listsCacheData || Date.now() - _listsCacheTs > LISTS_CACHE_TTL) {
+    const q = query(
+      collection(db, 'lists'),
+      orderBy('createdAt', 'desc'),
+      limit(100)
+    );
+    const snapshot = await getDocs(q);
+    _listsCacheData = snapshot.docs.map(docToList);
+    _listsCacheTs = Date.now();
+  }
   const qLower = queryStr.toLowerCase();
-  return snapshot.docs
-    .map(docToList)
+  return _listsCacheData
     .filter((l) =>
       l.name.toLowerCase().includes(qLower) ||
       l.description.toLowerCase().includes(qLower) ||

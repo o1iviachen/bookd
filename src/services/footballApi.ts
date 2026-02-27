@@ -507,6 +507,101 @@ export async function getPersonDetail(personId: number): Promise<PersonDetail> {
   };
 }
 
+// Person's appearance info for a given match
+export interface PersonMatchAppearance {
+  match: Match;
+  role: 'starter' | 'sub' | 'coach';
+  subbedIn?: number;  // minute subbed in (if bench player came on)
+  goals: number;
+  yellowCard: boolean;
+  redCard: boolean;
+}
+
+// Fetch matches where a person appeared in the squad (lineup/bench/coach)
+// Uses the playerIds array-contains index on matchDetails
+export async function getMatchesForPerson(personId: number): Promise<PersonMatchAppearance[]> {
+  try {
+    // Query matchDetails where playerIds contains this person
+    const detailsSnap = await getDocs(query(
+      collection(db, MATCH_DETAILS),
+      where('playerIds', 'array-contains', personId),
+      limit(100)
+    ));
+
+    if (detailsSnap.empty) return [];
+
+    // Build role map from matchDetails docs
+    const roleMap = new Map<number, { role: 'starter' | 'sub' | 'coach'; subbedIn?: number; goals: number; yellowCard: boolean; redCard: boolean }>();
+    for (const d of detailsSnap.docs) {
+      const data = d.data();
+      const matchId = data.matchId as number;
+      if (!matchId) continue;
+
+      let role: 'starter' | 'sub' | 'coach' = 'sub';
+      let subbedIn: number | undefined;
+
+      // Check starting XI
+      const starters = [...(data.homeLineup || []), ...(data.awayLineup || [])];
+      if (starters.some((p: any) => p?.id === personId)) {
+        role = 'starter';
+      }
+      // Check bench
+      else if ([...(data.homeBench || []), ...(data.awayBench || [])].some((p: any) => p?.id === personId)) {
+        role = 'sub';
+        // Check if they actually came on
+        const subs = data.substitutions || [];
+        const sub = subs.find((s: any) => s?.playerIn?.id === personId);
+        if (sub) subbedIn = sub.minute;
+      }
+      // Check coach
+      else if (data.homeCoach?.id === personId || data.awayCoach?.id === personId) {
+        role = 'coach';
+      }
+
+      // Count goals and cards
+      let goals = 0;
+      let yellowCard = false;
+      let redCard = false;
+      for (const g of (data.goals || [])) {
+        if (g?.scorer?.id === personId) goals++;
+      }
+      for (const b of (data.bookings || [])) {
+        if (b?.player?.id === personId) {
+          if (b.card === 'YELLOW') yellowCard = true;
+          if (b.card === 'RED' || b.card === 'YELLOW_RED') redCard = true;
+        }
+      }
+
+      roleMap.set(matchId, { role, subbedIn, goals, yellowCard, redCard });
+    }
+
+    // Fetch parent match docs
+    const uniqueIds = [...roleMap.keys()];
+    const matches: Match[] = [];
+    for (let i = 0; i < uniqueIds.length; i += 30) {
+      const batch = uniqueIds.slice(i, i + 30);
+      const snap = await getDocs(query(
+        collection(db, MATCHES),
+        where('id', 'in', batch)
+      ));
+      for (const d of snap.docs) {
+        const data = d.data();
+        if (isValidMatch(data)) matches.push(docToMatch(data));
+      }
+    }
+
+    // Sort by date descending and build appearances
+    matches.sort((a, b) => new Date(b.kickoff).getTime() - new Date(a.kickoff).getTime());
+    return matches.map((match) => {
+      const info = roleMap.get(match.id) || { role: 'sub' as const, goals: 0, yellowCard: false, redCard: false };
+      return { match, ...info };
+    });
+  } catch (err) {
+    console.error('[getMatchesForPerson] query failed:', err);
+    return [];
+  }
+}
+
 // ─── Search ───
 
 export interface SearchableTeam {
@@ -602,42 +697,48 @@ export async function searchMatchesQuery(queryStr: string): Promise<Match[]> {
   try {
     if (queryStr.length < 2) return [];
 
-    // Step 1: Find matching teams from cached teams (fast in-memory lookup)
     const allTeams = await getCachedTeams();
-    const qLower = queryStr.toLowerCase();
-    const matchingTeamIds: number[] = [];
 
-    for (const t of allTeams) {
-      if (
-        t.name.toLowerCase().includes(qLower) ||
-        t.shortName.toLowerCase().includes(qLower)
-      ) {
-        matchingTeamIds.push(t.id);
+    // Split query into individual search terms (by space, comma, or dash)
+    const terms = queryStr.toLowerCase().split(/[\s,\-]+/).filter((t) => t.length >= 2);
+    if (terms.length === 0) return [];
+
+    // For each term, find matching team IDs
+    const teamIdSets: Set<number>[] = [];
+    const allMatchingIds = new Set<number>();
+
+    for (const term of terms) {
+      const ids = new Set<number>();
+      for (const t of allTeams) {
+        if (t.name.toLowerCase().includes(term) || t.shortName.toLowerCase().includes(term)) {
+          ids.add(t.id);
+          allMatchingIds.add(t.id);
+        }
       }
+      teamIdSets.push(ids);
     }
 
     // Cap at 30 teams (Firestore 'in' operator limit)
-    const teamIdsToQuery = matchingTeamIds.slice(0, 30);
-
+    const teamIdsToQuery = [...allMatchingIds].slice(0, 30);
     if (teamIdsToQuery.length === 0) return [];
 
-    // Step 2: Use 'in' queries — just 2 queries instead of 2 per team
+    // Fetch matches for all matched teams
     const snapshots = await Promise.all([
       getDocs(query(
         collection(db, MATCHES),
         where('homeTeam.id', 'in', teamIdsToQuery),
         orderBy('kickoff', 'desc'),
-        limit(50)
+        limit(80)
       )),
       getDocs(query(
         collection(db, MATCHES),
         where('awayTeam.id', 'in', teamIdsToQuery),
         orderBy('kickoff', 'desc'),
-        limit(50)
+        limit(80)
       )),
     ]);
 
-    // Step 3: Deduplicate and build match list
+    // Deduplicate and build match list
     const seen = new Set<string>();
     const allMatches: Match[] = [];
     for (const snap of snapshots) {
@@ -651,8 +752,21 @@ export async function searchMatchesQuery(queryStr: string): Promise<Match[]> {
       }
     }
 
-    // Sort: finished/live first, upcoming (locked) last; most recent first within each group
+    // Score each match by how many search terms it matches (via its teams)
+    const matchScores = new Map<number, number>();
+    for (const m of allMatches) {
+      let score = 0;
+      for (const termIds of teamIdSets) {
+        if (termIds.has(m.homeTeam.id) || termIds.has(m.awayTeam.id)) score++;
+      }
+      matchScores.set(m.id, score);
+    }
+
+    // Sort: most matched terms first, then finished/live before upcoming, then by date
     allMatches.sort((a, b) => {
+      const scoreA = matchScores.get(a.id) || 0;
+      const scoreB = matchScores.get(b.id) || 0;
+      if (scoreA !== scoreB) return scoreB - scoreA;
       const aLocked = a.status !== 'FINISHED' && a.status !== 'IN_PLAY' && a.status !== 'PAUSED';
       const bLocked = b.status !== 'FINISHED' && b.status !== 'IN_PLAY' && b.status !== 'PAUSED';
       if (aLocked !== bLocked) return aLocked ? 1 : -1;

@@ -44,13 +44,14 @@ interface LikedEntry {
   likedIndex: number;
 }
 
-export function LikesScreen({ navigation }: any) {
+export function LikesScreen({ route, navigation }: any) {
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography } = theme;
   const { user } = useAuth();
+  const targetUserId = route.params?.userId || user?.uid || '';
   const { width: screenWidth } = useWindowDimensions();
-  const { data: profile, isLoading: profileLoading } = useUserProfile(user?.uid || '');
-  const { data: reviews } = useReviewsForUser(user?.uid || '');
+  const { data: profile, isLoading: profileLoading } = useUserProfile(targetUserId);
+  const { data: reviews } = useReviewsForUser(targetUserId);
 
   const [activeTabIndex, setActiveTabIndex] = useState(0);
   const pagerRef = useRef<PagerView>(null);
@@ -164,10 +165,10 @@ export function LikesScreen({ navigation }: any) {
   }, [entries, allMatches, filters, sort]);
 
   // ─── Reviews tab data ───
-  const { data: likedReviews, isLoading: likedReviewsLoading } = useLikedReviews(user?.uid || '');
+  const { data: likedReviews, isLoading: likedReviewsLoading } = useLikedReviews(targetUserId);
 
   // ─── Lists tab data ───
-  const { data: likedLists, isLoading: likedListsLoading } = useLikedLists(user?.uid || '');
+  const { data: likedLists, isLoading: likedListsLoading } = useLikedLists(targetUserId);
 
   const isLoading = profileLoading || matchQueries.some((q) => q.isLoading);
   if (isLoading && entries.length === 0 && activeTabIndex === 0) return <LoadingSpinner />;
@@ -251,13 +252,14 @@ export function LikesScreen({ navigation }: any) {
             <ScrollView
               indicatorStyle={isDark ? 'white' : 'default'}
               nestedScrollEnabled
-              contentContainerStyle={{ paddingHorizontal: spacing.md, paddingBottom: spacing.xl }}
+              contentContainerStyle={{ paddingBottom: spacing.xl }}
             >
-              {likedReviews.map((review) => (
+              {likedReviews.map((review, i) => (
                 <ReviewCard
                   key={review.id}
                   review={review}
                   onPress={() => navigation.navigate('ReviewDetail', { reviewId: review.id })}
+                  isLast={i === likedReviews.length - 1}
                 />
               ))}
             </ScrollView>

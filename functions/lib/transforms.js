@@ -129,6 +129,7 @@ function parseStage(round) {
 }
 // ─── Fixture Details → MatchDetail Document ───
 function transformFixtureDetails(fixtureId, lineups, events, stats, fixture) {
+    var _a, _b, _c;
     const homeLineupData = lineups.find((l) => l.team.id === fixture.teams.home.id);
     const awayLineupData = lineups.find((l) => l.team.id === fixture.teams.away.id);
     const homeStatsData = stats.find((s) => s.team.id === fixture.teams.home.id);
@@ -203,8 +204,21 @@ function transformFixtureDetails(fixtureId, lineups, events, stats, fixture) {
         detail: e.detail,
         comments: e.comments,
     }));
+    // Collect all player/coach IDs for efficient per-player queries (array-contains)
+    const playerIds = [];
+    for (const arr of [homeLineupData === null || homeLineupData === void 0 ? void 0 : homeLineupData.startXI, homeLineupData === null || homeLineupData === void 0 ? void 0 : homeLineupData.substitutes, awayLineupData === null || awayLineupData === void 0 ? void 0 : awayLineupData.startXI, awayLineupData === null || awayLineupData === void 0 ? void 0 : awayLineupData.substitutes]) {
+        if (arr)
+            for (const p of arr)
+                if ((_a = p.player) === null || _a === void 0 ? void 0 : _a.id)
+                    playerIds.push(p.player.id);
+    }
+    if ((_b = homeLineupData === null || homeLineupData === void 0 ? void 0 : homeLineupData.coach) === null || _b === void 0 ? void 0 : _b.id)
+        playerIds.push(homeLineupData.coach.id);
+    if ((_c = awayLineupData === null || awayLineupData === void 0 ? void 0 : awayLineupData.coach) === null || _c === void 0 ? void 0 : _c.id)
+        playerIds.push(awayLineupData.coach.id);
     return {
         matchId: fixtureId,
+        playerIds,
         homeLineup: homeLineupData ? mapPlayers(homeLineupData.startXI) : [],
         homeBench: homeLineupData ? mapPlayers(homeLineupData.substitutes) : [],
         awayLineup: awayLineupData ? mapPlayers(awayLineupData.startXI) : [],

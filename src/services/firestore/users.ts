@@ -76,6 +76,22 @@ export async function getUserProfile(uid: string): Promise<User | null> {
   return docToUser(snapshot);
 }
 
+// Batch fetch favourite team IDs for a list of user IDs (used for fan detection in ratings)
+export async function getFollowedTeamIdsForUsers(userIds: string[]): Promise<Map<string, string[]>> {
+  const result = new Map<string, string[]>();
+  if (userIds.length === 0) return result;
+  const unique = [...new Set(userIds)];
+  const promises = unique.map(async (uid) => {
+    const snap = await getDoc(doc(db, 'users', uid));
+    if (snap.exists()) {
+      const data = snap.data();
+      result.set(uid, (data.followedTeamIds || []).map(String));
+    }
+  });
+  await Promise.all(promises);
+  return result;
+}
+
 export async function updateUserProfile(
   uid: string,
   updates: Partial<Pick<User, 'username' | 'displayName' | 'bio' | 'location' | 'website' | 'avatar' | 'favoriteTeams' | 'clubAffiliations' | 'followedLeagues' | 'followedTeamIds' | 'favoriteMatchIds' | 'watchedMatchIds' | 'likedMatchIds' | 'customTags'>>
@@ -147,14 +163,18 @@ export async function followUser(
   await updateDoc(targetRef, { followers: arrayUnion(currentUserId) });
 
   if (senderInfo) {
-    const { createNotification } = await import('./notifications');
-    await createNotification({
-      recipientId: targetUserId,
-      senderId: currentUserId,
-      senderUsername: senderInfo.username,
-      senderAvatar: senderInfo.avatar,
-      type: 'follow',
-    });
+    try {
+      const { createNotification } = await import('./notifications');
+      await createNotification({
+        recipientId: targetUserId,
+        senderId: currentUserId,
+        senderUsername: senderInfo.username,
+        senderAvatar: senderInfo.avatar,
+        type: 'follow',
+      });
+    } catch {
+      // Notification is best-effort; don't let it break the follow action
+    }
   }
 }
 

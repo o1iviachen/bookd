@@ -73,8 +73,6 @@ export function ProfileScreen() {
     const userReviewsForMatch = allUserReviews.filter((r) => r.matchId === matchId);
     if (userReviewsForMatch.length === 1) {
       navigation.navigate('ReviewDetail', { reviewId: userReviewsForMatch[0].id });
-    } else if (userReviewsForMatch.length > 1) {
-      navigation.navigate('MatchDetail', { matchId });
     } else {
       navigation.navigate('MatchDetail', { matchId });
     }
@@ -230,7 +228,7 @@ export function ProfileScreen() {
         {/* Recent Activity */}
         {recentReviews.length > 0 && (
           <View style={{ paddingHorizontal: HORIZONTAL_PADDING, paddingVertical: spacing.md, backgroundColor: `${colors.accent}30`, borderBottomWidth: 1, borderColor: colors.border }}>
-            <Pressable onPress={() => navigation.navigate('Diary')} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm }}>
+            <Pressable onPress={() => navigation.navigate('Diary', {})} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm }}>
               <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1 }}>
                 Recent Activity
               </Text>
@@ -312,12 +310,12 @@ export function ProfileScreen() {
               <Pressable
                 key={link.label}
                 onPress={() => {
-                  if (link.label === 'Games') navigation.navigate('Games');
-                  else if (link.label === 'Diary') navigation.navigate('Diary');
-                  else if (link.label === 'Reviews') navigation.navigate('Reviews');
-                  else if (link.label === 'Lists') navigation.navigate('MyLists');
-                  else if (link.label === 'Likes') navigation.navigate('Likes');
-                  else if (link.label === 'Tags') navigation.navigate('Tags');
+                  if (link.label === 'Games') navigation.navigate('Games', {});
+                  else if (link.label === 'Diary') navigation.navigate('Diary', {});
+                  else if (link.label === 'Reviews') navigation.navigate('Reviews', {});
+                  else if (link.label === 'Lists') navigation.navigate('MyLists', {});
+                  else if (link.label === 'Likes') navigation.navigate('Likes', {});
+                  else if (link.label === 'Tags') navigation.navigate('Tags', {});
                 }}
                 style={({ pressed }) => ({
                   flexDirection: 'row',

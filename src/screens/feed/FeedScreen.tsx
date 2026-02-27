@@ -77,10 +77,17 @@ export function FeedScreen() {
     return matches.filter((m) => followedLeagues.includes(m.competition.code));
   }, [matches, followedLeagues]);
 
-  // Popular this week — finished matches from followed leagues
-  const popularMatches = followedMatches
-    .filter((m) => m.status === 'FINISHED')
-    .slice(0, 8);
+  // Popular this week — finished matches sorted by number of logs (reviews)
+  const popularMatches = useMemo(() => {
+    const finished = followedMatches.filter((m) => m.status === 'FINISHED');
+    const logMap = new Map<number, number>();
+    if (reviews) {
+      for (const r of reviews) logMap.set(r.matchId, (logMap.get(r.matchId) || 0) + 1);
+    }
+    return [...finished]
+      .sort((a, b) => (logMap.get(b.id) || 0) - (logMap.get(a.id) || 0))
+      .slice(0, 8);
+  }, [followedMatches, reviews]);
 
   // New from friends — reviews from users the current user follows
   const friendReviews = !reviews || !profile?.following?.length
@@ -292,6 +299,7 @@ export function FeedScreen() {
                               competitionCode: sample.competition.code,
                               competitionName: sample.competition.name,
                               competitionEmblem: sample.competition.emblem,
+                              initialTab: 'fixtures',
                             });
                           }
                         }}
@@ -322,8 +330,8 @@ export function FeedScreen() {
             {(() => {
               const friendsOnly = (reviews || []).filter((r) => r.userId !== user?.uid);
               return (
-                <View style={{ paddingHorizontal: spacing.md }}>
-                  <Text style={{ ...typography.h4, color: colors.foreground, marginTop: spacing.md, marginBottom: spacing.md }}>
+                <View>
+                  <Text style={{ ...typography.h4, color: colors.foreground, marginTop: spacing.sm, marginBottom: spacing.sm, paddingHorizontal: spacing.md }}>
                     New from friends
                   </Text>
                   {reviewsLoading ? (
@@ -336,11 +344,12 @@ export function FeedScreen() {
                       </Text>
                     </View>
                   ) : (
-                    friendsOnly.map((review) => (
+                    friendsOnly.map((review, i) => (
                       <ReviewCard
                         key={review.id}
                         review={review}
                         onPress={() => navigation.navigate('ReviewDetail', { reviewId: review.id })}
+                        isLast={i === friendsOnly.length - 1}
                       />
                     ))
                   )}
@@ -359,7 +368,7 @@ export function FeedScreen() {
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#fff" colors={['#fff']} />}
           >
             <View>
-              <Text style={{ ...typography.h4, color: colors.foreground, marginTop: spacing.md, marginBottom: spacing.md, paddingHorizontal: spacing.md }}>
+              <Text style={{ ...typography.h4, color: colors.foreground, marginTop: spacing.sm, marginBottom: spacing.sm, paddingHorizontal: spacing.md }}>
                 Popular lists
               </Text>
               {listsLoading ? (

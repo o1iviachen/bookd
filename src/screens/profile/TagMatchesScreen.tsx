@@ -1,7 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, FlatList, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import { useQueries } from '@tanstack/react-query';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
@@ -38,12 +37,13 @@ interface TagMatchEntry {
 }
 
 export function TagMatchesScreen({ route, navigation }: any) {
-  const { tag } = route.params as { tag: string };
+  const { tag, userId } = route.params as { tag: string; userId?: string };
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography } = theme;
   const { user } = useAuth();
+  const targetUserId = userId || user?.uid || '';
   const { width: screenWidth } = useWindowDimensions();
-  const { data: reviews, isLoading } = useReviewsForUser(user?.uid || '');
+  const { data: reviews, isLoading } = useReviewsForUser(targetUserId);
 
   // Get unique match IDs that have this tag
   const matchIds = useMemo(() => {

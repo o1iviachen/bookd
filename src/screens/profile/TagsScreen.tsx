@@ -14,11 +14,12 @@ interface TagEntry {
   count: number;
 }
 
-export function TagsScreen({ navigation }: any) {
+export function TagsScreen({ route, navigation }: any) {
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
   const { user } = useAuth();
-  const { data: reviews, isLoading } = useReviewsForUser(user?.uid || '');
+  const targetUserId = route.params?.userId || user?.uid || '';
+  const { data: reviews, isLoading } = useReviewsForUser(targetUserId);
 
   const tags: TagEntry[] = useMemo(() => {
     if (!reviews) return [];
@@ -52,7 +53,7 @@ export function TagsScreen({ navigation }: any) {
           contentContainerStyle={{ paddingHorizontal: spacing.md, paddingVertical: spacing.sm }}
           renderItem={({ item }) => (
             <Pressable
-              onPress={() => navigation.navigate('TagMatches', { tag: item.tag })}
+              onPress={() => navigation.navigate('TagMatches', { tag: item.tag, userId: targetUserId })}
               style={({ pressed }) => ({
                 flexDirection: 'row',
                 alignItems: 'center',

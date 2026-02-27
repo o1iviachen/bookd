@@ -172,7 +172,7 @@ export function MatchesScreen() {
             <ScrollView indicatorStyle={isDark ? 'white' : 'default'}
               style={{ flex: 1 }}
               nestedScrollEnabled
-              contentContainerStyle={{ paddingBottom: 100, paddingTop: spacing.sm }}
+              contentContainerStyle={{ paddingBottom: 40, paddingTop: spacing.sm }}
               refreshControl={
                 <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#fff" colors={['#fff']} />
               }

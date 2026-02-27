@@ -44,6 +44,8 @@ export function MatchPosterCard({ match, onPress, width: widthProp, compact }: M
         shadowOpacity: 0.3,
         shadowRadius: 6,
         elevation: 6,
+        borderWidth: isLive ? 1.5 : 0,
+        borderColor: isLive ? '#00e054' : 'transparent',
       })}
     >
       {/* Team kit color gradient background */}

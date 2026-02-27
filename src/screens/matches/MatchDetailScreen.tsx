@@ -13,7 +13,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useMatch, useMatchDetail } from '../../hooks/useMatches';
 import { useReviewsForMatch } from '../../hooks/useReviews';
 import { useCommentsForReview } from '../../hooks/useComments';
-import { useUserProfile } from '../../hooks/useUser';
+import { useUserProfile, useReviewerTeamIds } from '../../hooks/useUser';
 import { getUserProfile } from '../../services/firestore/users';
 import { useListsForMatch } from '../../hooks/useLists';
 import { TeamLogo } from '../../components/match/TeamLogo';
@@ -68,6 +68,10 @@ export function MatchDetailScreen({ route, navigation }: Props) {
   const { data: profile } = useUserProfile(user?.uid || '');
   const { data: matchLists } = useListsForMatch(matchId);
   const { data: matchDetail } = useMatchDetail(matchId);
+
+  // Fetch reviewer team affiliations for ratings filter
+  const reviewerUserIds = useMemo(() => (reviews || []).map((r) => r.userId), [reviews]);
+  const { data: reviewerTeamMap } = useReviewerTeamIds(reviewerUserIds);
 
   if (isLoading || !match) {
     return <LoadingSpinner />;
@@ -321,7 +325,7 @@ export function MatchDetailScreen({ route, navigation }: Props) {
                   onPress={() => navigation.navigate('WatchedBy', { matchId })}
                   style={{ flex: 1, backgroundColor: colors.primary, borderRadius: borderRadius.md, padding: spacing.md, alignItems: 'center' }}
                 >
-                  <Text style={{ fontSize: 24, fontWeight: '700', color: '#14181c' }}>{reviews.length}</Text>
+                  <Text style={{ fontSize: 24, fontWeight: '700', color: '#14181c' }}>{new Set(reviews.map((r: any) => r.userId)).size}</Text>
                   <Text style={{ fontSize: 11, color: '#14181c', fontWeight: '500' }}>Watched</Text>
                 </Pressable>
                 <Pressable
@@ -336,7 +340,15 @@ export function MatchDetailScreen({ route, navigation }: Props) {
 
             {/* Rating distribution bar chart */}
             {isFinished && reviews && reviews.length > 0 && (
-              <RatingChart reviews={reviews} showStats />
+              <RatingChart
+                reviews={reviews}
+                showStats
+                homeTeamId={match.homeTeam.id}
+                awayTeamId={match.awayTeam.id}
+                homeTeamName={match.homeTeam.shortName}
+                awayTeamName={match.awayTeam.shortName}
+                reviewerTeamMap={reviewerTeamMap}
+              />
             )}
 
             {/* Locked state for non-finished matches */}
@@ -453,20 +465,22 @@ function WatchedByFriends({ reviews, matchId, following, colors, spacing, typogr
   typography: any;
   navigation: any;
 }) {
-  // Get friend reviews (deduplicate by userId, keep latest)
-  const friendReviews = useMemo(() => {
-    const map = new Map<string, any>();
+  // Get friend reviews grouped by userId (latest review per user + aggregated data)
+  const { friendLatest, friendAllByUser } = useMemo(() => {
+    const latestMap = new Map<string, any>();
+    const allMap = new Map<string, any[]>();
     const sorted = [...reviews].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
     for (const r of sorted) {
-      if (following.includes(r.userId) && !map.has(r.userId)) {
-        map.set(r.userId, r);
-      }
+      if (!following.includes(r.userId)) continue;
+      if (!latestMap.has(r.userId)) latestMap.set(r.userId, r);
+      if (!allMap.has(r.userId)) allMap.set(r.userId, []);
+      allMap.get(r.userId)!.push(r);
     }
-    return Array.from(map.values());
+    return { friendLatest: Array.from(latestMap.values()), friendAllByUser: allMap };
   }, [reviews, following]);
 
   // Fetch profiles for friend watchers
-  const friendIds = useMemo(() => friendReviews.map((r) => r.userId), [friendReviews]);
+  const friendIds = useMemo(() => friendLatest.map((r) => r.userId), [friendLatest]);
   const profileQueries = useQueries({
     queries: friendIds.map((uid) => ({
       queryKey: ['user', uid],
@@ -477,28 +491,30 @@ function WatchedByFriends({ reviews, matchId, following, colors, spacing, typogr
   });
 
   const friendWatchers = useMemo(() => {
-    const entries: { userId: string; profile: User; rating: number; hasText: boolean; likedMatch: boolean; reviewId: string }[] = [];
+    const entries: { userId: string; profile: User; rating: number; hasText: boolean; likedMatch: boolean; username: string }[] = [];
     profileQueries.forEach((q) => {
       if (!q.data) return;
       const p = q.data;
-      const review = friendReviews.find((r) => r.userId === p.id);
-      if (!review) return;
+      const latestReview = friendLatest.find((r) => r.userId === p.id);
+      if (!latestReview) return;
+      const allUserReviews = friendAllByUser.get(p.id) || [];
+      const hasAnyText = allUserReviews.some((r: any) => (r.text?.trim().length || 0) > 0);
       entries.push({
         userId: p.id,
         profile: p,
-        rating: review.rating,
-        hasText: (review.text?.trim().length || 0) > 0,
+        rating: latestReview.rating,
+        hasText: hasAnyText,
         likedMatch: p.likedMatchIds?.some((id: number) => String(id) === String(matchId)) || false,
-        reviewId: review.id,
+        username: p.displayName || p.username,
       });
     });
     return entries;
-  }, [profileQueries, friendReviews, matchId]);
+  }, [profileQueries, friendLatest, friendAllByUser, matchId]);
 
   if (friendWatchers.length === 0) return null;
 
   return (
-    <View style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.md, backgroundColor: `${colors.accent}30`, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.border }}>
+    <View style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.md, backgroundColor: `${colors.accent}30`, borderBottomWidth: 1, borderColor: colors.border }}>
       {/* Header */}
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm }}>
         <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1 }}>
@@ -517,11 +533,7 @@ function WatchedByFriends({ reviews, matchId, following, colors, spacing, typogr
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.md }}>
         {friendWatchers.map((w) => {
           const handlePress = () => {
-            if (w.rating > 0) {
-              navigation.navigate('ReviewDetail', { reviewId: w.reviewId });
-            } else {
-              navigation.navigate('UserProfile', { userId: w.userId });
-            }
+            navigation.navigate('UserMatchReviews', { matchId, userId: w.userId, username: w.username });
           };
 
           return (
@@ -554,10 +566,10 @@ function WatchedByFriends({ reviews, matchId, following, colors, spacing, typogr
 type ReviewFilter = 'everyone' | 'friends' | 'you';
 type ReviewSort = 'recent' | 'popular' | 'highest' | 'lowest';
 
-function ReviewCardWithComments({ review, onPress }: { review: any; onPress: () => void }) {
+function ReviewCardWithComments({ review, onPress, isLast }: { review: any; onPress: () => void; isLast?: boolean }) {
   const { data: comments } = useCommentsForReview(review.id);
   const commentCount = comments?.length || 0;
-  return <ReviewCard review={review} onPress={onPress} commentCount={commentCount} />;
+  return <ReviewCard review={review} onPress={onPress} commentCount={commentCount} isLast={isLast} />;
 }
 
 function ReviewsSection({ reviews, userId, profile, colors, spacing, typography, borderRadius, navigation }: any) {
@@ -601,14 +613,14 @@ function ReviewsSection({ reviews, userId, profile, colors, spacing, typography,
   ];
 
   return (
-    <View style={{ marginTop: spacing.lg, paddingHorizontal: spacing.md }}>
+    <View style={{ marginTop: spacing.lg }}>
       {/* Header */}
-      <Text style={{ ...typography.h4, color: colors.foreground, marginBottom: spacing.sm }}>
+      <Text style={{ ...typography.h4, color: colors.foreground, marginBottom: spacing.sm, paddingHorizontal: spacing.md }}>
         Reviews {reviews.length > 0 ? `(${reviews.length})` : ''}
       </Text>
 
       {/* Filter tabs + Sort dropdown row */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md, paddingHorizontal: spacing.md }}>
         <View style={{ flexDirection: 'row', gap: spacing.xs }}>
           {filterTabs.map((tab) => (
             <Pressable
@@ -646,11 +658,12 @@ function ReviewsSection({ reviews, userId, profile, colors, spacing, typography,
           </Text>
         </View>
       ) : (
-        filteredReviews.map((review: any) => (
+        filteredReviews.map((review: any, i: number) => (
           <ReviewCardWithComments
             key={review.id}
             review={review}
             onPress={() => navigation.navigate('ReviewDetail', { reviewId: review.id })}
+            isLast={i === filteredReviews.length - 1}
           />
         ))
       )}

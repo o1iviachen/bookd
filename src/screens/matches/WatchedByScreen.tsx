@@ -26,7 +26,7 @@ interface WatcherEntry {
   rating: number;
   hasText: boolean;
   likedMatch: boolean;
-  reviewId: string | null;
+  username: string;
 }
 
 export function WatchedByScreen({ route, navigation }: any) {
@@ -52,19 +52,21 @@ export function WatchedByScreen({ route, navigation }: any) {
   }, []);
 
 
-  // Get unique user IDs from reviews (deduplicate - use latest review per user)
-  const userReviewMap = useMemo(() => {
-    const map = new Map<string, Review>();
-    if (!reviews) return map;
-    // Sort by date desc so first encountered is the latest
+  // Get unique user IDs from reviews (deduplicate - use latest review per user, track all for hasText)
+  const { userLatestMap, userAllMap } = useMemo(() => {
+    const latestMap = new Map<string, Review>();
+    const allMap = new Map<string, Review[]>();
+    if (!reviews) return { userLatestMap: latestMap, userAllMap: allMap };
     const sorted = [...reviews].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
     for (const r of sorted) {
-      if (!map.has(r.userId)) map.set(r.userId, r);
+      if (!latestMap.has(r.userId)) latestMap.set(r.userId, r);
+      if (!allMap.has(r.userId)) allMap.set(r.userId, []);
+      allMap.get(r.userId)!.push(r);
     }
-    return map;
+    return { userLatestMap: latestMap, userAllMap: allMap };
   }, [reviews]);
 
-  const uniqueUserIds = useMemo(() => Array.from(userReviewMap.keys()), [userReviewMap]);
+  const uniqueUserIds = useMemo(() => Array.from(userLatestMap.keys()), [userLatestMap]);
 
   // Fetch profiles for all watchers
   const profileQueries = useQueries({
@@ -81,19 +83,21 @@ export function WatchedByScreen({ route, navigation }: any) {
     profileQueries.forEach((q) => {
       if (!q.data) return;
       const profile = q.data;
-      const review = userReviewMap.get(profile.id);
-      if (!review) return;
+      const latestReview = userLatestMap.get(profile.id);
+      if (!latestReview) return;
+      const allUserReviews = userAllMap.get(profile.id) || [];
+      const hasAnyText = allUserReviews.some((r) => (r.text?.trim().length || 0) > 0);
       entries.push({
         userId: profile.id,
         profile,
-        rating: review.rating,
-        hasText: (review.text?.trim().length || 0) > 0,
+        rating: latestReview.rating,
+        hasText: hasAnyText,
         likedMatch: profile.likedMatchIds?.some((id) => String(id) === String(matchId)) || false,
-        reviewId: review.id,
+        username: profile.displayName || profile.username,
       });
     });
     return entries;
-  }, [profileQueries, userReviewMap, matchId]);
+  }, [profileQueries, userLatestMap, userAllMap, matchId]);
 
   const following = myProfile?.following || [];
 
@@ -136,11 +140,7 @@ export function WatchedByScreen({ route, navigation }: any) {
                   contentContainerStyle={{ paddingBottom: spacing.xl }}
                   renderItem={({ item }) => {
                     const handlePress = () => {
-                      if (item.reviewId && item.rating > 0) {
-                        navigation.navigate('ReviewDetail', { reviewId: item.reviewId });
-                      } else {
-                        navigation.navigate('UserProfile', { userId: item.userId });
-                      }
+                      navigation.navigate('UserMatchReviews', { matchId, userId: item.userId, username: item.username });
                     };
 
                     return (

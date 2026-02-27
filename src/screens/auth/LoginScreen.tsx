@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, KeyboardAvoidingView, Platform, ScrollView, Dimensions, Pressable, Keyboard } from 'react-native';
+import { View, Text, KeyboardAvoidingView, Platform, ScrollView, Dimensions, Pressable, Keyboard, TextInput as RNTextInput } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -20,6 +20,7 @@ export function LoginScreen({ navigation }: Props) {
   const { colors, spacing, typography } = theme;
 
   const scrollRef = useRef<ScrollView>(null);
+  const passwordRef = useRef<RNTextInput>(null);
 
   useEffect(() => {
     const event = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
@@ -129,13 +130,19 @@ export function LoginScreen({ navigation }: Props) {
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"
+            returnKeyType="next"
+            onSubmitEditing={() => passwordRef.current?.focus()}
+            blurOnSubmit={false}
           />
           <TextInput
+            ref={passwordRef}
             label="Password"
             placeholder="Your password"
             value={password}
             onChangeText={setPassword}
             secureTextEntry
+            returnKeyType="go"
+            onSubmitEditing={handleLogin}
           />
 
           <Button

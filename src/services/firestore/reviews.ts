@@ -231,18 +231,27 @@ export async function deleteReview(reviewId: string): Promise<void> {
 }
 
 // Search reviews by text content, username, or matchLabel
+// Uses client-side filtering since Firestore has no text search.
+// Cached via React Query staleTime so repeated queries are instant.
+let _reviewsCacheData: Review[] | null = null;
+let _reviewsCacheTs = 0;
+const REVIEWS_CACHE_TTL = 3 * 60 * 1000; // 3 minutes
+
 export async function searchReviews(queryStr: string): Promise<Review[]> {
-  if (queryStr.length < 2) return [];
-  // Fetch recent reviews and filter client-side (Firestore has no text search)
-  const q = query(
-    collection(db, 'reviews'),
-    orderBy('createdAt', 'desc'),
-    limit(100)
-  );
-  const snapshot = await getDocs(q);
+  if (queryStr.length < 3) return [];
+  // Fetch recent reviews once & cache in-memory to avoid re-fetching on every keystroke
+  if (!_reviewsCacheData || Date.now() - _reviewsCacheTs > REVIEWS_CACHE_TTL) {
+    const q = query(
+      collection(db, 'reviews'),
+      orderBy('createdAt', 'desc'),
+      limit(100)
+    );
+    const snapshot = await getDocs(q);
+    _reviewsCacheData = snapshot.docs.map((d) => docToReview(d));
+    _reviewsCacheTs = Date.now();
+  }
   const qLower = queryStr.toLowerCase();
-  return snapshot.docs
-    .map((d) => docToReview(d))
+  return _reviewsCacheData
     .filter((r) =>
       r.text.toLowerCase().includes(qLower) ||
       r.username.toLowerCase().includes(qLower) ||

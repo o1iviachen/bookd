@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import {
   getReviewsForMatch,
   getReviewsForUser,
@@ -112,7 +112,26 @@ export function useVoteOnReview() {
   return useMutation({
     mutationFn: (params: { reviewId: string; userId: string; voteType: 'up' | 'down'; senderInfo?: { username: string; avatar: string | null } }) =>
       voteOnReview(params.reviewId, params.userId, params.voteType, params.senderInfo),
-    onSuccess: () => {
+    onMutate: async (params) => {
+      // Optimistically update the review vote state in all cached review lists
+      await queryClient.cancelQueries({ queryKey: ['reviews'] });
+      const isToggle = params.voteType === 'up';
+      queryClient.setQueriesData<any[]>({ queryKey: ['reviews'] }, (old) => {
+        if (!old) return old;
+        return old.map((r: any) => {
+          if (r.id !== params.reviewId) return r;
+          const wasVoted = r.userVote === params.voteType;
+          return {
+            ...r,
+            userVote: wasVoted ? null : params.voteType,
+            upvotes: isToggle
+              ? wasVoted ? Math.max(0, (r.upvotes || 0) - 1) : (r.upvotes || 0) + 1
+              : r.upvotes,
+          };
+        });
+      });
+    },
+    onError: () => {
       queryClient.invalidateQueries({ queryKey: ['reviews'] });
       queryClient.invalidateQueries({ queryKey: ['review'] });
     },
@@ -162,7 +181,8 @@ export function useSearchReviews(queryStr: string, active = true) {
   return useQuery({
     queryKey: ['searchReviews', queryStr],
     queryFn: () => searchReviews(queryStr),
-    enabled: queryStr.length >= 2 && active,
+    enabled: queryStr.length >= 3 && active,
     staleTime: 2 * 60 * 1000,
+    placeholderData: keepPreviousData,
   });
 }

@@ -76,5 +76,6 @@ export function useSearchMatches(queryStr: string, active = true) {
     queryFn: () => searchMatchesQuery(queryStr),
     enabled: queryStr.length >= 2 && active,
     staleTime: 2 * 60 * 1000,
+    placeholderData: keepPreviousData,
   });
 }

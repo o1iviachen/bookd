@@ -191,8 +191,9 @@ export function useSearchLists(queryStr: string, active = true) {
   return useQuery({
     queryKey: ['searchLists', queryStr],
     queryFn: () => searchLists(queryStr),
-    enabled: queryStr.length >= 2 && active,
+    enabled: queryStr.length >= 3 && active,
     staleTime: 2 * 60 * 1000,
+    placeholderData: keepPreviousData,
   });
 }
 

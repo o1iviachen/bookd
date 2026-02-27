@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.migratePlayerNames = exports.enrichPlayers = exports.enrichTeams = exports.buildPlayers = exports.syncAllDetails = exports.syncDetailsForLeague = exports.manualSync = exports.buildTeams = exports.backfill = exports.liveSync = exports.dailySync = void 0;
+exports.backfillPlayerIds = exports.migratePlayerNames = exports.enrichPlayers = exports.enrichTeams = exports.buildPlayers = exports.syncAllDetails = exports.syncDetailsForLeague = exports.manualSync = exports.buildTeams = exports.backfill = exports.liveSync = exports.dailySync = void 0;
 const functions = __importStar(require("firebase-functions"));
 const admin = __importStar(require("firebase-admin"));
 admin.initializeApp();
@@ -304,6 +304,65 @@ exports.migratePlayerNames = functions
     }
     catch (err) {
         console.error('[migratePlayerNames] Error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+/**
+ * Backfill playerIds into existing matchDetails documents.
+ * Reads lineup/bench/coach data already stored in each doc and writes
+ * the playerIds array so array-contains queries work.
+ *   GET /backfillPlayerIds?limit=500
+ */
+exports.backfillPlayerIds = functions
+    .runWith({ timeoutSeconds: 540, memory: '512MB' })
+    .https.onRequest(async (req, res) => {
+    var _a, _b;
+    const batchLimit = req.query.limit ? parseInt(req.query.limit, 10) : 500;
+    try {
+        const db = admin.firestore();
+        // Find matchDetails that don't have playerIds yet
+        const snapshot = await db.collection('matchDetails').limit(batchLimit).get();
+        let updated = 0;
+        let skipped = 0;
+        const batch = db.batch();
+        for (const doc of snapshot.docs) {
+            const data = doc.data();
+            // Skip if already has playerIds
+            if (data.playerIds && Array.isArray(data.playerIds) && data.playerIds.length > 0) {
+                skipped++;
+                continue;
+            }
+            // Extract player IDs from lineup data
+            const playerIds = [];
+            for (const arr of [data.homeLineup, data.homeBench, data.awayLineup, data.awayBench]) {
+                if (Array.isArray(arr)) {
+                    for (const p of arr) {
+                        if (p === null || p === void 0 ? void 0 : p.id)
+                            playerIds.push(p.id);
+                    }
+                }
+            }
+            if ((_a = data.homeCoach) === null || _a === void 0 ? void 0 : _a.id)
+                playerIds.push(data.homeCoach.id);
+            if ((_b = data.awayCoach) === null || _b === void 0 ? void 0 : _b.id)
+                playerIds.push(data.awayCoach.id);
+            if (playerIds.length > 0) {
+                batch.update(doc.ref, { playerIds });
+                updated++;
+            }
+        }
+        if (updated > 0)
+            await batch.commit();
+        res.json({
+            success: true,
+            total: snapshot.size,
+            updated,
+            skipped,
+            message: updated > 0 ? `Updated ${updated} docs. Run again if more remain.` : 'All docs already have playerIds.',
+        });
+    }
+    catch (err) {
+        console.error('[backfillPlayerIds] Error:', err);
         res.status(500).json({ error: err.message });
     }
 });

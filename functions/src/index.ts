@@ -297,6 +297,67 @@ export const migratePlayerNames = functions
     }
   });
 
+/**
+ * Backfill playerIds into existing matchDetails documents.
+ * Reads lineup/bench/coach data already stored in each doc and writes
+ * the playerIds array so array-contains queries work.
+ *   GET /backfillPlayerIds?limit=500
+ */
+export const backfillPlayerIds = functions
+  .runWith({ timeoutSeconds: 540, memory: '512MB' })
+  .https.onRequest(async (req, res) => {
+    const batchLimit = req.query.limit ? parseInt(req.query.limit as string, 10) : 500;
+    try {
+      const db = admin.firestore();
+      // Find matchDetails that don't have playerIds yet
+      const snapshot = await db.collection('matchDetails').limit(batchLimit).get();
+
+      let updated = 0;
+      let skipped = 0;
+      const batch = db.batch();
+
+      for (const doc of snapshot.docs) {
+        const data = doc.data();
+
+        // Skip if already has playerIds
+        if (data.playerIds && Array.isArray(data.playerIds) && data.playerIds.length > 0) {
+          skipped++;
+          continue;
+        }
+
+        // Extract player IDs from lineup data
+        const playerIds: number[] = [];
+        for (const arr of [data.homeLineup, data.homeBench, data.awayLineup, data.awayBench]) {
+          if (Array.isArray(arr)) {
+            for (const p of arr) {
+              if (p?.id) playerIds.push(p.id);
+            }
+          }
+        }
+        if (data.homeCoach?.id) playerIds.push(data.homeCoach.id);
+        if (data.awayCoach?.id) playerIds.push(data.awayCoach.id);
+
+        if (playerIds.length > 0) {
+          batch.update(doc.ref, { playerIds });
+          updated++;
+        }
+      }
+
+      if (updated > 0) await batch.commit();
+
+      res.json({
+        success: true,
+        total: snapshot.size,
+        updated,
+        skipped,
+        message: updated > 0 ? `Updated ${updated} docs. Run again if more remain.` : 'All docs already have playerIds.',
+      });
+    } catch (err: any) {
+      console.error('[backfillPlayerIds] Error:', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
 // ─── Helpers ───
 
 function formatDate(date: Date): string {

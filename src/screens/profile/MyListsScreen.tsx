@@ -11,11 +11,13 @@ import { ScreenHeader } from '../../components/ui/ScreenHeader';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { MatchList } from '../../types/list';
 
-export function MyListsScreen({ navigation }: any) {
+export function MyListsScreen({ route, navigation }: any) {
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
   const { user } = useAuth();
-  const { data: lists, isLoading } = useListsForUser(user?.uid || '');
+  const targetUserId = route.params?.userId || user?.uid || '';
+  const isOwnProfile = targetUserId === user?.uid;
+  const { data: lists, isLoading } = useListsForUser(targetUserId);
 
   if (isLoading) return <LoadingSpinner />;
 
@@ -32,31 +34,33 @@ export function MyListsScreen({ navigation }: any) {
       <ScreenHeader
         title="Lists"
         onBack={() => navigation.goBack()}
-        rightElement={
+        rightElement={isOwnProfile ?
           <Pressable onPress={() => navigation.navigate('CreateList')} hitSlop={8}>
             <Ionicons name="add" size={24} color={colors.foreground} />
           </Pressable>
-        }
+        : undefined}
       />
 
       {!lists || lists.length === 0 ? (
         <EmptyState
           icon="list-outline"
           title="No lists yet"
-          subtitle="Organize your favourite matches into lists"
+          subtitle={isOwnProfile ? 'Organize your favourite matches into lists' : 'This user hasn\'t created any lists yet'}
         >
-          <Pressable
-            onPress={() => navigation.navigate('CreateList')}
-            style={{
-              marginTop: spacing.lg,
-              backgroundColor: colors.primary,
-              paddingHorizontal: spacing.lg,
-              paddingVertical: spacing.sm,
-              borderRadius: borderRadius.md,
-            }}
-          >
-            <Text style={{ ...typography.bodyBold, color: '#fff' }}>Create Your First List</Text>
-          </Pressable>
+          {isOwnProfile && (
+            <Pressable
+              onPress={() => navigation.navigate('CreateList')}
+              style={{
+                marginTop: spacing.lg,
+                backgroundColor: colors.primary,
+                paddingHorizontal: spacing.lg,
+                paddingVertical: spacing.sm,
+                borderRadius: borderRadius.md,
+              }}
+            >
+              <Text style={{ ...typography.bodyBold, color: '#fff' }}>Create Your First List</Text>
+            </Pressable>
+          )}
         </EmptyState>
       ) : (
         <FlatList indicatorStyle={isDark ? 'white' : 'default'}
