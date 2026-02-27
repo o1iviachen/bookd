@@ -1,39 +1,53 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { View, Text, ScrollView, Pressable, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
+import { useUserProfile } from '../../hooks/useUser';
+import { updateUserProfile } from '../../services/firestore/users';
+import { NotificationPreferences } from '../../types/user';
 
-type ToggleItem = { label: string; description: string; value: boolean; onToggle: (v: boolean) => void };
+type ToggleItem = { label: string; description: string; key: keyof NotificationPreferences };
 
 export function NotificationSettingsScreen() {
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
   const navigation = useNavigation();
+  const { user } = useAuth();
+  const { data: profile } = useUserProfile(user?.uid || '');
 
-  const [pushEnabled, setPushEnabled] = useState(true);
-  const [emailEnabled, setEmailEnabled] = useState(false);
+  const prefs: NotificationPreferences = profile?.notificationPreferences || {
+    pushEnabled: true,
+    emailEnabled: false,
+    reviewLikes: true,
+    reviewComments: true,
+    commentLikes: true,
+    listLikes: true,
+    listComments: true,
+    follows: true,
+  };
 
-  const [reviewLikes, setReviewLikes] = useState(true);
-  const [reviewComments, setReviewComments] = useState(true);
-  const [follows, setFollows] = useState(true);
-  const [commentLikes, setCommentLikes] = useState(true);
-  const [listLikes, setListLikes] = useState(true);
-  const [listComments, setListComments] = useState(true);
+  const toggle = (key: keyof NotificationPreferences, value: boolean) => {
+    if (!user) return;
+    updateUserProfile(user.uid, {
+      notificationPreferences: { ...prefs, [key]: value },
+    });
+  };
 
   const channels: ToggleItem[] = [
-    { label: 'Push Notifications', description: 'Receive push notifications on your device', value: pushEnabled, onToggle: setPushEnabled },
-    { label: 'Email Notifications', description: 'Receive notifications via email', value: emailEnabled, onToggle: setEmailEnabled },
+    { label: 'Push Notifications', description: 'Receive push notifications on your device', key: 'pushEnabled' },
+    { label: 'Email Notifications', description: 'Receive notifications via email', key: 'emailEnabled' },
   ];
 
   const activityItems: ToggleItem[] = [
-    { label: 'Review Likes', description: 'When someone likes your review', value: reviewLikes, onToggle: setReviewLikes },
-    { label: 'Review Comments', description: 'When someone comments on your review', value: reviewComments, onToggle: setReviewComments },
-    { label: 'Comment Likes', description: 'When someone likes your comment', value: commentLikes, onToggle: setCommentLikes },
-    { label: 'List Likes', description: 'When someone likes your list', value: listLikes, onToggle: setListLikes },
-    { label: 'List Comments', description: 'When someone comments on your list', value: listComments, onToggle: setListComments },
-    { label: 'New Followers', description: 'When someone starts following you', value: follows, onToggle: setFollows },
+    { label: 'Review Likes', description: 'When someone likes your review', key: 'reviewLikes' },
+    { label: 'Review Comments', description: 'When someone comments on your review', key: 'reviewComments' },
+    { label: 'Comment Likes', description: 'When someone likes your comment', key: 'commentLikes' },
+    { label: 'List Likes', description: 'When someone likes your list', key: 'listLikes' },
+    { label: 'List Comments', description: 'When someone comments on your list', key: 'listComments' },
+    { label: 'New Followers', description: 'When someone starts following you', key: 'follows' },
   ];
 
   const renderGroup = (title: string, items: ToggleItem[]) => (
@@ -44,7 +58,7 @@ export function NotificationSettingsScreen() {
       <View style={{ backgroundColor: colors.card, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' }}>
         {items.map((item, i) => (
           <View
-            key={item.label}
+            key={item.key}
             style={{
               flexDirection: 'row',
               alignItems: 'center',
@@ -60,8 +74,8 @@ export function NotificationSettingsScreen() {
               <Text style={{ ...typography.small, color: colors.textSecondary, marginTop: 2 }}>{item.description}</Text>
             </View>
             <Switch
-              value={item.value}
-              onValueChange={item.onToggle}
+              value={prefs[item.key]}
+              onValueChange={(v) => toggle(item.key, v)}
               trackColor={{ false: colors.muted, true: colors.primary }}
               thumbColor="#fff"
             />

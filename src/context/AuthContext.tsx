@@ -3,6 +3,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../config/firebase';
 import * as authService from '../services/auth';
 import { createUserProfile } from '../services/firestore/users';
+import { registerForPushNotifications } from '../services/pushNotifications';
 
 interface AuthUser {
   uid: string;
@@ -32,6 +33,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       if (firebaseUser) {
         setUser({ uid: firebaseUser.uid, email: firebaseUser.email });
+        registerForPushNotifications(firebaseUser.uid).catch(() => {});
       } else {
         setUser(null);
       }

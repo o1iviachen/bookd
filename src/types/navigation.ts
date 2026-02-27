@@ -9,6 +9,7 @@ export type AuthStackParamList = {
 export type OnboardingStackParamList = {
   OnboardingTeams: undefined;
   OnboardingMatches: undefined;
+  OnboardingLeagues: undefined;
 };
 
 // Shared screen params used across multiple stacks

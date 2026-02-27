@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, Pressable, useWindowDimensions } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, Text, Pressable, useWindowDimensions, Animated } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,6 +7,21 @@ import { useTheme } from '../../context/ThemeContext';
 import { Match } from '../../types/match';
 import { formatMatchDate } from '../../utils/formatDate';
 import { getTeamColor } from '../../utils/teamColors';
+
+function PulsingDot({ size = 6 }: { size?: number }) {
+  const opacity = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 0.3, duration: 800, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 1, duration: 800, useNativeDriver: true }),
+      ])
+    );
+    anim.start();
+    return () => anim.stop();
+  }, [opacity]);
+  return <Animated.View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: '#00e054', opacity }} />;
+}
 
 interface MatchPosterCardProps {
   match: Match;
@@ -112,13 +127,17 @@ export function MatchPosterCard({ match, onPress, width: widthProp, compact }: M
             <View
               style={{
                 alignSelf: 'center',
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 4,
                 backgroundColor: '#00e054',
                 paddingHorizontal: 6,
-                paddingVertical: 1,
+                paddingVertical: 2,
                 borderRadius: 3,
                 marginBottom: 4,
               }}
             >
+              <PulsingDot size={5} />
               <Text style={{ fontSize: 9, fontWeight: '800', color: '#14181c' }}>LIVE</Text>
             </View>
           )}

@@ -1,5 +1,7 @@
 import React, { useState, useMemo, useRef, useCallback } from 'react';
 import { View, Text, Pressable, Share, ScrollView, useWindowDimensions } from 'react-native';
+import ViewShot, { captureRef } from 'react-native-view-shot';
+import * as Sharing from 'expo-sharing';
 import PagerView from 'react-native-pager-view';
 import { Select } from '../../components/ui/Select';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -28,6 +30,8 @@ import { formatFullDate, formatMatchTime } from '../../utils/formatDate';
 import { getStadiumImageUrl } from '../../utils/stadiumImages';
 import { MatchesStackParamList } from '../../types/navigation';
 import { MatchDetail, MatchPlayer, MatchGoal, MatchBooking, MatchSubstitution } from '../../services/footballApi';
+import { shortName } from '../../utils/formatName';
+import { MatchPosterCard } from '../../components/match/MatchPosterCard';
 import { User } from '../../types/user';
 
 type MatchTab = 'reviews' | 'lineup' | 'info';
@@ -45,6 +49,7 @@ export function MatchDetailScreen({ route, navigation }: Props) {
   const [showMenu, setShowMenu] = useState(false);
   const [activeTabIndex, setActiveTabIndex] = useState(0);
   const pagerRef = useRef<PagerView>(null);
+  const posterRef = useRef<ViewShot>(null);
   const insets = useSafeAreaInsets();
 
   const MATCH_TABS: { key: MatchTab; label: string }[] = [
@@ -86,6 +91,17 @@ export function MatchDetailScreen({ route, navigation }: Props) {
   const stadiumUrl = getStadiumImageUrl(match.homeTeam.id);
 
   const handleShare = async () => {
+    try {
+      // Try to capture poster as image first
+      if (posterRef.current) {
+        const uri = await captureRef(posterRef, { format: 'png', quality: 1 });
+        if (uri && await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(uri, { mimeType: 'image/png', dialogTitle: 'Share match' });
+          return;
+        }
+      }
+    } catch {}
+    // Fallback to text share
     let message: string;
     if (isFinished || isLive) {
       message = `Check out ${match.homeTeam.shortName} ${match.homeScore} - ${match.awayScore} ${match.awayTeam.shortName} on bookd!`;
@@ -275,7 +291,7 @@ export function MatchDetailScreen({ route, navigation }: Props) {
           <TeamLogo uri={match.competition.emblem} size={16} />
         </View>
         <Text style={{ ...typography.caption, color: colors.textSecondary }}>
-          {match.competition.name} · {formatFullDate(match.kickoff)}
+          {match.competition.name}{roundLabel(match) ? ` · ${roundLabel(match)}` : ''} · {formatFullDate(match.kickoff)}
         </Text>
       </Pressable>
 
@@ -450,6 +466,16 @@ export function MatchDetailScreen({ route, navigation }: Props) {
         onClose={() => setShowListModal(false)}
         matchId={matchId}
       />
+
+      {/* Off-screen poster for share capture */}
+      <ViewShot ref={posterRef} options={{ format: 'png', quality: 1 }} style={{ position: 'absolute', top: -9999, left: -9999 }}>
+        <View style={{ backgroundColor: colors.background, padding: 16, alignItems: 'center' }}>
+          <MatchPosterCard match={match} width={300} />
+          <Text style={{ fontSize: 10, fontWeight: '600', color: colors.textSecondary, marginTop: 8, letterSpacing: 1 }}>
+            bookd
+          </Text>
+        </View>
+      </ViewShot>
     </View>
   );
 }
@@ -671,6 +697,28 @@ function ReviewsSection({ reviews, userId, profile, colors, spacing, typography,
   );
 }
 
+/** Short round/stage label for the info line, e.g. "MD38", "QF", "SF", "F" */
+function roundLabel(match: { matchday: number | null; stage: string | null }): string | null {
+  const STAGE_LABELS: Record<string, string> = {
+    FINAL: 'F',
+    SEMI_FINALS: 'SF',
+    QUARTER_FINALS: 'QF',
+    ROUND_OF_16: 'R16',
+    LAST_16: 'R16',
+    ROUND_OF_32: 'R32',
+    LAST_32: 'R32',
+    GROUP_STAGE: match.matchday ? `GS${match.matchday}` : 'GS',
+    PRELIMINARY_ROUND: 'PR',
+    QUALIFICATION: 'Q',
+    PLAYOFF: 'PO',
+    THIRD_PLACE: '3rd',
+  };
+
+  if (match.stage && STAGE_LABELS[match.stage]) return STAGE_LABELS[match.stage];
+  if (match.matchday) return `MD${match.matchday}`;
+  return null;
+}
+
 /* ─── Lineup Section — Formation Pitch Diagram ─── */
 
 /** Parse "4-3-3" → [4, 3, 3] */
@@ -731,9 +779,10 @@ function PitchPlayerDot({
 }) {
   const DOT_SIZE = 36;
   const TOUCH_WIDTH = 56;
-  // Show last name only (or first word if single name)
-  const nameParts = player.name.split(' ');
-  const displayName = nameParts.length > 1 ? nameParts[nameParts.length - 1] : player.name;
+  // Show last name only for pitch diagram
+  const shortened = shortName(player.name);
+  const displayParts = shortened.split(' ');
+  const displayName = displayParts.length > 1 ? displayParts[displayParts.length - 1] : shortened;
 
   const hasEvents = events && (events.goals > 0 || events.yellowCard || events.redCard || events.subbedOutMin !== null);
 
@@ -803,10 +852,10 @@ function FormationPitch({
   const pitchHeight = pitchWidth * 1.7;
   const halfHeight = pitchHeight / 2;
   const padX = 24;
-  // Asymmetric: top only needs dot radius (18) clearance, bottom needs dot+name (32)
-  const topPad = 22;      // home GK y — dot top is 4px from edge
-  const bottomPad = 36;   // away GK y — name bottom is 4px from edge
-  const centerPad = 40;   // push strikers further from center line
+  // GK sits inside the penalty area; bottom needs extra room for name text below dot
+  const topPad = pitchHeight * 0.07;    // home GK ~inside penalty box
+  const bottomPad = pitchHeight * 0.08; // away GK ~inside penalty box (extra for name)
+  const centerPad = 40;                 // push strikers away from center line
 
   const homeFormation = matchDetail.homeFormation ? parseFormation(matchDetail.homeFormation) : [];
   const awayFormation = matchDetail.awayFormation ? parseFormation(matchDetail.awayFormation) : [];
@@ -885,7 +934,7 @@ function FormationPitch({
               y={pos.y}
               teamColor="rgba(20,20,30,0.65)"
               events={playerEvents.get(player.id)}
-              onPress={() => navigation.navigate('PersonDetail', { personId: player.id, personName: player.name, role: 'player' })}
+              onPress={() => navigation.navigate('PersonDetail', { personId: player.id, personName: shortName(player.name), role: 'player' })}
             />
           );
         })
@@ -903,7 +952,7 @@ function FormationPitch({
               y={pos.y}
               teamColor="rgba(255,255,255,0.2)"
               events={playerEvents.get(player.id)}
-              onPress={() => navigation.navigate('PersonDetail', { personId: player.id, personName: player.name, role: 'player' })}
+              onPress={() => navigation.navigate('PersonDetail', { personId: player.id, personName: shortName(player.name), role: 'player' })}
             />
           );
         })
@@ -927,7 +976,7 @@ function BenchPlayerRow({ player, substitution, colors, spacing, typography, onP
           </Text>
         )}
         <Text style={{ ...typography.body, color: colors.foreground, fontSize: 14, flex: 1 }} numberOfLines={1}>
-          {player.name}
+          {shortName(player.name)}
         </Text>
         {substitution && (
           <Text style={{ fontSize: 11, color: colors.textSecondary }}>
@@ -1001,7 +1050,7 @@ function LineupSection({ matchDetail, match, colors, spacing, typography, naviga
               <Text style={{ ...typography.caption, color: colors.textSecondary }}>Starting XI</Text>
             </View>
             {matchDetail.homeLineup.map((p) => (
-              <BenchPlayerRow key={p.id} player={p} colors={colors} spacing={spacing} typography={typography} onPress={() => navigation.navigate('PersonDetail', { personId: p.id, personName: p.name, role: 'player' })} />
+              <BenchPlayerRow key={p.id} player={p} colors={colors} spacing={spacing} typography={typography} onPress={() => navigation.navigate('PersonDetail', { personId: p.id, personName: shortName(p.name), role: 'player' })} />
             ))}
           </View>
           <View style={{ height: 1, backgroundColor: colors.border, marginBottom: spacing.md }} />
@@ -1013,7 +1062,7 @@ function LineupSection({ matchDetail, match, colors, spacing, typography, naviga
               <Text style={{ ...typography.caption, color: colors.textSecondary }}>Starting XI</Text>
             </View>
             {matchDetail.awayLineup.map((p) => (
-              <BenchPlayerRow key={p.id} player={p} colors={colors} spacing={spacing} typography={typography} onPress={() => navigation.navigate('PersonDetail', { personId: p.id, personName: p.name, role: 'player' })} />
+              <BenchPlayerRow key={p.id} player={p} colors={colors} spacing={spacing} typography={typography} onPress={() => navigation.navigate('PersonDetail', { personId: p.id, personName: shortName(p.name), role: 'player' })} />
             ))}
           </View>
         </>
@@ -1037,17 +1086,17 @@ function LineupSection({ matchDetail, match, colors, spacing, typography, naviga
               colors={colors}
               spacing={spacing}
               typography={typography}
-              onPress={() => navigation.navigate('PersonDetail', { personId: p.id, personName: p.name, role: 'player' })}
+              onPress={() => navigation.navigate('PersonDetail', { personId: p.id, personName: shortName(p.name), role: 'player' })}
             />
           ))}
           {matchDetail.homeCoach && (
-            <Pressable onPress={() => navigation.navigate('PersonDetail', { personId: matchDetail.homeCoach!.id, personName: matchDetail.homeCoach!.name, role: 'manager' })} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
+            <Pressable onPress={() => navigation.navigate('PersonDetail', { personId: matchDetail.homeCoach!.id, personName: shortName(matchDetail.homeCoach!.name), role: 'manager' })} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
               <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.xs + 2, gap: spacing.sm, marginTop: spacing.xs }}>
                 <Text style={{ width: 24, textAlign: 'center', ...typography.caption, color: colors.textSecondary }}>
                   <Ionicons name="person" size={12} color={colors.textSecondary} />
                 </Text>
                 <Text style={{ ...typography.body, color: colors.textSecondary, fontSize: 14, fontStyle: 'italic' }}>
-                  {matchDetail.homeCoach.name} (Coach)
+                  {shortName(matchDetail.homeCoach.name)} (Coach)
                 </Text>
               </View>
             </Pressable>
@@ -1075,17 +1124,17 @@ function LineupSection({ matchDetail, match, colors, spacing, typography, naviga
               colors={colors}
               spacing={spacing}
               typography={typography}
-              onPress={() => navigation.navigate('PersonDetail', { personId: p.id, personName: p.name, role: 'player' })}
+              onPress={() => navigation.navigate('PersonDetail', { personId: p.id, personName: shortName(p.name), role: 'player' })}
             />
           ))}
           {matchDetail.awayCoach && (
-            <Pressable onPress={() => navigation.navigate('PersonDetail', { personId: matchDetail.awayCoach!.id, personName: matchDetail.awayCoach!.name, role: 'manager' })} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
+            <Pressable onPress={() => navigation.navigate('PersonDetail', { personId: matchDetail.awayCoach!.id, personName: shortName(matchDetail.awayCoach!.name), role: 'manager' })} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
               <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.xs + 2, gap: spacing.sm, marginTop: spacing.xs }}>
                 <Text style={{ width: 24, textAlign: 'center', ...typography.caption, color: colors.textSecondary }}>
                   <Ionicons name="person" size={12} color={colors.textSecondary} />
                 </Text>
                 <Text style={{ ...typography.body, color: colors.textSecondary, fontSize: 14, fontStyle: 'italic' }}>
-                  {matchDetail.awayCoach.name} (Coach)
+                  {shortName(matchDetail.awayCoach.name)} (Coach)
                 </Text>
               </View>
             </Pressable>
@@ -1219,49 +1268,6 @@ function InfoSection({ matchDetail, match, colors, spacing, typography, borderRa
           <Text style={{ ...typography.body, color: colors.textSecondary, marginTop: spacing.sm }}>
             Match stats not available yet
           </Text>
-        </View>
-      )}
-
-      {/* Goals */}
-      {matchDetail.goals.length > 0 && (
-        <View style={{ marginBottom: spacing.lg }}>
-          <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 15, marginBottom: spacing.sm }}>
-            Goals
-          </Text>
-          {matchDetail.goals.map((goal, i) => {
-            const isHome = goal.team.id === match.homeTeam.id;
-            return (
-              <View
-                key={i}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  paddingVertical: spacing.xs + 2,
-                  gap: spacing.sm,
-                }}
-              >
-                <View style={{ width: 30, alignItems: 'center' }}>
-                  <Text style={{ fontSize: 13 }}>⚽</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Pressable onPress={() => navigation.navigate('PersonDetail', { personId: goal.scorer.id, personName: goal.scorer.name, role: 'player' })}>
-                    <Text style={{ ...typography.body, color: colors.foreground, fontSize: 14 }}>
-                      {goal.scorer.name}
-                      <Text style={{ color: colors.textSecondary }}> {goal.minute}'</Text>
-                    </Text>
-                  </Pressable>
-                  {goal.assist && (
-                    <Pressable onPress={() => navigation.navigate('PersonDetail', { personId: goal.assist!.id, personName: goal.assist!.name, role: 'player' })}>
-                      <Text style={{ ...typography.small, color: colors.textSecondary }}>
-                        Assist: {goal.assist.name}
-                      </Text>
-                    </Pressable>
-                  )}
-                </View>
-                <TeamLogo uri={isHome ? match.homeTeam.crest : match.awayTeam.crest} size={18} />
-              </View>
-            );
-          })}
         </View>
       )}
 

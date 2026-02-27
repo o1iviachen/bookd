@@ -11,6 +11,7 @@ import { MatchFilters, MatchFilterState, applyMatchFilters } from '../../compone
 import { Select } from '../../components/ui/Select';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { shortName } from '../../utils/formatName';
 
 type SortKey = 'recent_played' | 'oldest';
 
@@ -219,7 +220,7 @@ export function TeamDetailScreen({ route, navigation }: any) {
                     {players.map((player) => (
                       <Pressable
                         key={player.id}
-                        onPress={() => navigation.navigate('PersonDetail', { personId: player.id, personName: player.name, role: 'player' as const })}
+                        onPress={() => navigation.navigate('PersonDetail', { personId: player.id, personName: shortName(player.name), role: 'player' as const })}
                         style={({ pressed }) => ({
                           flexDirection: 'row',
                           alignItems: 'center',
@@ -229,7 +230,7 @@ export function TeamDetailScreen({ route, navigation }: any) {
                           opacity: pressed ? 0.7 : 1,
                         })}
                       >
-                        <Text style={{ ...typography.body, color: colors.foreground, flex: 1 }}>{player.name}</Text>
+                        <Text style={{ ...typography.body, color: colors.foreground, flex: 1 }}>{shortName(player.name)}</Text>
                         {player.nationality ? (
                           <Text style={{ ...typography.caption, color: colors.textSecondary }}>{player.nationality}</Text>
                         ) : null}
@@ -254,14 +255,14 @@ export function TeamDetailScreen({ route, navigation }: any) {
                   {/* Coach */}
                   {teamDetail.coach && (
                     <Pressable
-                      onPress={() => navigation.navigate('PersonDetail', { personId: teamDetail.coach!.id, personName: teamDetail.coach!.name, role: 'manager' as const })}
+                      onPress={() => navigation.navigate('PersonDetail', { personId: teamDetail.coach!.id, personName: shortName(teamDetail.coach!.name), role: 'manager' as const })}
                       style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
                     >
                       <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
                         Manager
                       </Text>
                       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <Text style={{ ...typography.body, color: colors.foreground, flex: 1 }}>{teamDetail.coach.name}</Text>
+                        <Text style={{ ...typography.body, color: colors.foreground, flex: 1 }}>{shortName(teamDetail.coach.name)}</Text>
                         <Ionicons name="chevron-forward" size={14} color={colors.textSecondary} />
                       </View>
                     </Pressable>

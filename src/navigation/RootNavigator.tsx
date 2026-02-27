@@ -6,6 +6,7 @@ import { AuthStack } from './AuthStack';
 import { OnboardingStack } from './OnboardingStack';
 import { MainTabs } from './MainTabs';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
+import { navigationRef } from './navigationRef';
 
 export function RootNavigator() {
   const { user, loading, needsOnboarding } = useAuth();
@@ -23,6 +24,7 @@ export function RootNavigator() {
 
   return (
     <NavigationContainer
+      ref={navigationRef}
       theme={{
         dark: isDark,
         colors: {

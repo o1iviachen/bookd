@@ -3,6 +3,7 @@ import {
   getReviewsForMatch,
   getReviewsForUser,
   getRecentReviews,
+  getPopularMatchIdsThisWeek,
   getReviewById,
   createReview,
   updateReview,
@@ -45,6 +46,14 @@ export function useRecentReviews() {
   });
 }
 
+export function usePopularMatchIdsThisWeek() {
+  return useQuery({
+    queryKey: ['reviews', 'popularThisWeek'],
+    queryFn: () => getPopularMatchIdsThisWeek(),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
 export function useReview(reviewId: string) {
   const { user } = useAuth();
   return useQuery({
@@ -67,6 +76,7 @@ export function useCreateReview() {
       text: string;
       tags: string[];
       media?: ReviewMedia[];
+      isSpoiler?: boolean;
     }) =>
       createReview(
         params.matchId,
@@ -76,7 +86,8 @@ export function useCreateReview() {
         params.rating,
         params.text,
         params.tags,
-        params.media || []
+        params.media || [],
+        params.isSpoiler || false
       ),
     onSuccess: (_, params) => {
       queryClient.invalidateQueries({ queryKey: ['reviews', 'match', params.matchId] });
@@ -97,6 +108,7 @@ export function useUpdateReview() {
         text?: string;
         tags?: string[];
         media?: ReviewMedia[];
+        isSpoiler?: boolean;
       };
     }) => updateReview(params.reviewId, params.data),
     onSuccess: (_, params) => {

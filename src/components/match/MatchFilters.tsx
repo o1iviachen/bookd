@@ -25,6 +25,7 @@ interface MatchFiltersProps {
   showMinLogs?: boolean;
   showTeamFilter?: boolean;
   showSeasonFilter?: boolean;
+  teamOptions?: { value: string; label: string }[];
 }
 
 const SEASONS = [
@@ -45,6 +46,7 @@ export function MatchFilters({
   showMinLogs = true,
   showTeamFilter = true,
   showSeasonFilter = true,
+  teamOptions: teamOptionsProp,
 }: MatchFiltersProps) {
   const { theme } = useTheme();
   const { colors, spacing, borderRadius } = theme;
@@ -60,6 +62,7 @@ export function MatchFilters({
   }, [matches]);
 
   const teams = useMemo(() => {
+    if (teamOptionsProp) return teamOptionsProp;
     const set = new Set<string>();
     for (const m of matches) {
       if (filters.league === 'all' || m.competition.code === filters.league) {
@@ -70,7 +73,7 @@ export function MatchFilters({
     return Array.from(set)
       .sort()
       .map((name) => ({ value: name, label: name }));
-  }, [matches, filters.league]);
+  }, [matches, filters.league, teamOptionsProp]);
 
   const hasActiveFilters =
     filters.league !== 'all' ||
@@ -160,7 +163,7 @@ export function MatchFilters({
               value={filters.team}
               onValueChange={(value) => onFiltersChange({ ...filters, team: value })}
               options={[{ value: 'all', label: 'All Teams' }, ...teams]}
-              disabled={filters.league === 'all'}
+              disabled={!teamOptionsProp && filters.league === 'all'}
             />
           </View>
         )}

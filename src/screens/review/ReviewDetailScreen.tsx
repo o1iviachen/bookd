@@ -41,6 +41,7 @@ export function ReviewDetailScreen({ route, navigation }: any) {
   const [replyingTo, setReplyingTo] = useState<{ id: string; username: string } | null>(null);
   const [showMenu, setShowMenu] = useState(false);
   const [showLikes, setShowLikes] = useState(false);
+  const [spoilerRevealed, setSpoilerRevealed] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
   const inputRef = useRef<TextInput>(null);
 
@@ -267,50 +268,76 @@ export function ReviewDetailScreen({ route, navigation }: any) {
                     {formatRelativeTime(review.createdAt)}
                     {review.editedAt ? ' (edited)' : ''}
                   </Text>
+                  {review.isSpoiler && (
+                    <View style={{ backgroundColor: '#f59e0b', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 }}>
+                      <Text style={{ fontSize: 9, fontWeight: '700', color: '#000' }}>SPOILER</Text>
+                    </View>
+                  )}
                 </View>
               </View>
               </Pressable>
             </View>
 
-            {/* Review text */}
-            {review.text ? (
-              <Text style={{ ...typography.body, color: colors.foreground, lineHeight: 24, fontSize: 16, marginBottom: spacing.md }}>
-                {review.text}
-              </Text>
-            ) : null}
-
-            {/* Media gallery */}
-            {review.media && review.media.length > 0 && (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={{ marginBottom: spacing.md }}
-                contentContainerStyle={{ gap: spacing.sm }}
+            {/* Review text + media (spoiler-aware) */}
+            {review.isSpoiler && !spoilerRevealed && (review.text || (review.media && review.media.length > 0)) ? (
+              <Pressable
+                onPress={() => setSpoilerRevealed(true)}
+                style={{
+                  backgroundColor: colors.muted,
+                  borderRadius: borderRadius.md,
+                  padding: spacing.lg,
+                  marginBottom: spacing.md,
+                  alignItems: 'center',
+                  gap: spacing.xs,
+                }}
               >
-                {review.media.map((item, index) => (
-                  <View
-                    key={index}
-                    style={{
-                      width: 200,
-                      height: 200,
-                      borderRadius: borderRadius.md,
-                      overflow: 'hidden',
-                      backgroundColor: colors.accent,
-                    }}
+                <Ionicons name="eye-off-outline" size={24} color={colors.textSecondary} />
+                <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center' }}>
+                  This review contains spoilers. Tap to reveal.
+                </Text>
+              </Pressable>
+            ) : (
+              <>
+                {review.text ? (
+                  <Text style={{ ...typography.body, color: colors.foreground, lineHeight: 24, fontSize: 16, marginBottom: spacing.md }}>
+                    {review.text}
+                  </Text>
+                ) : null}
+
+                {/* Media gallery */}
+                {review.media && review.media.length > 0 && (
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={{ marginBottom: spacing.md }}
+                    contentContainerStyle={{ gap: spacing.sm }}
                   >
-                    <Image
-                      source={{ uri: item.url }}
-                      style={{ width: 200, height: 200 }}
-                      contentFit="cover"
-                    />
-                    {item.type === 'video' && (
-                      <View style={{ position: 'absolute', bottom: 6, left: 6, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
-                        <Ionicons name="videocam" size={12} color="#fff" />
+                    {review.media.map((item, index) => (
+                      <View
+                        key={index}
+                        style={{
+                          width: 200,
+                          height: 200,
+                          borderRadius: borderRadius.md,
+                          overflow: 'hidden',
+                          backgroundColor: colors.accent,
+                        }}
+                      >
+                        <Image
+                          source={{ uri: item.url }}
+                          style={{ width: 200, height: 200 }}
+                          contentFit="cover"
+                        />
+                        {item.type === 'video' && (
+                          <View style={{ position: 'absolute', bottom: 6, left: 6, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
+                            <Ionicons name="videocam" size={12} color="#fff" />
+                          </View>
+                        )}
                       </View>
-                    )}
-                  </View>
-                ))}
+                    ))}
               </ScrollView>
+            )}
+              </>
             )}
 
             {/* Tags */}

@@ -21,7 +21,8 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "competition.code", "order": "ASCENDING" },
-        { "fieldPath": "season", "order": "ASCENDING" }
+        { "fieldPath": "season", "order": "ASCENDING" },
+        { "fieldPath": "kickoff", "order": "ASCENDING" }
       ]
     },
     {

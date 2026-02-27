@@ -1,10 +1,25 @@
-import React from 'react';
-import { View, Text, Pressable } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, Text, Pressable, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { TeamLogo } from './TeamLogo';
 import { Match } from '../../types/match';
 import { formatMatchTime } from '../../utils/formatDate';
+
+function PulsingDot() {
+  const opacity = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 0.3, duration: 800, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 1, duration: 800, useNativeDriver: true }),
+      ])
+    );
+    anim.start();
+    return () => anim.stop();
+  }, [opacity]);
+  return <Animated.View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#00e054', opacity }} />;
+}
 
 interface CompactMatchRowProps {
   match: Match;
@@ -62,7 +77,7 @@ export function CompactMatchRow({ match, onPress }: CompactMatchRowProps) {
         )}
         {isLive && (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 1 }}>
-            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#00e054' }} />
+            <PulsingDot />
             <Text style={{ fontSize: 10, fontWeight: '700', color: '#00e054' }}>LIVE</Text>
           </View>
         )}

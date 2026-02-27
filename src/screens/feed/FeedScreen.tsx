@@ -11,7 +11,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useUserProfile } from '../../hooks/useUser';
 import { useMatchesRange } from '../../hooks/useMatches';
-import { useRecentReviews } from '../../hooks/useReviews';
+import { useRecentReviews, usePopularMatchIdsThisWeek } from '../../hooks/useReviews';
 import { useRecentLists } from '../../hooks/useLists';
 import { ListPreviewCard } from '../../components/list/ListPreviewCard';
 import { groupMatchesByCompetition, getMatchById } from '../../services/matchService';
@@ -58,12 +58,14 @@ export function FeedScreen() {
   const { data: matches, isLoading: matchesLoading } = useMatchesRange(weekAgo, today);
   const { data: reviews, isLoading: reviewsLoading } = useRecentReviews();
   const { data: recentLists, isLoading: listsLoading } = useRecentLists();
+  const { data: popularMatchIds } = usePopularMatchIdsThisWeek();
 
   const handleRefresh = async () => {
     setRefreshing(true);
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['matches', 'range'] }),
       queryClient.invalidateQueries({ queryKey: ['reviews', 'recent'] }),
+      queryClient.invalidateQueries({ queryKey: ['reviews', 'popularThisWeek'] }),
       queryClient.invalidateQueries({ queryKey: ['lists', 'recent'] }),
     ]);
     setRefreshing(false);
@@ -77,17 +79,34 @@ export function FeedScreen() {
     return matches.filter((m) => followedLeagues.includes(m.competition.code));
   }, [matches, followedLeagues]);
 
-  // Popular this week — finished matches sorted by number of logs (reviews)
+  // Popular this week — fetch match data for top reviewed matchIds
+  const topPopularIds = useMemo(() =>
+    (popularMatchIds || []).slice(0, 8).map((p) => p.matchId),
+    [popularMatchIds]
+  );
+  const popularMatchQueries = useQueries({
+    queries: topPopularIds.map((id) => ({
+      queryKey: ['match', id],
+      queryFn: () => getMatchById(id),
+      staleTime: 5 * 60 * 1000,
+      enabled: topPopularIds.length > 0,
+    })),
+  });
   const popularMatches = useMemo(() => {
-    const finished = followedMatches.filter((m) => m.status === 'FINISHED');
-    const logMap = new Map<number, number>();
-    if (reviews) {
-      for (const r of reviews) logMap.set(r.matchId, (logMap.get(r.matchId) || 0) + 1);
+    // Start with reviewed matches in rank order
+    const reviewed: Match[] = [];
+    for (const q of popularMatchQueries) {
+      if (q.data) reviewed.push(q.data);
     }
-    return [...finished]
-      .sort((a, b) => (logMap.get(b.id) || 0) - (logMap.get(a.id) || 0))
-      .slice(0, 8);
-  }, [followedMatches, reviews]);
+    if (reviewed.length >= 8) return reviewed.slice(0, 8);
+
+    // Fill remaining slots with recent finished matches
+    const usedIds = new Set(reviewed.map((m) => m.id));
+    const filler = (matches || [])
+      .filter((m) => m.status === 'FINISHED' && !usedIds.has(m.id))
+      .slice(0, 8 - reviewed.length);
+    return [...reviewed, ...filler];
+  }, [popularMatchQueries, matches]);
 
   // New from friends — reviews from users the current user follows
   const friendReviews = !reviews || !profile?.following?.length
@@ -235,9 +254,13 @@ export function FeedScreen() {
                               {isLiked && (
                                 <Ionicons name="heart" size={9} color="#ef4444" />
                               )}
-                              {hasText && (
+                              {item.isSpoiler ? (
+                                <View style={{ backgroundColor: '#f59e0b', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 3 }}>
+                                  <Text style={{ fontSize: 7, fontWeight: '700', color: '#000' }}>SPOILER</Text>
+                                </View>
+                              ) : hasText ? (
                                 <Ionicons name="reorder-three-outline" size={10} color={colors.textSecondary} />
-                              )}
+                              ) : null}
                             </View>
                           </View>
                         ) : (

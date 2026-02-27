@@ -471,6 +471,7 @@ export async function getTeamMatches(teamId: number, status?: string): Promise<M
 export interface PersonDetail {
   id: number;
   name: string;
+  photo: string | null;
   dateOfBirth: string | null;
   nationality: string | null;
   position: string | null;
@@ -486,6 +487,7 @@ export async function getPersonDetail(personId: number): Promise<PersonDetail> {
     return {
       id: personId,
       name: 'Unknown Player',
+      photo: null,
       dateOfBirth: null,
       nationality: null,
       position: null,
@@ -499,6 +501,7 @@ export async function getPersonDetail(personId: number): Promise<PersonDetail> {
   return {
     id: data.id ?? personId,
     name: data.name ?? 'Unknown Player',
+    photo: data.photo || null,
     dateOfBirth: data.dateOfBirth || null,
     nationality: data.nationality || null,
     position: data.position || null,
@@ -511,6 +514,7 @@ export async function getPersonDetail(personId: number): Promise<PersonDetail> {
 export interface PersonMatchAppearance {
   match: Match;
   role: 'starter' | 'sub' | 'coach';
+  teamSide: 'home' | 'away';  // which side the person was on
   subbedIn?: number;  // minute subbed in (if bench player came on)
   goals: number;
   yellowCard: boolean;
@@ -531,31 +535,45 @@ export async function getMatchesForPerson(personId: number): Promise<PersonMatch
     if (detailsSnap.empty) return [];
 
     // Build role map from matchDetails docs
-    const roleMap = new Map<number, { role: 'starter' | 'sub' | 'coach'; subbedIn?: number; goals: number; yellowCard: boolean; redCard: boolean }>();
+    const roleMap = new Map<number, { role: 'starter' | 'sub' | 'coach'; teamSide: 'home' | 'away'; subbedIn?: number; goals: number; yellowCard: boolean; redCard: boolean }>();
     for (const d of detailsSnap.docs) {
       const data = d.data();
       const matchId = data.matchId as number;
       if (!matchId) continue;
 
       let role: 'starter' | 'sub' | 'coach' = 'sub';
+      let teamSide: 'home' | 'away' = 'home';
       let subbedIn: number | undefined;
 
-      // Check starting XI
-      const starters = [...(data.homeLineup || []), ...(data.awayLineup || [])];
-      if (starters.some((p: any) => p?.id === personId)) {
+      // Check starting XI (home then away separately to determine side)
+      if ((data.homeLineup || []).some((p: any) => p?.id === personId)) {
         role = 'starter';
+        teamSide = 'home';
+      } else if ((data.awayLineup || []).some((p: any) => p?.id === personId)) {
+        role = 'starter';
+        teamSide = 'away';
       }
       // Check bench
-      else if ([...(data.homeBench || []), ...(data.awayBench || [])].some((p: any) => p?.id === personId)) {
+      else if ((data.homeBench || []).some((p: any) => p?.id === personId)) {
         role = 'sub';
-        // Check if they actually came on
+        teamSide = 'home';
+        const subs = data.substitutions || [];
+        const sub = subs.find((s: any) => s?.playerIn?.id === personId);
+        if (sub) subbedIn = sub.minute;
+      } else if ((data.awayBench || []).some((p: any) => p?.id === personId)) {
+        role = 'sub';
+        teamSide = 'away';
         const subs = data.substitutions || [];
         const sub = subs.find((s: any) => s?.playerIn?.id === personId);
         if (sub) subbedIn = sub.minute;
       }
       // Check coach
-      else if (data.homeCoach?.id === personId || data.awayCoach?.id === personId) {
+      else if (data.homeCoach?.id === personId) {
         role = 'coach';
+        teamSide = 'home';
+      } else if (data.awayCoach?.id === personId) {
+        role = 'coach';
+        teamSide = 'away';
       }
 
       // Count goals and cards
@@ -572,7 +590,7 @@ export async function getMatchesForPerson(personId: number): Promise<PersonMatch
         }
       }
 
-      roleMap.set(matchId, { role, subbedIn, goals, yellowCard, redCard });
+      roleMap.set(matchId, { role, teamSide, subbedIn, goals, yellowCard, redCard });
     }
 
     // Fetch parent match docs
@@ -593,7 +611,7 @@ export async function getMatchesForPerson(personId: number): Promise<PersonMatch
     // Sort by date descending and build appearances
     matches.sort((a, b) => new Date(b.kickoff).getTime() - new Date(a.kickoff).getTime());
     return matches.map((match) => {
-      const info = roleMap.get(match.id) || { role: 'sub' as const, goals: 0, yellowCard: false, redCard: false };
+      const info = roleMap.get(match.id) || { role: 'sub' as const, teamSide: 'home' as const, goals: 0, yellowCard: false, redCard: false };
       return { match, ...info };
     });
   } catch (err) {

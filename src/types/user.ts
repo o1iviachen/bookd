@@ -1,3 +1,14 @@
+export interface NotificationPreferences {
+  pushEnabled: boolean;
+  emailEnabled: boolean;
+  reviewLikes: boolean;
+  reviewComments: boolean;
+  commentLikes: boolean;
+  listLikes: boolean;
+  listComments: boolean;
+  follows: boolean;
+}
+
 export interface User {
   id: string;
   username: string;
@@ -17,6 +28,8 @@ export interface User {
   customTags: string[];
   following: string[];
   followers: string[];
+  expoPushToken: string | null;
+  notificationPreferences: NotificationPreferences;
   createdAt: Date;
 }
 

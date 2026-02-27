@@ -13,6 +13,7 @@ export interface Review {
   text: string;
   tags: string[];
   media: ReviewMedia[];
+  isSpoiler: boolean;
   upvotes: number;
   downvotes: number;
   createdAt: Date;

@@ -30,6 +30,7 @@ function docToReview(docSnap: any, userVote: 'up' | 'down' | null = null): Revie
     text: data.text || '',
     tags: data.tags || [],
     media: data.media || [],
+    isSpoiler: data.isSpoiler || false,
     upvotes: data.upvotes || 0,
     downvotes: data.downvotes || 0,
     createdAt: data.createdAt?.toDate() || new Date(),
@@ -52,7 +53,8 @@ export async function createReview(
   rating: number,
   text: string,
   tags: string[],
-  media: ReviewMedia[] = []
+  media: ReviewMedia[] = [],
+  isSpoiler: boolean = false
 ): Promise<string> {
   const reviewRef = await addDoc(collection(db, 'reviews'), {
     matchId,
@@ -63,6 +65,7 @@ export async function createReview(
     text,
     tags,
     media,
+    isSpoiler,
     upvotes: 0,
     downvotes: 0,
     createdAt: serverTimestamp(),
@@ -115,6 +118,30 @@ export async function getRecentReviews(currentUserId?: string): Promise<Review[]
       return docToReview(d, vote);
     })
   );
+}
+
+/** Returns matchIds ranked by number of reviews this week, most logged first. */
+export async function getPopularMatchIdsThisWeek(): Promise<{ matchId: number; count: number }[]> {
+  const weekAgo = new Date();
+  weekAgo.setDate(weekAgo.getDate() - 7);
+
+  const q = query(
+    collection(db, 'reviews'),
+    where('createdAt', '>=', weekAgo),
+    orderBy('createdAt', 'desc'),
+    limit(500)
+  );
+  const snapshot = await getDocs(q);
+
+  const counts = new Map<number, number>();
+  for (const d of snapshot.docs) {
+    const matchId = d.data().matchId as number;
+    if (matchId) counts.set(matchId, (counts.get(matchId) || 0) + 1);
+  }
+
+  return [...counts.entries()]
+    .map(([matchId, count]) => ({ matchId, count }))
+    .sort((a, b) => b.count - a.count);
 }
 
 export async function getReviewById(reviewId: string, currentUserId?: string): Promise<Review | null> {
@@ -220,6 +247,7 @@ export async function updateReview(
     text?: string;
     tags?: string[];
     media?: ReviewMedia[];
+    isSpoiler?: boolean;
   }
 ): Promise<void> {
   const reviewRef = doc(db, 'reviews', reviewId);

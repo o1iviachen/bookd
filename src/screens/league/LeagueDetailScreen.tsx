@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
-import { View, Text, ScrollView, Pressable, LayoutChangeEvent } from 'react-native';
+import { View, Text, ScrollView, Pressable, LayoutChangeEvent, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
@@ -14,6 +14,21 @@ import { Match } from '../../types/match';
 
 // Competitions that have knockout rounds
 const CUP_COMPETITIONS = new Set(['CL', 'EL', 'ECL', 'FAC', 'EFL', 'WC', 'EURO']);
+
+function PulsingDot() {
+  const opacity = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 0.3, duration: 800, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 1, duration: 800, useNativeDriver: true }),
+      ])
+    );
+    anim.start();
+    return () => anim.stop();
+  }, [opacity]);
+  return <Animated.View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#00e054', opacity }} />;
+}
 
 // Knockout stages in bracket order
 const KNOCKOUT_STAGES = [
@@ -65,6 +80,7 @@ export function LeagueDetailScreen({ route, navigation }: any) {
   const defaultTabIndex = initialTab === 'fixtures' ? 1 : 0;
   const [activeTabIndex, setActiveTabIndex] = useState(defaultTabIndex);
   const pagerRef = useRef<PagerView>(null);
+  const lastReportedPage = useRef(defaultTabIndex);
 
   const { data: standings, isLoading: standingsLoading } = useQuery({
     queryKey: ['standings', competitionCode],
@@ -221,8 +237,8 @@ export function LeagueDetailScreen({ route, navigation }: any) {
     ...(isCup ? [{ key: 'knockout' as Tab, label: 'Knockout' }] : []),
   ];
 
-  // Shared fixture row component
-  const renderFixtureRow = (match: Match) => (
+  // Shared fixture row component — memoized to avoid recreation on tab changes
+  const renderFixtureRow = useCallback((match: Match) => (
     <Pressable
       key={match.id}
       onPress={() => navigation.navigate('MatchDetail', { matchId: match.id })}
@@ -265,7 +281,7 @@ export function LeagueDetailScreen({ route, navigation }: any) {
             </View>
             {(match.status === 'IN_PLAY' || match.status === 'PAUSED') && (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 }}>
-                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#00e054' }} />
+                <PulsingDot />
                 <Text style={{ fontSize: 10, fontWeight: '700', color: '#00e054' }}>LIVE</Text>
               </View>
             )}
@@ -283,7 +299,130 @@ export function LeagueDetailScreen({ route, navigation }: any) {
         <TeamLogo uri={match.awayTeam.crest} size={24} />
       </View>
     </Pressable>
-  );
+  ), [colors, spacing, typography, navigation]);
+
+  // Memoize heavy page content so tab-switch re-renders don't rebuild them
+  const tableContent = useMemo(() => {
+    if (standingsLoading) return <LoadingSpinner />;
+    if (!standings || standings.length === 0) {
+      return (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <Text style={{ ...typography.body, color: colors.textSecondary }}>No standings available</Text>
+        </View>
+      );
+    }
+    return (
+      <ScrollView indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: 60 }} nestedScrollEnabled>
+        {/* Table header */}
+        <View style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          paddingHorizontal: spacing.md,
+          paddingVertical: spacing.sm,
+          borderBottomWidth: 1,
+          borderBottomColor: colors.border,
+        }}>
+          <Text style={{ width: 28, ...typography.small, color: colors.textSecondary, fontWeight: '600' }}>#</Text>
+          <Text style={{ flex: 1, ...typography.small, color: colors.textSecondary, fontWeight: '600' }}>Team</Text>
+          <Text style={{ width: 30, textAlign: 'center', ...typography.small, color: colors.textSecondary, fontWeight: '600' }}>P</Text>
+          <Text style={{ width: 30, textAlign: 'center', ...typography.small, color: colors.textSecondary, fontWeight: '600' }}>W</Text>
+          <Text style={{ width: 30, textAlign: 'center', ...typography.small, color: colors.textSecondary, fontWeight: '600' }}>D</Text>
+          <Text style={{ width: 30, textAlign: 'center', ...typography.small, color: colors.textSecondary, fontWeight: '600' }}>L</Text>
+          <Text style={{ width: 34, textAlign: 'center', ...typography.small, color: colors.textSecondary, fontWeight: '600' }}>GD</Text>
+          <Text style={{ width: 34, textAlign: 'center', ...typography.small, color: colors.textSecondary, fontWeight: '600' }}>Pts</Text>
+        </View>
+
+        {/* Table rows */}
+        {standings.map((row) => (
+          <Pressable
+            key={row.position}
+            onPress={() => navigation.navigate('TeamDetail', { teamId: row.team.id, teamName: row.team.name, teamCrest: row.team.crest })}
+            style={({ pressed }) => ({
+              flexDirection: 'row',
+              alignItems: 'center',
+              paddingHorizontal: spacing.md,
+              paddingVertical: spacing.sm + 2,
+              borderBottomWidth: 1,
+              borderBottomColor: colors.border,
+              borderLeftWidth: row.position <= 4 ? 3 : 0,
+              borderLeftColor: row.position <= 4 ? colors.primary : 'transparent',
+              opacity: pressed ? 0.7 : 1,
+            })}
+          >
+            <Text style={{ width: 28, ...typography.caption, color: colors.textSecondary, fontWeight: '500' }}>
+              {row.position}
+            </Text>
+            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+              <TeamLogo uri={row.team.crest} size={22} />
+              <Text style={{ ...typography.body, color: colors.foreground, fontSize: 14 }} numberOfLines={1}>
+                {row.team.shortName}
+              </Text>
+            </View>
+            <Text style={{ width: 30, textAlign: 'center', ...typography.caption, color: colors.textSecondary }}>
+              {row.playedGames}
+            </Text>
+            <Text style={{ width: 30, textAlign: 'center', ...typography.caption, color: colors.textSecondary }}>
+              {row.won}
+            </Text>
+            <Text style={{ width: 30, textAlign: 'center', ...typography.caption, color: colors.textSecondary }}>
+              {row.draw}
+            </Text>
+            <Text style={{ width: 30, textAlign: 'center', ...typography.caption, color: colors.textSecondary }}>
+              {row.lost}
+            </Text>
+            <Text style={{
+              width: 34, textAlign: 'center', ...typography.caption,
+              color: row.goalDifference > 0 ? colors.primary : row.goalDifference < 0 ? '#ef4444' : colors.textSecondary,
+              fontWeight: '500',
+            }}>
+              {row.goalDifference > 0 ? `+${row.goalDifference}` : row.goalDifference}
+            </Text>
+            <Text style={{ width: 34, textAlign: 'center', ...typography.bodyBold, color: colors.foreground, fontSize: 14 }}>
+              {row.points}
+            </Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+    );
+  }, [standingsLoading, standings, isDark, colors, spacing, typography, borderRadius, navigation]);
+
+  const fixturesContent = useMemo(() => {
+    if (fixturesLoading) return <LoadingSpinner />;
+    if (leagueFixtures.length === 0) {
+      return (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <Text style={{ ...typography.body, color: colors.textSecondary }}>No fixtures available</Text>
+        </View>
+      );
+    }
+    return (
+      <ScrollView ref={fixturesScrollRef} indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: 60 }} nestedScrollEnabled>
+        {Array.from(fixturesByMatchday.entries())
+          .sort(([a], [b]) => a - b)
+          .map(([matchday, mdMatches]) => (
+            <View key={matchday} onLayout={(e) => handleMatchdayLayout(matchday, e)}>
+              {/* Matchday header */}
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingHorizontal: spacing.md,
+                paddingTop: spacing.lg,
+                paddingBottom: spacing.sm,
+                gap: spacing.sm,
+              }}>
+                <View style={{ height: 1, flex: 1, backgroundColor: colors.border }} />
+                <Text style={{ ...typography.caption, color: colors.textSecondary, fontWeight: '600', letterSpacing: 0.5 }}>
+                  MATCHDAY {matchday}
+                </Text>
+                <View style={{ height: 1, flex: 1, backgroundColor: colors.border }} />
+              </View>
+
+              {mdMatches.map(renderFixtureRow)}
+            </View>
+          ))}
+      </ScrollView>
+    );
+  }, [fixturesLoading, leagueFixtures, fixturesByMatchday, isDark, colors, spacing, handleMatchdayLayout, renderFixtureRow]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
@@ -347,131 +486,37 @@ export function LeagueDetailScreen({ route, navigation }: any) {
         ref={pagerRef}
         style={{ flex: 1 }}
         initialPage={defaultTabIndex}
-        onPageScroll={(e: any) => setActiveTabIndex(Math.round(e.nativeEvent.position + e.nativeEvent.offset))}
+        offscreenPageLimit={1}
+        onPageScroll={(e: any) => {
+          const page = Math.min(
+            Math.round(e.nativeEvent.position + e.nativeEvent.offset),
+            tabs.length - 1,
+          );
+          if (page !== lastReportedPage.current) {
+            lastReportedPage.current = page;
+            setActiveTabIndex(page);
+          }
+        }}
+        onPageSelected={(e: any) => {
+          // Prevent swiping to hidden knockout page for non-cup leagues
+          if (e.nativeEvent.position >= tabs.length) {
+            pagerRef.current?.setPage(tabs.length - 1);
+          }
+        }}
       >
         {/* ─── Table Tab ─── */}
         <View key="table" style={{ flex: 1 }}>
-          {standingsLoading ? (
-            <LoadingSpinner />
-          ) : !standings || standings.length === 0 ? (
-            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ ...typography.body, color: colors.textSecondary }}>No standings available</Text>
-            </View>
-          ) : (
-            <ScrollView indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: 60 }} nestedScrollEnabled>
-              {/* Table header */}
-              <View style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                paddingHorizontal: spacing.md,
-                paddingVertical: spacing.sm,
-                borderBottomWidth: 1,
-                borderBottomColor: colors.border,
-              }}>
-                <Text style={{ width: 28, ...typography.small, color: colors.textSecondary, fontWeight: '600' }}>#</Text>
-                <Text style={{ flex: 1, ...typography.small, color: colors.textSecondary, fontWeight: '600' }}>Team</Text>
-                <Text style={{ width: 30, textAlign: 'center', ...typography.small, color: colors.textSecondary, fontWeight: '600' }}>P</Text>
-                <Text style={{ width: 30, textAlign: 'center', ...typography.small, color: colors.textSecondary, fontWeight: '600' }}>W</Text>
-                <Text style={{ width: 30, textAlign: 'center', ...typography.small, color: colors.textSecondary, fontWeight: '600' }}>D</Text>
-                <Text style={{ width: 30, textAlign: 'center', ...typography.small, color: colors.textSecondary, fontWeight: '600' }}>L</Text>
-                <Text style={{ width: 34, textAlign: 'center', ...typography.small, color: colors.textSecondary, fontWeight: '600' }}>GD</Text>
-                <Text style={{ width: 34, textAlign: 'center', ...typography.small, color: colors.textSecondary, fontWeight: '600' }}>Pts</Text>
-              </View>
-
-              {/* Table rows */}
-              {standings.map((row) => (
-                <Pressable
-                  key={row.position}
-                  onPress={() => navigation.navigate('TeamDetail', { teamId: row.team.id, teamName: row.team.name, teamCrest: row.team.crest })}
-                  style={({ pressed }) => ({
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    paddingHorizontal: spacing.md,
-                    paddingVertical: spacing.sm + 2,
-                    borderBottomWidth: 1,
-                    borderBottomColor: colors.border,
-                    borderLeftWidth: row.position <= 4 ? 3 : 0,
-                    borderLeftColor: row.position <= 4 ? colors.primary : 'transparent',
-                    opacity: pressed ? 0.7 : 1,
-                  })}
-                >
-                  <Text style={{ width: 28, ...typography.caption, color: colors.textSecondary, fontWeight: '500' }}>
-                    {row.position}
-                  </Text>
-                  <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-                    <TeamLogo uri={row.team.crest} size={22} />
-                    <Text style={{ ...typography.body, color: colors.foreground, fontSize: 14 }} numberOfLines={1}>
-                      {row.team.shortName}
-                    </Text>
-                  </View>
-                  <Text style={{ width: 30, textAlign: 'center', ...typography.caption, color: colors.textSecondary }}>
-                    {row.playedGames}
-                  </Text>
-                  <Text style={{ width: 30, textAlign: 'center', ...typography.caption, color: colors.textSecondary }}>
-                    {row.won}
-                  </Text>
-                  <Text style={{ width: 30, textAlign: 'center', ...typography.caption, color: colors.textSecondary }}>
-                    {row.draw}
-                  </Text>
-                  <Text style={{ width: 30, textAlign: 'center', ...typography.caption, color: colors.textSecondary }}>
-                    {row.lost}
-                  </Text>
-                  <Text style={{
-                    width: 34, textAlign: 'center', ...typography.caption,
-                    color: row.goalDifference > 0 ? colors.primary : row.goalDifference < 0 ? '#ef4444' : colors.textSecondary,
-                    fontWeight: '500',
-                  }}>
-                    {row.goalDifference > 0 ? `+${row.goalDifference}` : row.goalDifference}
-                  </Text>
-                  <Text style={{ width: 34, textAlign: 'center', ...typography.bodyBold, color: colors.foreground, fontSize: 14 }}>
-                    {row.points}
-                  </Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-          )}
+          {tableContent}
         </View>
 
-        {/* ─── Fixtures Tab (league phase only) ─── */}
+        {/* ─── Fixtures Tab ─── */}
         <View key="fixtures" style={{ flex: 1 }}>
-          {fixturesLoading ? (
-            <LoadingSpinner />
-          ) : leagueFixtures.length === 0 ? (
-            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ ...typography.body, color: colors.textSecondary }}>No fixtures available</Text>
-            </View>
-          ) : (
-            <ScrollView ref={fixturesScrollRef} indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: 60 }} nestedScrollEnabled>
-              {Array.from(fixturesByMatchday.entries())
-                .sort(([a], [b]) => a - b)
-                .map(([matchday, mdMatches]) => (
-                  <View key={matchday} onLayout={(e) => handleMatchdayLayout(matchday, e)}>
-                    {/* Matchday header */}
-                    <View style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      paddingHorizontal: spacing.md,
-                      paddingTop: spacing.lg,
-                      paddingBottom: spacing.sm,
-                      gap: spacing.sm,
-                    }}>
-                      <View style={{ height: 1, flex: 1, backgroundColor: colors.border }} />
-                      <Text style={{ ...typography.caption, color: colors.textSecondary, fontWeight: '600', letterSpacing: 0.5 }}>
-                        MATCHDAY {matchday}
-                      </Text>
-                      <View style={{ height: 1, flex: 1, backgroundColor: colors.border }} />
-                    </View>
-
-                    {mdMatches.map(renderFixtureRow)}
-                  </View>
-                ))}
-            </ScrollView>
-          )}
+          {fixturesContent}
         </View>
 
-        {/* ─── Knockout Tab (cups only) ─── */}
-        {isCup && <View key="knockout" style={{ flex: 1 }}>
-          {fixturesLoading ? (
+        {/* ─── Knockout Tab ─── */}
+        <View key="knockout" collapsable={false} style={{ flex: 1 }}>
+          {!isCup ? null : fixturesLoading ? (
             <LoadingSpinner />
           ) : knockoutFixtures.length === 0 ? (
             <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
@@ -672,7 +717,7 @@ export function LeagueDetailScreen({ route, navigation }: any) {
               </ScrollView>
             );
           })()}
-        </View>}
+        </View>
       </PagerView>
     </SafeAreaView>
   );

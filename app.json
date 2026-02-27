@@ -37,6 +37,12 @@
           "photosPermission": "Allow bookd to access your photos for profile pictures and reviews.",
           "cameraPermission": "Allow bookd to use your camera for profile pictures and reviews."
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#00e054"
+        }
       ]
     ]
   }

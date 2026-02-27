@@ -9,6 +9,9 @@ import { syncMissingDetails, syncMatchDetails, syncAllMissingDetails } from './s
 import { syncLiveMatches } from './sync/syncLive';
 import { runBackfill, buildTeamsFromMatches, buildPlayersAndEnrichTeams, fetchTeamColors, enrichPlayersFromSquads, backfillPlayerNameLower } from './sync/backfill';
 
+// ─── Push Notifications ───
+export { sendPushNotification } from './notifications';
+
 // ─── Scheduled Functions ───
 
 /**
@@ -54,6 +57,54 @@ export const liveSync = functions
     const count = await syncLiveMatches();
     if (count > 0) {
       console.log(`[liveSync] Updated ${count} live matches`);
+    }
+  });
+
+/**
+ * Detail backfill: runs every 5 minutes.
+ * Syncs lineups/stats/events for finished matches that are missing details.
+ * Processes 50 matches per run (~200 API calls, well within 300 req/min limit).
+ * Also backfills playerIds for any newly synced docs.
+ */
+export const detailBackfill = functions
+  .runWith({ timeoutSeconds: 540, memory: '512MB' })
+  .pubsub.schedule('every 5 minutes')
+  .onRun(async () => {
+    const result = await syncAllMissingDetails(50);
+    if (result.synced > 0) {
+      console.log(`[detailBackfill] Synced ${result.synced} match details (${result.remaining} remaining)`);
+
+      // Backfill playerIds for newly synced docs
+      const db = admin.firestore();
+      const snapshot = await db.collection('matchDetails').limit(500).get();
+      const batch = db.batch();
+      let updated = 0;
+
+      for (const doc of snapshot.docs) {
+        const data = doc.data();
+        if (data.playerIds && Array.isArray(data.playerIds) && data.playerIds.length > 0) continue;
+
+        const playerIds: number[] = [];
+        for (const arr of [data.homeLineup, data.homeBench, data.awayLineup, data.awayBench]) {
+          if (Array.isArray(arr)) {
+            for (const p of arr) {
+              if (p?.id) playerIds.push(p.id);
+            }
+          }
+        }
+        if (data.homeCoach?.id) playerIds.push(data.homeCoach.id);
+        if (data.awayCoach?.id) playerIds.push(data.awayCoach.id);
+
+        if (playerIds.length > 0) {
+          batch.update(doc.ref, { playerIds });
+          updated++;
+        }
+      }
+
+      if (updated > 0) {
+        await batch.commit();
+        console.log(`[detailBackfill] Backfilled playerIds for ${updated} docs`);
+      }
     }
   });
 

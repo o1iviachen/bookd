@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { View, Text, ScrollView, Pressable, TextInput as RNTextInput, LayoutAnimation, useWindowDimensions, Keyboard, NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
+import { View, Text, ScrollView, Pressable, TextInput as RNTextInput, useWindowDimensions, Keyboard, NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -18,6 +18,7 @@ import { ListPreviewCard } from '../../components/list/ListPreviewCard';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { SearchStackParamList } from '../../types/navigation';
 import { TeamLogo } from '../../components/match/TeamLogo';
+import { shortName } from '../../utils/formatName';
 
 const RECENT_SEARCHES_KEY = 'bookd_recent_searches';
 const MAX_RECENT_SEARCHES = 10;
@@ -82,7 +83,6 @@ export function SearchScreen() {
     const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
     if (distanceFromBottom < 300 && !loadingMore.current) {
       loadingMore.current = true;
-      LayoutAnimation.configureNext(LayoutAnimation.create(300, LayoutAnimation.Types.easeInEaseOut, LayoutAnimation.Properties.opacity));
       setVisibleCounts((prev) => ({ ...prev, [activeCategory]: prev[activeCategory] + PAGE_SIZE }));
       setTimeout(() => { loadingMore.current = false; }, 800);
     }
@@ -131,8 +131,8 @@ export function SearchScreen() {
             placeholderTextColor={colors.textSecondary}
             value={queryStr}
             onChangeText={(t) => { setQueryStr(t); setVisibleCounts({ matches: 30, teams: 30, players: 30, members: 30, reviews: 30, lists: 30 }); }}
-            onFocus={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setIsSearching(true); }}
-            onBlur={() => { if (!queryStr) { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setIsSearching(false); } }}
+            onFocus={() => setIsSearching(true)}
+            onBlur={() => { if (!queryStr) setIsSearching(false); }}
             autoCapitalize="none"
             autoCorrect={false}
             style={{
@@ -144,7 +144,7 @@ export function SearchScreen() {
             }}
           />
           {queryStr.length > 0 && (
-            <Pressable onPress={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setQueryStr(''); setIsSearching(false); Keyboard.dismiss(); }}>
+            <Pressable onPress={() => { setQueryStr(''); setIsSearching(false); Keyboard.dismiss(); }}>
               <Ionicons name="close" size={18} color={colors.textSecondary} />
             </Pressable>
           )}
@@ -152,12 +152,13 @@ export function SearchScreen() {
 
         {/* Category tabs */}
         {isSearching && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" style={{ marginBottom: spacing.sm }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="always" style={{ marginBottom: spacing.sm }}>
             <View style={{ flexDirection: 'row', gap: spacing.sm }}>
               {categories.map((cat) => (
                 <Pressable
                   key={cat.key}
-                  onPress={() => setActiveCategory(cat.key)}
+                  onPress={() => { if (queryStr.trim()) Keyboard.dismiss(); setActiveCategory(cat.key); }}
+                  hitSlop={8}
                   style={{
                     paddingHorizontal: spacing.md,
                     paddingVertical: spacing.xs + 2,
@@ -181,7 +182,7 @@ export function SearchScreen() {
         )}
       </View>
 
-      <ScrollView indicatorStyle={isDark ? 'white' : 'default'} style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 0 }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" onScroll={handleScroll} scrollEventThrottle={400}>
+      <ScrollView indicatorStyle={isDark ? 'white' : 'default'} style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 0 }} keyboardShouldPersistTaps="always" keyboardDismissMode="on-drag" onScroll={handleScroll} scrollEventThrottle={400}>
         {/* Default browse view */}
         {!isSearching && (
           <View style={{ paddingVertical: spacing.lg, paddingHorizontal: spacing.md }}>
@@ -371,7 +372,7 @@ export function SearchScreen() {
               playerResults.slice(0, visibleCounts.players).map((player, i, arr) => (
                 <Pressable
                   key={player.id}
-                  onPress={() => navigation.navigate('PersonDetail', { personId: player.id, personName: player.name, role: player.position === 'Coach' ? 'manager' : 'player' })}
+                  onPress={() => navigation.navigate('PersonDetail', { personId: player.id, personName: shortName(player.name), role: player.position === 'Coach' ? 'manager' : 'player' })}
                   style={({ pressed }) => ({
                     borderBottomWidth: i < arr.length - 1 ? 1 : 0,
                     borderBottomColor: colors.border,
@@ -383,7 +384,7 @@ export function SearchScreen() {
                       <Ionicons name={player.position === 'Coach' ? 'person' : 'football'} size={16} color={colors.textSecondary} />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={{ ...typography.body, color: colors.foreground, fontSize: 15 }}>{player.name}</Text>
+                      <Text style={{ ...typography.body, color: colors.foreground, fontSize: 15 }}>{shortName(player.name)}</Text>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
                         {player.position && (
                           <Text style={{ ...typography.caption, color: colors.textSecondary }}>{player.position}</Text>

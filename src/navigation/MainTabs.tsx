@@ -10,6 +10,8 @@ import { SearchStack } from './SearchStack';
 import { ActivityStack } from './ActivityStack';
 import { ProfileStack } from './ProfileStack';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
+import { useNotifications } from '../hooks/useNotifications';
 
 const Tab = createBottomTabNavigator<MainTabsParamList>();
 
@@ -32,6 +34,9 @@ const TAB_LABELS: Record<keyof MainTabsParamList, string> = {
 export function MainTabs() {
   const { theme } = useTheme();
   const { colors, spacing } = theme;
+  const { user } = useAuth();
+  const { data: notifications } = useNotifications(user?.uid || '');
+  const unreadCount = notifications?.filter((n: any) => !n.isRead).length || 0;
 
   return (
     <Tab.Navigator
@@ -67,7 +72,14 @@ export function MainTabs() {
       <Tab.Screen name="FeedTab" component={FeedStack} />
       <Tab.Screen name="MatchesTab" component={MatchesStack} />
       <Tab.Screen name="SearchTab" component={SearchStack} />
-      <Tab.Screen name="ActivityTab" component={ActivityStack} />
+      <Tab.Screen
+        name="ActivityTab"
+        component={ActivityStack}
+        options={{
+          tabBarBadge: unreadCount > 0 ? (unreadCount > 9 ? '9+' : unreadCount) : undefined,
+          tabBarBadgeStyle: unreadCount > 0 ? { backgroundColor: '#00e054', color: '#fff', fontSize: 10, fontWeight: '700', minWidth: 18, height: 18, lineHeight: 18 } : undefined,
+        }}
+      />
       <Tab.Screen name="ProfileTab" component={ProfileStack} />
     </Tab.Navigator>
   );

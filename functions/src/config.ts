@@ -47,6 +47,8 @@ export const SYNC_LEAGUES = [
   // International
   { code: 'WC', apiId: 1, name: 'World Cup', country: 'World' },
   { code: 'EURO', apiId: 4, name: 'Euro Championship', country: 'Europe' },
+  { code: 'NL', apiId: 5, name: 'Nations League', country: 'Europe' },
+  { code: 'CA', apiId: 9, name: 'Copa America', country: 'South America' },
 ];
 
 // Seasons to backfill (API-Football uses the starting year of the season)

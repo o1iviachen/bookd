@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, Pressable, KeyboardAvoidingView, Platform, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, Pressable, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
@@ -48,6 +48,7 @@ export function CreateReviewScreen({ route, navigation }: any) {
   const [showTagInput, setShowTagInput] = useState(false);
   const [mediaItems, setMediaItems] = useState<LocalMedia[]>([]);
   const [existingMedia, setExistingMedia] = useState<ReviewMedia[]>([]);
+  const [isSpoiler, setIsSpoiler] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [initialized, setInitialized] = useState(!isEditMode);
 
@@ -58,6 +59,7 @@ export function CreateReviewScreen({ route, navigation }: any) {
       setText(existingReview.text);
       setSelectedTags(existingReview.tags);
       setExistingMedia(existingReview.media || []);
+      setIsSpoiler(existingReview.isSpoiler || false);
       setInitialized(true);
     }
   }, [isEditMode, existingReview, initialized]);
@@ -145,6 +147,7 @@ export function CreateReviewScreen({ route, navigation }: any) {
             text,
             tags: selectedTags,
             media: allMedia,
+            isSpoiler,
           },
         });
       } else {
@@ -160,6 +163,7 @@ export function CreateReviewScreen({ route, navigation }: any) {
           text,
           tags: selectedTags,
           media: allMedia,
+          isSpoiler,
         });
       }
 
@@ -451,7 +455,27 @@ export function CreateReviewScreen({ route, navigation }: any) {
             </View>
           )}
 
-          {!showTagInput && <View style={{ marginBottom: spacing.lg }} />}
+          {!showTagInput && <View style={{ marginBottom: spacing.md }} />}
+
+          {/* Spoiler toggle */}
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingVertical: spacing.sm,
+            marginBottom: spacing.lg,
+          }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+              <Ionicons name="eye-off-outline" size={18} color={colors.textSecondary} />
+              <Text style={{ ...typography.body, color: colors.foreground }}>Contains spoilers</Text>
+            </View>
+            <Switch
+              value={isSpoiler}
+              onValueChange={setIsSpoiler}
+              trackColor={{ false: colors.border, true: colors.primary }}
+              thumbColor="#fff"
+            />
+          </View>
 
           {/* Upload progress indicator — only show when there are media items */}
           {uploading && mediaItems.length > 0 && (
