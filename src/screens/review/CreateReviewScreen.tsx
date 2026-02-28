@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { View, Text, ScrollView, Pressable, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, Switch, Modal, Dimensions, PanResponder, Animated as RNAnimated } from 'react-native';
+import { View, Text, ScrollView, Pressable, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, Switch, Modal, Dimensions, PanResponder } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
@@ -319,7 +319,11 @@ export function CreateReviewScreen({ route, navigation }: any) {
         const ext = asset.uri.split('.').pop()?.toLowerCase();
         const isVideo = asset.type === 'video' || ext === 'mov' || ext === 'mp4';
         if (isVideo) {
-          // expo-image-picker duration is already in ms
+          // expo-image-picker duration is already in ms — enforce 1 min max
+          if (asset.duration && asset.duration > 60000) {
+            Alert.alert('Video Too Long', 'Videos must be 1 minute or shorter.');
+            return;
+          }
           addVideoWithThumbnail(asset.uri, asset.duration || undefined, asset.width, asset.height);
         } else {
           setMediaItems((prev) => [...prev, { uri: asset.uri, type: 'image' as const }].slice(0, 4 - existingMedia.length));
@@ -339,12 +343,6 @@ export function CreateReviewScreen({ route, navigation }: any) {
     setExistingMedia((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // Drag-to-reorder state
-  const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
-  const dragX = useRef(new RNAnimated.Value(0)).current;
-  const dragY = useRef(new RNAnimated.Value(0)).current;
-  const mediaPositions = useRef<{ x: number; y: number; width: number; height: number }[]>([]);
-
   const allMediaItems = useMemo(() => {
     const items: { key: string; source: 'existing' | 'new'; index: number }[] = [];
     existingMedia.forEach((_, i) => items.push({ key: `existing-${i}`, source: 'existing', index: i }));
@@ -352,57 +350,14 @@ export function CreateReviewScreen({ route, navigation }: any) {
     return items;
   }, [existingMedia, mediaItems]);
 
-  const handleMediaReorder = (fromGlobalIndex: number, toGlobalIndex: number) => {
-    if (fromGlobalIndex === toGlobalIndex) return;
+  const swapMedia = (globalIndexA: number, globalIndexB: number) => {
     const combined = [
       ...existingMedia.map((m) => ({ type: 'existing' as const, data: m })),
       ...mediaItems.map((m) => ({ type: 'new' as const, data: m })),
     ];
-    const [moved] = combined.splice(fromGlobalIndex, 1);
-    combined.splice(toGlobalIndex, 0, moved);
+    [combined[globalIndexA], combined[globalIndexB]] = [combined[globalIndexB], combined[globalIndexA]];
     setExistingMedia(combined.filter((c) => c.type === 'existing').map((c) => c.data as ReviewMedia));
     setMediaItems(combined.filter((c) => c.type === 'new').map((c) => c.data as LocalMedia));
-  };
-
-  const mediaDragResponder = useMemo(() => PanResponder.create({
-    onStartShouldSetPanResponder: () => draggingIndex !== null,
-    onMoveShouldSetPanResponder: () => draggingIndex !== null,
-    onPanResponderMove: (_, gesture) => {
-      dragX.setValue(gesture.dx);
-      dragY.setValue(gesture.dy);
-    },
-    onPanResponderRelease: (_, gesture) => {
-      if (draggingIndex !== null) {
-        // Find which position we're over
-        const positions = mediaPositions.current;
-        const startPos = positions[draggingIndex];
-        if (startPos) {
-          const endX = startPos.x + gesture.dx + startPos.width / 2;
-          const endY = startPos.y + gesture.dy + startPos.height / 2;
-          let closestIdx = draggingIndex;
-          let closestDist = Infinity;
-          positions.forEach((pos, idx) => {
-            const cx = pos.x + pos.width / 2;
-            const cy = pos.y + pos.height / 2;
-            const dist = Math.sqrt((endX - cx) ** 2 + (endY - cy) ** 2);
-            if (dist < closestDist) {
-              closestDist = dist;
-              closestIdx = idx;
-            }
-          });
-          handleMediaReorder(draggingIndex, closestIdx);
-        }
-      }
-      setDraggingIndex(null);
-      dragX.setValue(0);
-      dragY.setValue(0);
-    },
-  }), [draggingIndex]);
-
-  const startDrag = (globalIndex: number) => {
-    setDraggingIndex(globalIndex);
-    dragX.setValue(0);
-    dragY.setValue(0);
   };
 
   const hasReviewText = text.trim().length > 0;
@@ -564,7 +519,7 @@ export function CreateReviewScreen({ route, navigation }: any) {
           <Text style={{ ...typography.bodyBold, color: colors.foreground, marginBottom: spacing.sm }}>
             Photos and Videos
           </Text>
-          <View {...mediaDragResponder.panHandlers} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.lg }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.lg }}>
             {allMediaItems.map((meta, globalIndex) => {
               const isExisting = meta.source === 'existing';
               const existingItem = isExisting ? existingMedia[meta.index] : null;
@@ -573,7 +528,8 @@ export function CreateReviewScreen({ route, navigation }: any) {
                 ? (existingItem!.type === 'video' && existingItem!.thumbnailUrl ? existingItem!.thumbnailUrl : existingItem!.url)
                 : (newItem!.type === 'video' && newItem!.thumbnail ? newItem!.thumbnail : newItem!.uri);
               const isVideo = isExisting ? existingItem!.type === 'video' : newItem!.type === 'video';
-              const isDragging = draggingIndex === globalIndex;
+              const canMoveLeft = globalIndex > 0;
+              const canMoveRight = globalIndex < allMediaItems.length - 1;
 
               const handleTap = () => {
                 if (isExisting) handleTapExistingMedia(existingItem!, meta.index);
@@ -584,25 +540,16 @@ export function CreateReviewScreen({ route, navigation }: any) {
                 else removeMedia(meta.index);
               };
 
-              const content = (
-                <View
-                  key={meta.key}
-                  onLayout={(e) => {
-                    const { x, y, width, height } = e.nativeEvent.layout;
-                    mediaPositions.current[globalIndex] = { x, y, width, height };
-                  }}
-                >
+              return (
+                <View key={meta.key}>
                   <Pressable
                     onPress={handleTap}
-                    onLongPress={() => startDrag(globalIndex)}
-                    delayLongPress={200}
                     style={{
                       width: 80,
                       height: 80,
                       borderRadius: borderRadius.md,
                       overflow: 'hidden',
                       backgroundColor: colors.accent,
-                      opacity: isDragging ? 0.3 : 1,
                     }}
                   >
                     <Image
@@ -632,43 +579,27 @@ export function CreateReviewScreen({ route, navigation }: any) {
                       <Ionicons name="close" size={12} color="#fff" />
                     </Pressable>
                   </Pressable>
+                  {/* Reorder arrows — only show when 2+ media */}
+                  {allMediaItems.length > 1 && (
+                    <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 2, marginTop: 4 }}>
+                      <Pressable
+                        onPress={() => canMoveLeft && swapMedia(globalIndex, globalIndex - 1)}
+                        hitSlop={4}
+                        style={{ opacity: canMoveLeft ? 1 : 0.25 }}
+                      >
+                        <Ionicons name="chevron-back" size={16} color={colors.textSecondary} />
+                      </Pressable>
+                      <Pressable
+                        onPress={() => canMoveRight && swapMedia(globalIndex, globalIndex + 1)}
+                        hitSlop={4}
+                        style={{ opacity: canMoveRight ? 1 : 0.25 }}
+                      >
+                        <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+                      </Pressable>
+                    </View>
+                  )}
                 </View>
               );
-
-              if (isDragging) {
-                return (
-                  <React.Fragment key={meta.key}>
-                    {content}
-                    <RNAnimated.View
-                      style={{
-                        position: 'absolute',
-                        zIndex: 100,
-                        transform: [
-                          { translateX: RNAnimated.add(dragX, mediaPositions.current[globalIndex]?.x ?? 0) },
-                          { translateY: RNAnimated.add(dragY, mediaPositions.current[globalIndex]?.y ?? 0) },
-                        ],
-                      }}
-                    >
-                      <View style={{
-                        width: 80,
-                        height: 80,
-                        borderRadius: borderRadius.md,
-                        overflow: 'hidden',
-                        borderWidth: 2,
-                        borderColor: colors.primary,
-                      }}>
-                        <Image
-                          source={{ uri: thumbnailUri }}
-                          style={{ width: 80, height: 80 }}
-                          contentFit="cover"
-                        />
-                      </View>
-                    </RNAnimated.View>
-                  </React.Fragment>
-                );
-              }
-
-              return content;
             })}
             {totalMediaCount < 4 && (
               <Pressable
@@ -820,7 +751,7 @@ export function CreateReviewScreen({ route, navigation }: any) {
       </KeyboardAvoidingView>
 
       {/* Thumbnail scrubber modal */}
-      <Modal visible={thumbPickerVisible} animationType="none">
+      <Modal visible={thumbPickerVisible} animationType="none" presentationStyle="fullScreen">
         <View style={{ flex: 1, backgroundColor: '#000' }}>
           <SafeAreaView style={{ flex: 1 }}>
             {/* Header */}
