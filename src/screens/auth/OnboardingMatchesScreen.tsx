@@ -8,11 +8,12 @@ import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useMatchesRange } from '../../hooks/useMatches';
 import { updateUserProfile } from '../../services/firestore/users';
+import { getMatchById } from '../../services/matchService';
 import { MatchPosterCard } from '../../components/match/MatchPosterCard';
 import { MatchFilters, MatchFilterState, applyMatchFilters } from '../../components/match/MatchFilters';
-import { CompactMatchRow } from '../../components/match/CompactMatchRow';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { Match } from '../../types/match';
+import { useQueries } from '@tanstack/react-query';
 
 const MAX_FAVOURITES = 4;
 
@@ -78,12 +79,16 @@ export function OnboardingMatchesScreen() {
     return filtered.slice(0, 30);
   }, [recentMatches, selected, pickerSearch, filters]);
 
-  const selectedMatches = useMemo(() => {
-    if (!recentMatches) return [];
-    return selected
-      .map((id) => recentMatches.find((m) => m.id === id))
-      .filter((m): m is Match => m !== undefined);
-  }, [recentMatches, selected]);
+  const matchQueries = useQueries({
+    queries: selected.map((id) => ({
+      queryKey: ['match', id],
+      queryFn: () => getMatchById(id),
+      staleTime: 5 * 60 * 1000,
+    })),
+  });
+  const selectedMatches = matchQueries
+    .map((q) => q.data)
+    .filter((m): m is Match => m !== undefined);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
@@ -205,8 +210,6 @@ export function OnboardingMatchesScreen() {
           <MatchFilters
             filters={filters}
             onFiltersChange={setFilters}
-            minLogs={0}
-            onMinLogsChange={() => {}}
             matches={recentMatches || []}
             showMinLogs={false}
           />

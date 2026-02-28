@@ -4,14 +4,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
-import { subDays } from 'date-fns';
+import { useQueries } from '@tanstack/react-query';
 import { useTheme } from '../../context/ThemeContext';
-import { useMatchesRange } from '../../hooks/useMatches';
-import { useRecentReviews } from '../../hooks/useReviews';
+import { usePopularMatchIdsThisWeek } from '../../hooks/useReviews';
+import { getMatchById } from '../../services/matchService';
 import { MatchFilters, MatchFilterState, applyMatchFilters } from '../../components/match/MatchFilters';
 import { MatchPosterCardCrest } from '../../components/match/MatchPosterCardCrest';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { SearchStackParamList } from '../../types/navigation';
+import { Match } from '../../types/match';
 
 type Nav = NativeStackNavigationProp<SearchStackParamList, 'BrowsePopular'>;
 const NUM_COLUMNS = 3;
@@ -29,38 +30,50 @@ export function BrowsePopularScreen() {
   const [filters, setFilters] = useState<MatchFilterState>({ league: 'all', team: 'all', season: 'all' });
   const [minLogs, setMinLogs] = useState(0);
 
-  const today = new Date();
-  const weekAgo = subDays(today, 7);
-  const { data: matches, isLoading: matchesLoading } = useMatchesRange(weekAgo, today);
-  const { data: reviews, isLoading: reviewsLoading } = useRecentReviews();
+  const { data: popularIds, isLoading: idsLoading } = usePopularMatchIdsThisWeek();
 
-  const isLoading = matchesLoading || reviewsLoading;
+  const matchIds = useMemo(() => (popularIds || []).map((p) => p.matchId), [popularIds]);
 
-  const popularMatches = useMemo(() => {
-    if (!matches) return [];
-    let filtered = matches.filter((m) => m.status === 'FINISHED');
+  const matchQueries = useQueries({
+    queries: matchIds.map((id) => ({
+      queryKey: ['match', id],
+      queryFn: () => getMatchById(id),
+      staleTime: 5 * 60 * 1000,
+    })),
+  });
 
-    // Apply dropdown filters
-    filtered = applyMatchFilters(filtered, filters);
+  const allLoaded = matchQueries.every((q) => !q.isLoading);
+  const isLoading = idsLoading || !allLoaded;
 
-    // Calculate log counts per match
-    const logMap = new Map<number, number>();
-    if (reviews) {
-      for (const r of reviews) {
-        logMap.set(r.matchId, (logMap.get(r.matchId) || 0) + 1);
+  const logMap = useMemo(() => {
+    const map = new Map<number, number>();
+    if (popularIds) {
+      for (const p of popularIds) {
+        map.set(p.matchId, p.count);
       }
     }
+    return map;
+  }, [popularIds]);
 
-    // Filter by minimum logs
+  const allMatches = useMemo(() => {
+    return matchIds
+      .map((id, i) => matchQueries[i]?.data)
+      .filter((m): m is Match => m !== undefined);
+  }, [matchIds, matchQueries]);
+
+  const popularMatches = useMemo(() => {
+    let filtered = allMatches.filter((m) => m.status === 'FINISHED');
+
+    filtered = applyMatchFilters(filtered, filters);
+
     if (minLogs > 0) {
       filtered = filtered.filter((m) => (logMap.get(m.id) || 0) >= minLogs);
     }
 
-    // Sort by popularity (log count)
     filtered.sort((a, b) => (logMap.get(b.id) || 0) - (logMap.get(a.id) || 0));
 
-    return filtered.slice(0, 30);
-  }, [matches, reviews, filters, minLogs]);
+    return filtered;
+  }, [allMatches, filters, minLogs, logMap]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
@@ -78,7 +91,7 @@ export function BrowsePopularScreen() {
         onFiltersChange={setFilters}
         minLogs={minLogs}
         onMinLogsChange={setMinLogs}
-        matches={matches || []}
+        matches={allMatches}
       />
 
       {isLoading ? (
@@ -87,7 +100,7 @@ export function BrowsePopularScreen() {
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
           <Ionicons name="trending-up-outline" size={48} color={colors.textSecondary} />
           <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.md }}>
-            No popular matches this week
+            No popular matches yet
           </Text>
         </View>
       ) : (

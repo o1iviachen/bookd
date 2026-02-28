@@ -4,6 +4,7 @@ import {
   getReviewsForUser,
   getRecentReviews,
   getPopularMatchIdsThisWeek,
+  getHighestRatedMatchIds,
   getReviewById,
   createReview,
   updateReview,
@@ -50,6 +51,14 @@ export function usePopularMatchIdsThisWeek() {
   return useQuery({
     queryKey: ['reviews', 'popularThisWeek'],
     queryFn: () => getPopularMatchIdsThisWeek(),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useHighestRatedMatchIds() {
+  return useQuery({
+    queryKey: ['reviews', 'highestRated'],
+    queryFn: () => getHighestRatedMatchIds(),
     staleTime: 5 * 60 * 1000,
   });
 }

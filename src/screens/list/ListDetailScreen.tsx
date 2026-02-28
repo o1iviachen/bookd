@@ -22,6 +22,7 @@ import { formatRelativeTime } from '../../utils/formatDate';
 import { POPULAR_TEAMS } from '../../utils/constants';
 import { Match } from '../../types/match';
 import { User } from '../../types/user';
+import { isTextClean } from '../../utils/moderation';
 
 const NUM_COLUMNS = 3;
 
@@ -285,8 +286,6 @@ export function ListDetailScreen({ route, navigation }: any) {
             <MatchFilters
               filters={filters}
               onFiltersChange={setFilters}
-              minLogs={0}
-              onMinLogsChange={() => {}}
               matches={matches}
               showMinLogs={false}
             />
@@ -458,6 +457,10 @@ export function ListDetailScreen({ route, navigation }: any) {
             <Pressable
               onPress={() => {
                 if (!commentText.trim() || !user || !profile) return;
+                if (!isTextClean(commentText)) {
+                  Alert.alert('Content Warning', 'Your comment contains inappropriate language. Please revise.');
+                  return;
+                }
                 createComment.mutate({
                   listId,
                   userId: user.uid,

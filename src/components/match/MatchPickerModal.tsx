@@ -124,8 +124,6 @@ export function MatchPickerModal({ visible, onClose, onAddMatches, excludeMatchI
         <MatchFilters
           filters={filters}
           onFiltersChange={setFilters}
-          minLogs={0}
-          onMinLogsChange={() => {}}
           matches={matches || []}
           showMinLogs={false}
         />

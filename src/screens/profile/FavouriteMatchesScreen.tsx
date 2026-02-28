@@ -9,11 +9,12 @@ import { useAuth } from '../../context/AuthContext';
 import { useUserProfile } from '../../hooks/useUser';
 import { useMatchesRange } from '../../hooks/useMatches';
 import { updateUserProfile } from '../../services/firestore/users';
+import { getMatchById } from '../../services/matchService';
 import { MatchPosterCard } from '../../components/match/MatchPosterCard';
 import { MatchFilters, MatchFilterState, applyMatchFilters } from '../../components/match/MatchFilters';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { Match } from '../../types/match';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQueries } from '@tanstack/react-query';
 
 const MAX_FAVOURITES = 3;
 const NUM_COLUMNS = 3;
@@ -59,6 +60,7 @@ export function FavouriteMatchesScreen() {
     setSelected((prev) => [...prev, matchId]);
     setShowPicker(false);
     setPickerSearch('');
+    setFilters({ league: 'all', team: 'all', season: 'all' });
   };
 
   const removeMatch = (matchId: number) => {
@@ -92,13 +94,17 @@ export function FavouriteMatchesScreen() {
     return filtered.slice(0, 60);
   }, [recentMatches, selected, pickerSearch, filters]);
 
-  // Get match data for selected IDs
-  const selectedMatches = useMemo(() => {
-    if (!recentMatches) return [];
-    return selected
-      .map((id) => recentMatches.find((m) => m.id === id))
-      .filter((m): m is Match => m !== undefined);
-  }, [recentMatches, selected]);
+  // Fetch each selected match independently so removing one doesn't flash the rest
+  const matchQueries = useQueries({
+    queries: selected.map((id) => ({
+      queryKey: ['match', id],
+      queryFn: () => getMatchById(id),
+      staleTime: 5 * 60 * 1000,
+    })),
+  });
+  const selectedMatches = matchQueries
+    .map((q) => q.data)
+    .filter((m): m is Match => m !== undefined);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
@@ -172,7 +178,7 @@ export function FavouriteMatchesScreen() {
         <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border }}>
             <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 17 }}>Select a Match</Text>
-            <Pressable onPress={() => { setShowPicker(false); setPickerSearch(''); }}>
+            <Pressable onPress={() => { setShowPicker(false); setPickerSearch(''); setFilters({ league: 'all', team: 'all', season: 'all' }); }}>
               <Text style={{ color: colors.primary, fontSize: 16 }}>Cancel</Text>
             </Pressable>
           </View>
@@ -208,8 +214,6 @@ export function FavouriteMatchesScreen() {
           <MatchFilters
             filters={filters}
             onFiltersChange={setFilters}
-            minLogs={0}
-            onMinLogsChange={() => {}}
             matches={recentMatches || []}
             showMinLogs={false}
           />

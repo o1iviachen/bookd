@@ -62,9 +62,8 @@ export function LikesScreen({ route, navigation }: any) {
     pagerRef.current?.setPage(index);
   }, []);
 
-  const handlePageScroll = useCallback((e: any) => {
-    const { position, offset } = e.nativeEvent;
-    setActiveTabIndex(Math.round(position + offset));
+  const handlePageSelected = useCallback((e: any) => {
+    setActiveTabIndex(e.nativeEvent.position);
   }, []);
   const [filters, setFilters] = useState<MatchFilterState>({ league: 'all', team: 'all', season: 'all' });
 
@@ -186,15 +185,13 @@ export function LikesScreen({ route, navigation }: any) {
         ref={pagerRef}
         style={{ flex: 1 }}
         initialPage={0}
-        onPageScroll={handlePageScroll}
+        onPageSelected={handlePageSelected}
       >
         {/* ─── Matches Page ─── */}
         <View key="matches" style={{ flex: 1 }}>
           <MatchFilters
             filters={filters}
             onFiltersChange={setFilters}
-            minLogs={0}
-            onMinLogsChange={() => {}}
             matches={allMatches}
             showMinLogs={false}
           />

@@ -4,14 +4,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
-import { subDays } from 'date-fns';
+import { useQueries } from '@tanstack/react-query';
 import { useTheme } from '../../context/ThemeContext';
-import { useRecentReviews } from '../../hooks/useReviews';
-import { useMatchesRange } from '../../hooks/useMatches';
+import { useHighestRatedMatchIds } from '../../hooks/useReviews';
+import { getMatchById } from '../../services/matchService';
 import { MatchFilters, MatchFilterState, applyMatchFilters } from '../../components/match/MatchFilters';
 import { MatchPosterCard } from '../../components/match/MatchPosterCard';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { SearchStackParamList } from '../../types/navigation';
+import { Match } from '../../types/match';
 
 type Nav = NativeStackNavigationProp<SearchStackParamList, 'BrowseHighestRated'>;
 const NUM_COLUMNS = 3;
@@ -29,42 +30,52 @@ export function BrowseHighestRatedScreen() {
   const [filters, setFilters] = useState<MatchFilterState>({ league: 'all', team: 'all', season: 'all' });
   const [minLogs, setMinLogs] = useState(0);
 
-  const { data: reviews, isLoading: reviewsLoading } = useRecentReviews();
-  const today = new Date();
-  const twoWeeksAgo = subDays(today, 14);
-  const { data: recentMatches, isLoading: matchesLoading } = useMatchesRange(twoWeeksAgo, today);
+  const { data: ratedIds, isLoading: idsLoading } = useHighestRatedMatchIds();
 
-  const isLoading = reviewsLoading || matchesLoading;
+  const matchIds = useMemo(() => (ratedIds || []).map((r) => r.matchId), [ratedIds]);
+
+  const matchQueries = useQueries({
+    queries: matchIds.map((id) => ({
+      queryKey: ['match', id],
+      queryFn: () => getMatchById(id),
+      staleTime: 5 * 60 * 1000,
+    })),
+  });
+
+  const allLoaded = matchQueries.every((q) => !q.isLoading);
+  const isLoading = idsLoading || !allLoaded;
+
+  const { ratingMap, logMap } = useMemo(() => {
+    const rm = new Map<number, number>();
+    const lm = new Map<number, number>();
+    if (ratedIds) {
+      for (const r of ratedIds) {
+        rm.set(r.matchId, r.avgRating);
+        lm.set(r.matchId, r.count);
+      }
+    }
+    return { ratingMap: rm, logMap: lm };
+  }, [ratedIds]);
+
+  const allMatches = useMemo(() => {
+    return matchIds
+      .map((id, i) => matchQueries[i]?.data)
+      .filter((m): m is Match => m !== undefined);
+  }, [matchIds, matchQueries]);
 
   const highestRatedMatches = useMemo(() => {
-    if (!reviews || !recentMatches) return [];
+    let filtered = allMatches.filter((m) => ratingMap.has(m.id));
 
-    // Build rating and log maps
-    const ratingMap = new Map<number, number>();
-    const logMap = new Map<number, number>();
-    for (const review of reviews) {
-      const current = ratingMap.get(review.matchId) || 0;
-      if (review.rating > current) {
-        ratingMap.set(review.matchId, review.rating);
-      }
-      logMap.set(review.matchId, (logMap.get(review.matchId) || 0) + 1);
-    }
-
-    let filtered = recentMatches.filter((m) => ratingMap.has(m.id));
-
-    // Apply dropdown filters
     filtered = applyMatchFilters(filtered, filters);
 
-    // Filter by minimum logs
     if (minLogs > 0) {
       filtered = filtered.filter((m) => (logMap.get(m.id) || 0) >= minLogs);
     }
 
-    // Sort by highest rating
     filtered.sort((a, b) => (ratingMap.get(b.id) || 0) - (ratingMap.get(a.id) || 0));
 
     return filtered;
-  }, [reviews, recentMatches, filters, minLogs]);
+  }, [allMatches, ratingMap, logMap, filters, minLogs]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
@@ -82,7 +93,7 @@ export function BrowseHighestRatedScreen() {
         onFiltersChange={setFilters}
         minLogs={minLogs}
         onMinLogsChange={setMinLogs}
-        matches={recentMatches || []}
+        matches={allMatches}
       />
 
       {isLoading ? (

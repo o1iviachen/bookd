@@ -141,7 +141,7 @@ export function TeamDetailScreen({ route, navigation }: any) {
         ref={pagerRef}
         style={{ flex: 1 }}
         initialPage={0}
-        onPageScroll={(e: any) => setActiveTabIndex(Math.round(e.nativeEvent.position + e.nativeEvent.offset))}
+        onPageSelected={(e: any) => setActiveTabIndex(e.nativeEvent.position)}
       >
         {/* ─── Matches Tab ─── */}
         <View key="matches" style={{ flex: 1 }}>
@@ -159,8 +159,6 @@ export function TeamDetailScreen({ route, navigation }: any) {
                 <MatchFilters
                   filters={filters}
                   onFiltersChange={setFilters}
-                  minLogs={0}
-                  onMinLogsChange={() => {}}
                   matches={allMatches}
                   showMinLogs={false}
                   showTeamFilter={false}

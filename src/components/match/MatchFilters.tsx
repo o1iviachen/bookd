@@ -19,8 +19,8 @@ export interface MatchFilterState {
 interface MatchFiltersProps {
   filters: MatchFilterState;
   onFiltersChange: (filters: MatchFilterState) => void;
-  minLogs: number;
-  onMinLogsChange: (value: number) => void;
+  minLogs?: number;
+  onMinLogsChange?: (value: number) => void;
   matches: Match[];
   showMinLogs?: boolean;
   showTeamFilter?: boolean;
@@ -79,15 +79,13 @@ export function MatchFilters({
     filters.league !== 'all' ||
     filters.team !== 'all' ||
     filters.season !== 'all' ||
-    minLogs > 0;
+    (minLogs ?? 0) > 0;
 
   const clearAll = () => {
     LayoutAnimation.configureNext(LayoutAnimation.create(200, 'easeInEaseOut', 'opacity'));
     onFiltersChange({ league: 'all', team: 'all', season: 'all' });
-    onMinLogsChange(0);
+    onMinLogsChange?.(0);
   };
-
-  const visibleDropdowns = [true, showTeamFilter, showSeasonFilter].filter(Boolean).length;
 
   return (
     <View
@@ -186,11 +184,11 @@ export function MatchFilters({
       </View>
 
       {/* Minimum Logs Slider */}
-      {showMinLogs && (
+      {showMinLogs && onMinLogsChange && (
         <View style={{ marginTop: spacing.md }}>
           <SliderInput
             label="Minimum Logs"
-            value={minLogs}
+            value={minLogs ?? 0}
             onValueChange={onMinLogsChange}
             min={0}
             max={1000}

@@ -55,7 +55,6 @@ export function GamesScreen({ route, navigation }: any) {
 
   const [sort, setSort] = useState<SortKey>('recent_logged');
   const [filters, setFilters] = useState<MatchFilterState>({ league: 'all', team: 'all', season: 'all' });
-  const [minLogs, setMinLogs] = useState(0);
 
   const GAP = spacing.sm;
   const HORIZONTAL_PADDING = spacing.md;
@@ -170,8 +169,6 @@ export function GamesScreen({ route, navigation }: any) {
       <MatchFilters
         filters={filters}
         onFiltersChange={setFilters}
-        minLogs={minLogs}
-        onMinLogsChange={setMinLogs}
         matches={allMatches}
         showMinLogs={false}
       />

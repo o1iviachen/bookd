@@ -21,22 +21,5 @@ export async function getMatchesByDateRange(from: Date, to: Date): Promise<Match
   return footballApi.getMatchesByDateRange(from, to);
 }
 
-export async function getMatchesByIds(ids: number[]): Promise<Map<number, Match>> {
-  if (ids.length === 0) return new Map();
-
-  const results = await Promise.allSettled(
-    ids.map((id) => footballApi.getMatchById(id))
-  );
-
-  const map = new Map<number, Match>();
-  results.forEach((result) => {
-    if (result.status === 'fulfilled') {
-      map.set(result.value.id, result.value);
-    }
-  });
-
-  return map;
-}
-
 // Re-export utilities
 export { groupMatchesByCompetition } from './footballApi';

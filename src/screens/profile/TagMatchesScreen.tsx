@@ -160,8 +160,6 @@ export function TagMatchesScreen({ route, navigation }: any) {
       <MatchFilters
         filters={filters}
         onFiltersChange={setFilters}
-        minLogs={0}
-        onMinLogsChange={() => {}}
         matches={allMatches}
         showMinLogs={false}
       />

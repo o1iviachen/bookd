@@ -28,8 +28,58 @@ type Nav = NativeStackNavigationProp<FeedStackParamList, 'Feed'>;
 const TABS = ['Matches', 'Reviews', 'Lists'] as const;
 const TAB_INDICES = { Matches: 0, Reviews: 1, Lists: 2 } as const;
 
-// Stable date references — only changes when the date string changes
-const todayKey = new Date().toISOString().split('T')[0];
+import { Review } from '../../types/review';
+
+/** Separate component so useUserProfile hook fires per-item and triggers re-render when profile loads */
+function FriendReviewCard({ item, match, onPress, colors, spacing }: {
+  item: Review;
+  match: Match | undefined;
+  onPress: () => void;
+  colors: any;
+  spacing: any;
+}) {
+  const { data: authorProfile } = useUserProfile(item.userId);
+  const isLiked = authorProfile?.likedMatchIds?.some((id) => String(id) === String(item.matchId)) || false;
+  const hasText = item.text?.trim().length > 0;
+  const hasMedia = item.media && item.media.length > 0;
+
+  if (match) {
+    return (
+      <View>
+        <MatchPosterCard match={match} onPress={onPress} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 5 }}>
+          <Avatar uri={item.userAvatar} name={item.username} size={18} />
+          {item.rating > 0 && <StarRating rating={item.rating} size={9} />}
+          {isLiked && <Ionicons name="heart" size={9} color="#ef4444" />}
+          {hasText && <Ionicons name="reorder-three-outline" size={10} color={colors.textSecondary} />}
+          {hasMedia && <Ionicons name="image-outline" size={9} color={colors.textSecondary} />}
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={{
+        width: 120, height: 180, backgroundColor: colors.card,
+        borderRadius: 4, borderWidth: 1, borderColor: colors.border,
+        justifyContent: 'flex-end', padding: 6,
+      }}
+    >
+      <Text style={{ fontSize: 9, fontWeight: '600', color: colors.foreground }} numberOfLines={2}>
+        {item.matchLabel || `Match #${item.matchId}`}
+      </Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 }}>
+        <Avatar uri={item.userAvatar} name={item.username} size={14} />
+        {item.rating > 0 && <StarRating rating={item.rating} size={8} />}
+        {isLiked && <Ionicons name="heart" size={8} color="#ef4444" style={{ marginLeft: 1 }} />}
+        {hasText && <Ionicons name="reorder-three-outline" size={10} color={colors.textSecondary} style={{ marginLeft: 1 }} />}
+        {hasMedia && <Ionicons name="image-outline" size={8} color={colors.textSecondary} style={{ marginLeft: 1 }} />}
+      </View>
+    </Pressable>
+  );
+}
 
 export function FeedScreen() {
   const { theme, isDark } = useTheme();
@@ -48,12 +98,11 @@ export function FeedScreen() {
     pagerRef.current?.setPage(index);
   }, []);
 
-  const handlePageScroll = useCallback((e: any) => {
-    const { position, offset } = e.nativeEvent;
-    setActiveTabIndex(Math.round(position + offset));
+  const handlePageSelected = useCallback((e: any) => {
+    setActiveTabIndex(e.nativeEvent.position);
   }, []);
 
-  const today = useMemo(() => new Date(), [todayKey]);
+  const today = useMemo(() => new Date(), []);
   const weekAgo = useMemo(() => subDays(today, 7), [today]);
   const { data: matches, isLoading: matchesLoading } = useMatchesRange(weekAgo, today);
   const { data: reviews, isLoading: reviewsLoading } = useRecentReviews();
@@ -193,7 +242,7 @@ export function FeedScreen() {
         ref={pagerRef}
         style={{ flex: 1 }}
         initialPage={0}
-        onPageScroll={handlePageScroll}
+        onPageSelected={handlePageSelected}
       >
         {/* ─── Matches Page ─── */}
         <View key="matches" style={{ flex: 1 }}>
@@ -238,61 +287,15 @@ export function FeedScreen() {
                       keyExtractor={(item) => item.id}
                       showsHorizontalScrollIndicator={false}
                       contentContainerStyle={{ paddingHorizontal: spacing.md, gap: spacing.sm + 4 }}
-                      renderItem={({ item }) => {
-                        const match = friendMatchMap.get(item.matchId);
-                        const isLiked = profile?.likedMatchIds?.some((id) => String(id) === String(item.matchId)) || false;
-                        const hasText = item.text?.trim().length > 0;
-                        return match ? (
-                          <View>
-                            <MatchPosterCard
-                              match={match}
-                              onPress={() => navigation.navigate('ReviewDetail', { reviewId: item.id })}
-                            />
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 5 }}>
-                              <Avatar uri={item.userAvatar} name={item.username} size={18} />
-                              <StarRating rating={item.rating} size={9} />
-                              {isLiked && (
-                                <Ionicons name="heart" size={9} color="#ef4444" />
-                              )}
-                              {item.isSpoiler ? (
-                                <View style={{ backgroundColor: '#f59e0b', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 3 }}>
-                                  <Text style={{ fontSize: 7, fontWeight: '700', color: '#000' }}>SPOILER</Text>
-                                </View>
-                              ) : hasText ? (
-                                <Ionicons name="reorder-three-outline" size={10} color={colors.textSecondary} />
-                              ) : null}
-                            </View>
-                          </View>
-                        ) : (
-                          <Pressable
-                            onPress={() => navigation.navigate('ReviewDetail', { reviewId: item.id })}
-                            style={{
-                              width: 120,
-                              height: 180,
-                              backgroundColor: colors.card,
-                              borderRadius: 4,
-                              borderWidth: 1,
-                              borderColor: colors.border,
-                              justifyContent: 'flex-end',
-                              padding: 6,
-                            }}
-                          >
-                            <Text style={{ fontSize: 9, fontWeight: '600', color: colors.foreground }} numberOfLines={2}>
-                              {item.matchLabel || `Match #${item.matchId}`}
-                            </Text>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 }}>
-                              <Avatar uri={item.userAvatar} name={item.username} size={14} />
-                              <StarRating rating={item.rating} size={8} />
-                              {isLiked && (
-                                <Ionicons name="heart" size={8} color="#ef4444" style={{ marginLeft: 1 }} />
-                              )}
-                              {hasText && (
-                                <Ionicons name="reorder-three-outline" size={10} color={colors.textSecondary} style={{ marginLeft: 1 }} />
-                              )}
-                            </View>
-                          </Pressable>
-                        );
-                      }}
+                      renderItem={({ item }) => (
+                        <FriendReviewCard
+                          item={item}
+                          match={friendMatchMap.get(item.matchId)}
+                          onPress={() => navigation.navigate('ReviewDetail', { reviewId: item.id })}
+                          colors={colors}
+                          spacing={spacing}
+                        />
+                      )}
                     />
                   ) : (
                     <Text style={{ ...typography.caption, color: colors.textSecondary, paddingHorizontal: spacing.md }}>

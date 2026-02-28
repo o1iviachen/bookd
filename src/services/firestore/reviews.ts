@@ -36,6 +36,7 @@ function docToReview(docSnap: any, userVote: 'up' | 'down' | null = null): Revie
     createdAt: data.createdAt?.toDate() || new Date(),
     editedAt: data.editedAt?.toDate() || null,
     userVote,
+    flagged: data.flagged || false,
   };
 }
 
@@ -86,7 +87,7 @@ export async function getReviewsForMatch(matchId: number, currentUserId?: string
     })
   );
   reviews.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-  return reviews;
+  return reviews.filter((r) => !r.flagged || r.userId === currentUserId);
 }
 
 export async function getReviewsForUser(userId: string, currentUserId?: string): Promise<Review[]> {
@@ -112,22 +113,19 @@ export async function getRecentReviews(currentUserId?: string): Promise<Review[]
     limit(30)
   );
   const snapshot = await getDocs(q);
-  return Promise.all(
+  const reviews = await Promise.all(
     snapshot.docs.map(async (d) => {
       const vote = currentUserId ? await getUserVote(d.id, currentUserId) : null;
       return docToReview(d, vote);
     })
   );
+  return reviews.filter((r) => !r.flagged || r.userId === currentUserId);
 }
 
 /** Returns matchIds ranked by number of reviews this week, most logged first. */
 export async function getPopularMatchIdsThisWeek(): Promise<{ matchId: number; count: number }[]> {
-  const weekAgo = new Date();
-  weekAgo.setDate(weekAgo.getDate() - 7);
-
   const q = query(
     collection(db, 'reviews'),
-    where('createdAt', '>=', weekAgo),
     orderBy('createdAt', 'desc'),
     limit(500)
   );
@@ -142,6 +140,32 @@ export async function getPopularMatchIdsThisWeek(): Promise<{ matchId: number; c
   return [...counts.entries()]
     .map(([matchId, count]) => ({ matchId, count }))
     .sort((a, b) => b.count - a.count);
+}
+
+/** Returns matchIds ranked by average rating (all time), with review count. */
+export async function getHighestRatedMatchIds(): Promise<{ matchId: number; avgRating: number; count: number }[]> {
+  const q = query(
+    collection(db, 'reviews'),
+    orderBy('createdAt', 'desc'),
+    limit(500)
+  );
+  const snapshot = await getDocs(q);
+
+  const totals = new Map<number, { sum: number; count: number }>();
+  for (const d of snapshot.docs) {
+    const data = d.data();
+    const matchId = data.matchId as number;
+    const rating = data.rating as number;
+    if (!matchId || !rating) continue;
+    const existing = totals.get(matchId) || { sum: 0, count: 0 };
+    existing.sum += rating;
+    existing.count += 1;
+    totals.set(matchId, existing);
+  }
+
+  return [...totals.entries()]
+    .map(([matchId, { sum, count }]) => ({ matchId, avgRating: sum / count, count }))
+    .sort((a, b) => b.avgRating - a.avgRating || b.count - a.count);
 }
 
 export async function getReviewById(reviewId: string, currentUserId?: string): Promise<Review | null> {
@@ -281,10 +305,11 @@ export async function searchReviews(queryStr: string): Promise<Review[]> {
   const qLower = queryStr.toLowerCase();
   return _reviewsCacheData
     .filter((r) =>
-      r.text.toLowerCase().includes(qLower) ||
+      !r.flagged &&
+      (r.text.toLowerCase().includes(qLower) ||
       r.username.toLowerCase().includes(qLower) ||
       (r.matchLabel && r.matchLabel.toLowerCase().includes(qLower)) ||
-      r.tags.some((t) => t.toLowerCase().includes(qLower))
+      r.tags.some((t) => t.toLowerCase().includes(qLower)))
     )
     .slice(0, 20);
 }
