@@ -4,13 +4,14 @@ import { getMatchesByDate, getMatchById, getMatchesByDateRange } from '../servic
 import { getMatchDetail, searchMatchesQuery } from '../services/footballApi';
 import { addDays } from 'date-fns';
 
-export function useMatchesByDate(date: Date) {
+export function useMatchesByDate(date: Date, enabled = true) {
   const dateKey = date.toISOString().split('T')[0];
   const isToday = dateKey === new Date().toISOString().split('T')[0];
   const queryClient = useQueryClient();
 
   // Prefetch adjacent dates so swiping feels instant
   useEffect(() => {
+    if (!enabled) return;
     const prefetch = (d: Date) => {
       const key = d.toISOString().split('T')[0];
       queryClient.prefetchQuery({
@@ -21,13 +22,13 @@ export function useMatchesByDate(date: Date) {
     };
     prefetch(addDays(date, -1));
     prefetch(addDays(date, 1));
-  }, [dateKey, queryClient]);
+  }, [dateKey, queryClient, enabled]);
 
   return useQuery({
     queryKey: ['matches', dateKey],
     queryFn: () => getMatchesByDate(date),
+    enabled,
     staleTime: isToday ? 2 * 60 * 1000 : 10 * 60 * 1000,
-    placeholderData: keepPreviousData,
     retry: 2,
     retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 10000),
     refetchOnWindowFocus: false,
