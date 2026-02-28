@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { View, Text, ScrollView, Pressable, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, Switch, Modal, Dimensions, PanResponder } from 'react-native';
+import { View, Text, ScrollView, Pressable, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, Switch, Modal, Dimensions, PanResponder, Animated as RNAnimated, LayoutAnimation, UIManager } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
@@ -75,6 +75,18 @@ export function CreateReviewScreen({ route, navigation }: any) {
   const videoRef = useRef<Video>(null);
 
   const isWatched = profile?.watchedMatchIds?.some((id) => String(id) === String(matchId)) || rating > 0 || text.trim().length > 0;
+
+  // Reset form when navigating to a new (non-edit) entry
+  useEffect(() => {
+    if (!isEditMode) {
+      setRating(0);
+      setText('');
+      setSelectedTags([]);
+      setMediaItems([]);
+      setExistingMedia([]);
+      setIsSpoiler(false);
+    }
+  }, [matchId, isEditMode]);
 
   // Pre-populate fields when editing
   useEffect(() => {
@@ -350,15 +362,122 @@ export function CreateReviewScreen({ route, navigation }: any) {
     return items;
   }, [existingMedia, mediaItems]);
 
-  const swapMedia = (globalIndexA: number, globalIndexB: number) => {
-    const combined = [
-      ...existingMedia.map((m) => ({ type: 'existing' as const, data: m })),
-      ...mediaItems.map((m) => ({ type: 'new' as const, data: m })),
+  // Drag-to-reorder state
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const dragIdxRef = useRef<number | null>(null);
+  const isDragActive = useRef(false);
+  const touchedItemIdx = useRef(-1);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dragAnim = useRef(new RNAnimated.ValueXY()).current;
+  const itemRects = useRef<{ x: number; y: number; w: number; h: number }[]>([]);
+
+  // Refs so PanResponder closures always have fresh data
+  const existingMediaRef = useRef(existingMedia);
+  existingMediaRef.current = existingMedia;
+  const mediaItemsRef = useRef(mediaItems);
+  mediaItemsRef.current = mediaItems;
+
+  const handleMediaTapByIndex = (globalIdx: number) => {
+    const existing = existingMediaRef.current;
+    const items = mediaItemsRef.current;
+    const allItems = [
+      ...existing.map((_, i) => ({ source: 'existing' as const, index: i })),
+      ...items.map((_, i) => ({ source: 'new' as const, index: i })),
     ];
-    [combined[globalIndexA], combined[globalIndexB]] = [combined[globalIndexB], combined[globalIndexA]];
-    setExistingMedia(combined.filter((c) => c.type === 'existing').map((c) => c.data as ReviewMedia));
-    setMediaItems(combined.filter((c) => c.type === 'new').map((c) => c.data as LocalMedia));
+    if (globalIdx < 0 || globalIdx >= allItems.length) return;
+    const meta = allItems[globalIdx];
+    if (meta.source === 'existing') {
+      handleTapExistingMedia(existing[meta.index], meta.index);
+    } else {
+      handleTapNewMedia(items[meta.index], meta.index);
+    }
   };
+  const handleMediaTapRef = useRef(handleMediaTapByIndex);
+  handleMediaTapRef.current = handleMediaTapByIndex;
+
+  const doSwap = (from: number, to: number) => {
+    const combined = [
+      ...existingMediaRef.current.map((m) => ({ t: 'e' as const, d: m })),
+      ...mediaItemsRef.current.map((m) => ({ t: 'n' as const, d: m })),
+    ];
+    [combined[from], combined[to]] = [combined[to], combined[from]];
+    LayoutAnimation.configureNext({
+      duration: 200,
+      update: { type: LayoutAnimation.Types.easeInEaseOut },
+    });
+    setExistingMedia(combined.filter((c) => c.t === 'e').map((c) => c.d as ReviewMedia));
+    setMediaItems(combined.filter((c) => c.t === 'n').map((c) => c.d as LocalMedia));
+    dragIdxRef.current = to;
+    setDragIdx(to);
+    dragAnim.setValue({ x: 0, y: 0 });
+  };
+  const doSwapRef = useRef(doSwap);
+  doSwapRef.current = doSwap;
+
+  const findItemAt = (lx: number, ly: number): number => {
+    for (let i = 0; i < itemRects.current.length; i++) {
+      const r = itemRects.current[i];
+      if (lx >= r.x && lx <= r.x + r.w && ly >= r.y && ly <= r.y + r.h) return i;
+    }
+    return -1;
+  };
+
+  const mediaDragPanResponder = useMemo(() => PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: () => isDragActive.current,
+    onPanResponderTerminationRequest: () => !isDragActive.current,
+    onPanResponderGrant: (evt) => {
+      isDragActive.current = false;
+      const { locationX, locationY } = evt.nativeEvent;
+      const idx = findItemAt(locationX, locationY);
+      touchedItemIdx.current = idx;
+      if (idx >= 0 && itemRects.current.length > 1) {
+        longPressTimer.current = setTimeout(() => {
+          isDragActive.current = true;
+          dragIdxRef.current = idx;
+          setDragIdx(idx);
+          dragAnim.setValue({ x: 0, y: 0 });
+        }, 150);
+      }
+    },
+    onPanResponderMove: (_, g) => {
+      if (!isDragActive.current) {
+        if (Math.abs(g.dx) > 5 || Math.abs(g.dy) > 5) {
+          if (longPressTimer.current) clearTimeout(longPressTimer.current);
+          touchedItemIdx.current = -1;
+        }
+        return;
+      }
+      dragAnim.x.setValue(g.dx);
+      dragAnim.y.setValue(g.dy);
+      const idx = dragIdxRef.current;
+      if (idx === null) return;
+      const from = itemRects.current[idx];
+      if (!from) return;
+      const cx = from.x + from.w / 2 + g.dx;
+      for (let i = 0; i < itemRects.current.length; i++) {
+        if (i === idx) continue;
+        const r = itemRects.current[i];
+        const targetCx = r.x + r.w / 2;
+        if (Math.abs(cx - targetCx) < r.w * 0.4) {
+          doSwapRef.current(idx, i);
+          break;
+        }
+      }
+    },
+    onPanResponderRelease: () => {
+      if (longPressTimer.current) clearTimeout(longPressTimer.current);
+      if (isDragActive.current) {
+        isDragActive.current = false;
+        dragIdxRef.current = null;
+        setDragIdx(null);
+        dragAnim.setValue({ x: 0, y: 0 });
+      } else if (touchedItemIdx.current >= 0) {
+        handleMediaTapRef.current(touchedItemIdx.current);
+      }
+      touchedItemIdx.current = -1;
+    },
+  }), []);
 
   const hasReviewText = text.trim().length > 0;
 
@@ -519,7 +638,10 @@ export function CreateReviewScreen({ route, navigation }: any) {
           <Text style={{ ...typography.bodyBold, color: colors.foreground, marginBottom: spacing.sm }}>
             Photos and Videos
           </Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.lg }}>
+          <View
+            {...mediaDragPanResponder.panHandlers}
+            style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.lg }}
+          >
             {allMediaItems.map((meta, globalIndex) => {
               const isExisting = meta.source === 'existing';
               const existingItem = isExisting ? existingMedia[meta.index] : null;
@@ -528,30 +650,29 @@ export function CreateReviewScreen({ route, navigation }: any) {
                 ? (existingItem!.type === 'video' && existingItem!.thumbnailUrl ? existingItem!.thumbnailUrl : existingItem!.url)
                 : (newItem!.type === 'video' && newItem!.thumbnail ? newItem!.thumbnail : newItem!.uri);
               const isVideo = isExisting ? existingItem!.type === 'video' : newItem!.type === 'video';
-              const canMoveLeft = globalIndex > 0;
-              const canMoveRight = globalIndex < allMediaItems.length - 1;
+              const isDragging = dragIdx === globalIndex;
 
-              const handleTap = () => {
-                if (isExisting) handleTapExistingMedia(existingItem!, meta.index);
-                else handleTapNewMedia(newItem!, meta.index);
-              };
               const handleRemove = () => {
                 if (isExisting) removeExistingMedia(meta.index);
                 else removeMedia(meta.index);
               };
 
               return (
-                <View key={meta.key}>
-                  <Pressable
-                    onPress={handleTap}
-                    style={{
-                      width: 80,
-                      height: 80,
-                      borderRadius: borderRadius.md,
-                      overflow: 'hidden',
-                      backgroundColor: colors.accent,
-                    }}
-                  >
+                <View
+                  key={meta.key}
+                  onLayout={(e) => {
+                    const { x, y, width, height } = e.nativeEvent.layout;
+                    itemRects.current[globalIndex] = { x, y, w: width, h: height };
+                  }}
+                >
+                  <View style={{
+                    width: 80,
+                    height: 80,
+                    borderRadius: borderRadius.md,
+                    overflow: 'hidden',
+                    backgroundColor: colors.accent,
+                    opacity: isDragging ? 0.3 : 1,
+                  }}>
                     <Image
                       source={{ uri: thumbnailUri }}
                       style={{ width: 80, height: 80 }}
@@ -578,29 +699,46 @@ export function CreateReviewScreen({ route, navigation }: any) {
                     >
                       <Ionicons name="close" size={12} color="#fff" />
                     </Pressable>
-                  </Pressable>
-                  {/* Reorder arrows — only show when 2+ media */}
-                  {allMediaItems.length > 1 && (
-                    <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 2, marginTop: 4 }}>
-                      <Pressable
-                        onPress={() => canMoveLeft && swapMedia(globalIndex, globalIndex - 1)}
-                        hitSlop={4}
-                        style={{ opacity: canMoveLeft ? 1 : 0.25 }}
-                      >
-                        <Ionicons name="chevron-back" size={16} color={colors.textSecondary} />
-                      </Pressable>
-                      <Pressable
-                        onPress={() => canMoveRight && swapMedia(globalIndex, globalIndex + 1)}
-                        hitSlop={4}
-                        style={{ opacity: canMoveRight ? 1 : 0.25 }}
-                      >
-                        <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
-                      </Pressable>
-                    </View>
-                  )}
+                  </View>
                 </View>
               );
             })}
+            {/* Ghost item following finger during drag */}
+            {dragIdx !== null && itemRects.current[dragIdx] && (() => {
+              const meta = allMediaItems[dragIdx];
+              if (!meta) return null;
+              const isExisting = meta.source === 'existing';
+              const existingItem = isExisting ? existingMedia[meta.index] : null;
+              const newItem = !isExisting ? mediaItems[meta.index] : null;
+              const thumbnailUri = isExisting
+                ? (existingItem!.type === 'video' && existingItem!.thumbnailUrl ? existingItem!.thumbnailUrl : existingItem!.url)
+                : (newItem!.type === 'video' && newItem!.thumbnail ? newItem!.thumbnail : newItem!.uri);
+              return (
+                <RNAnimated.View
+                  pointerEvents="none"
+                  style={{
+                    position: 'absolute',
+                    left: itemRects.current[dragIdx].x,
+                    top: itemRects.current[dragIdx].y,
+                    transform: [
+                      { translateX: dragAnim.x },
+                      { translateY: dragAnim.y },
+                      { scale: 1.1 },
+                    ],
+                    zIndex: 100,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.3,
+                    shadowRadius: 8,
+                    elevation: 8,
+                  }}
+                >
+                  <View style={{ width: 80, height: 80, borderRadius: borderRadius.md, overflow: 'hidden', borderWidth: 2, borderColor: colors.primary }}>
+                    <Image source={{ uri: thumbnailUri }} style={{ width: 80, height: 80 }} contentFit="cover" />
+                  </View>
+                </RNAnimated.View>
+              );
+            })()}
             {totalMediaCount < 4 && (
               <Pressable
                 onPress={handlePickMedia}

@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, KeyboardAvoidingView, Platform, ScrollView, Dimensions, Pressable, Keyboard, TextInput as RNTextInput } from 'react-native';
+import { View, Text, KeyboardAvoidingView, Platform, ScrollView, Dimensions, Pressable, Keyboard, TextInput as RNTextInput, Alert } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
+import { resetPassword } from '../../services/auth';
 import { TextInput } from '../../components/ui/TextInput';
 import { Button } from '../../components/ui/Button';
 import { AuthStackParamList } from '../../types/navigation';
@@ -34,6 +35,19 @@ export function LoginScreen({ navigation }: Props) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const handleForgotPassword = async () => {
+    if (!email) {
+      Alert.alert('Enter Email', 'Please enter your email or username first, then tap Forgot Password.');
+      return;
+    }
+    try {
+      await resetPassword(email);
+      Alert.alert('Check Your Email', 'A password reset link has been sent to your email.');
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to send reset email.');
+    }
+  };
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -144,6 +158,12 @@ export function LoginScreen({ navigation }: Props) {
             returnKeyType="go"
             onSubmitEditing={handleLogin}
           />
+
+          <Pressable onPress={handleForgotPassword} style={{ alignSelf: 'flex-end', marginTop: -spacing.sm, marginBottom: spacing.md }}>
+            <Text style={{ ...typography.caption, color: colors.primary, fontWeight: '600' }}>
+              Forgot Password?
+            </Text>
+          </Pressable>
 
           <Button
             title="Log In"

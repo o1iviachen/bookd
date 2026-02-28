@@ -2,6 +2,7 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
+  sendPasswordResetEmail,
 } from 'firebase/auth';
 import { auth } from '../config/firebase';
 import { getEmailByUsername } from './firestore/users';
@@ -29,4 +30,16 @@ export async function signIn(emailOrUsername: string, password: string) {
 
 export async function signOut() {
   await firebaseSignOut(auth);
+}
+
+export async function resetPassword(emailOrUsername: string) {
+  let email = emailOrUsername;
+  if (!emailOrUsername.includes('@')) {
+    const found = await getEmailByUsername(emailOrUsername);
+    if (!found) {
+      throw new Error('No account found with that username');
+    }
+    email = found;
+  }
+  await sendPasswordResetEmail(auth, email);
 }
