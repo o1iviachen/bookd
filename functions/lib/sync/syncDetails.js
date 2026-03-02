@@ -35,7 +35,6 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.syncMatchDetails = syncMatchDetails;
 exports.syncMissingDetails = syncMissingDetails;
-exports.syncAllMissingDetails = syncAllMissingDetails;
 const admin = __importStar(require("firebase-admin"));
 const apiFootball_1 = require("../apiFootball");
 const transforms_1 = require("../transforms");
@@ -73,6 +72,10 @@ async function syncMatchDetails(fixtureIds, force = false) {
                 ...detailDoc,
                 syncedAt: admin.firestore.FieldValue.serverTimestamp(),
             });
+            // Mark the match as having details so we never re-scan it
+            await db.collection(config_1.COLLECTIONS.MATCHES).doc(String(fixtureId)).update({
+                hasDetails: true,
+            });
             synced++;
             console.log(`[syncDetails] Synced details for fixture ${fixtureId}`);
         }
@@ -89,51 +92,28 @@ async function syncMatchDetails(fixtureIds, force = false) {
 }
 /**
  * Finds recently finished matches that are missing details and syncs them.
- * Checks the last 30 days to catch any matches missed by previous failed syncs.
+ * Checks the last 7 days to catch any matches missed by previous failed syncs.
+ * Uses batch existence checks instead of N+1 getDoc calls.
+ * Also marks synced matches with hasDetails: true.
  */
 async function syncMissingDetails() {
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     const matchesSnapshot = await db
         .collection(config_1.COLLECTIONS.MATCHES)
         .where('status', '==', 'FINISHED')
-        .where('kickoff', '>=', thirtyDaysAgo.toISOString())
+        .where('kickoff', '>=', sevenDaysAgo.toISOString())
         .get();
-    const fixtureIds = [];
-    for (const doc of matchesSnapshot.docs) {
-        fixtureIds.push(doc.data().id);
-    }
-    if (fixtureIds.length === 0)
+    if (matchesSnapshot.empty)
         return 0;
-    console.log(`[syncMissingDetails] Found ${fixtureIds.length} recent finished matches to check`);
-    return await syncMatchDetails(fixtureIds);
-}
-/**
- * Bulk syncs all finished matches missing details across all leagues.
- * Processes up to `limit` matches per call. Returns count and whether more remain.
- */
-async function syncAllMissingDetails(batchLimit = 50) {
-    // Find ALL finished matches
-    const matchesSnapshot = await db
-        .collection(config_1.COLLECTIONS.MATCHES)
-        .where('status', '==', 'FINISHED')
-        .get();
-    // Check which ones are missing details
-    const missingIds = [];
-    for (const matchDoc of matchesSnapshot.docs) {
-        const fixtureId = matchDoc.data().id;
-        const detailDoc = await db.collection(config_1.COLLECTIONS.MATCH_DETAILS).doc(String(fixtureId)).get();
-        if (!detailDoc.exists) {
-            missingIds.push(fixtureId);
-        }
-        if (missingIds.length >= batchLimit)
-            break;
-    }
-    if (missingIds.length === 0) {
-        return { synced: 0, remaining: 0 };
-    }
-    const totalMissing = matchesSnapshot.docs.length; // approximate
-    const synced = await syncMatchDetails(missingIds);
-    return { synced, remaining: Math.max(0, totalMissing - synced) };
+    const fixtureIds = matchesSnapshot.docs.map((d) => d.data().id);
+    // Batch-check which details already exist using getAll instead of N+1 getDoc
+    const detailRefs = fixtureIds.map((id) => db.collection(config_1.COLLECTIONS.MATCH_DETAILS).doc(String(id)));
+    const detailSnaps = await db.getAll(...detailRefs);
+    const missingIds = fixtureIds.filter((_, i) => !detailSnaps[i].exists);
+    if (missingIds.length === 0)
+        return 0;
+    console.log(`[syncMissingDetails] Found ${missingIds.length} missing details out of ${fixtureIds.length} recent finished matches`);
+    return await syncMatchDetails(missingIds);
 }
 //# sourceMappingURL=syncDetails.js.map

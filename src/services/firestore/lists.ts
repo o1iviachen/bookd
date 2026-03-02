@@ -211,11 +211,11 @@ export async function getCommentsForList(listId: string): Promise<ListComment[]>
   const q = query(
     collection(db, 'listComments'),
     where('listId', '==', listId),
+    orderBy('createdAt', 'asc'),
+    limit(100),
   );
   const snapshot = await getDocs(q);
-  const comments = snapshot.docs.map(docToListComment);
-  comments.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
-  return comments;
+  return snapshot.docs.map(docToListComment);
 }
 
 export async function deleteListComment(commentId: string): Promise<void> {

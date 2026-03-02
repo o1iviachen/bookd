@@ -16,7 +16,7 @@ interface MatchPosterCardProps {
   compact?: boolean;
 }
 
-export function MatchPosterCard({ match, onPress, width: widthProp, compact }: MatchPosterCardProps) {
+export const MatchPosterCard = React.memo(function MatchPosterCard({ match, onPress, width: widthProp, compact }: MatchPosterCardProps) {
   const { theme } = useTheme();
   const { spacing } = theme;
   const { width: screenWidth } = useWindowDimensions();
@@ -196,4 +196,4 @@ export function MatchPosterCard({ match, onPress, width: widthProp, compact }: M
       </LinearGradient>
     </Pressable>
   );
-}
+});

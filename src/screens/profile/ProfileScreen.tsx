@@ -73,10 +73,12 @@ export function ProfileScreen() {
     const userReviewsForMatch = allUserReviews.filter((r) => r.matchId === matchId);
     if (userReviewsForMatch.length === 1) {
       navigation.navigate('ReviewDetail', { reviewId: userReviewsForMatch[0].id });
+    } else if (userReviewsForMatch.length > 1) {
+      navigation.navigate('UserMatchReviews', { matchId, userId: user?.uid || '', username: profile?.username || '' });
     } else {
       navigation.navigate('MatchDetail', { matchId });
     }
-  }, [reviews, navigation]);
+  }, [reviews, navigation, user, profile]);
 
   if (isLoading) return <LoadingSpinner />;
 
@@ -227,7 +229,7 @@ export function ProfileScreen() {
 
         {/* Recent Activity */}
         {recentReviews.length > 0 && (
-          <View style={{ paddingHorizontal: HORIZONTAL_PADDING, paddingVertical: spacing.md, backgroundColor: `${colors.accent}30`, borderBottomWidth: 1, borderColor: colors.border }}>
+          <View style={{ paddingHorizontal: HORIZONTAL_PADDING, paddingVertical: spacing.md, backgroundColor: `${colors.accent}30`, borderColor: colors.border }}>
             <Pressable onPress={() => navigation.navigate('Diary', {})} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm }}>
               <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1 }}>
                 Recent Activity
@@ -247,6 +249,7 @@ export function ProfileScreen() {
                 const match = recentMatchMap.get(review.matchId);
                 const isLiked = profile?.likedMatchIds?.some((id) => String(id) === String(review.matchId)) || false;
                 const hasText = review.text.trim().length > 0;
+                const hasMedia = review.media && review.media.length > 0;
                 return match ? (
                   <View key={review.id} style={{ width: CARD_WIDTH }}>
                     <MatchPosterCard
@@ -256,12 +259,15 @@ export function ProfileScreen() {
                     />
                     {/* Rating, heart, review indicator — left aligned */}
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 5 }}>
-                      <StarRating rating={review.rating} size={9} />
+                      {review.rating > 0 && <StarRating rating={review.rating} size={9} />}
                       {isLiked && (
                         <Ionicons name="heart" size={9} color="#ef4444" />
                       )}
                       {hasText && (
                         <Ionicons name="reorder-three-outline" size={10} color={colors.textSecondary} />
+                      )}
+                      {hasMedia && (
+                        <Ionicons name="image-outline" size={9} color={colors.textSecondary} />
                       )}
                     </View>
                   </View>
@@ -284,12 +290,15 @@ export function ProfileScreen() {
                       {review.matchLabel || `Match #${review.matchId}`}
                     </Text>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 2 }}>
-                      <StarRating rating={review.rating} size={8} />
+                      {review.rating > 0 && <StarRating rating={review.rating} size={8} />}
                       {isLiked && (
                         <Ionicons name="heart" size={8} color="#ef4444" style={{ marginLeft: 1 }} />
                       )}
                       {hasText && (
                         <Ionicons name="reorder-three-outline" size={10} color={colors.textSecondary} style={{ marginLeft: 1 }} />
+                      )}
+                      {hasMedia && (
+                        <Ionicons name="image-outline" size={8} color={colors.textSecondary} style={{ marginLeft: 1 }} />
                       )}
                     </View>
                   </Pressable>

@@ -1,5 +1,5 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { View, Text, ScrollView, Pressable, TextInput as RNTextInput, useWindowDimensions, Keyboard, NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { View, Text, ScrollView, FlatList, Pressable, TextInput as RNTextInput, useWindowDimensions, Keyboard, LayoutAnimation, Platform, UIManager } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -13,6 +13,7 @@ import { useSearchReviews } from '../../hooks/useReviews';
 import { useSearchLists } from '../../hooks/useLists';
 import { Avatar } from '../../components/ui/Avatar';
 import { MatchPosterCard } from '../../components/match/MatchPosterCard';
+import { Match } from '../../types/match';
 import { ReviewCard } from '../../components/review/ReviewCard';
 import { ListPreviewCard } from '../../components/list/ListPreviewCard';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
@@ -28,6 +29,49 @@ type Category = 'matches' | 'teams' | 'players' | 'members' | 'reviews' | 'lists
 
 const NUM_COLUMNS = 3;
 
+const CATEGORIES: { key: Category; label: string }[] = [
+  { key: 'matches', label: 'Matches' },
+  { key: 'teams', label: 'Teams' },
+  { key: 'players', label: 'Players and Managers' },
+  { key: 'members', label: 'Members' },
+  { key: 'reviews', label: 'Reviews' },
+  { key: 'lists', label: 'Lists' },
+];
+
+const BROWSE_LINKS: { label: string; route: keyof SearchStackParamList }[] = [
+  { label: 'Date', route: 'BrowseByDate' },
+  { label: 'Most popular', route: 'BrowsePopular' },
+  { label: 'Highest rated', route: 'BrowseHighestRated' },
+];
+
+const EMPTY_ICONS: Record<Category, keyof typeof Ionicons.glyphMap> = {
+  matches: 'football-outline',
+  teams: 'shield-outline',
+  players: 'people-outline',
+  members: 'person-outline',
+  reviews: 'chatbubble-outline',
+  lists: 'list-outline',
+};
+
+const EMPTY_LABELS: Record<Category, string> = {
+  matches: 'No matches found',
+  teams: 'No teams found',
+  players: 'No players found',
+  members: 'No members found',
+  reviews: 'No reviews found',
+  lists: 'No lists found',
+};
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+const LAYOUT_ANIM = LayoutAnimation.create(
+  200,
+  LayoutAnimation.Types.easeInEaseOut,
+  LayoutAnimation.Properties.opacity,
+);
+
 export function SearchScreen() {
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
@@ -37,12 +81,16 @@ export function SearchScreen() {
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [activeCategory, setActiveCategory] = useState<Category>('matches');
-  const [visibleCounts, setVisibleCounts] = useState<Record<Category, number>>({
-    matches: 30, teams: 30, players: 30, members: 30, reviews: 30, lists: 30,
-  });
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const recentSearchesRef = useRef<string[]>([]);
-  const inputRef = useRef<RNTextInput>(null);
+  const keyboardVisibleRef = useRef(false);
+
+  // Track keyboard visibility
+  useEffect(() => {
+    const showSub = Keyboard.addListener('keyboardDidShow', () => { keyboardVisibleRef.current = true; });
+    const hideSub = Keyboard.addListener('keyboardDidHide', () => { keyboardVisibleRef.current = false; });
+    return () => { showSub.remove(); hideSub.remove(); };
+  }, []);
 
   // Load recent searches on mount
   useEffect(() => {
@@ -66,131 +114,171 @@ export function SearchScreen() {
     await AsyncStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(updated));
   }, []);
 
-  // Debounce search query by 500ms to prevent excessive queries and keep UI responsive
+  // Debounce search query by 300ms to prevent excessive queries and keep UI responsive
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedQuery(queryStr);
       if (queryStr.trim().length >= 2) saveRecentSearch(queryStr);
-    }, 500);
+    }, 300);
     return () => clearTimeout(timer);
   }, [queryStr]);
-
-  const PAGE_SIZE = 30;
-  const loadingMore = useRef(false);
-
-  const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
-    const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
-    if (distanceFromBottom < 300 && !loadingMore.current) {
-      loadingMore.current = true;
-      setVisibleCounts((prev) => ({ ...prev, [activeCategory]: prev[activeCategory] + PAGE_SIZE }));
-      setTimeout(() => { loadingMore.current = false; }, 800);
-    }
-  }, [activeCategory]);
 
   const GAP = spacing.sm;
   const HORIZONTAL_PADDING = spacing.md;
   const CARD_WIDTH = (screenWidth - HORIZONTAL_PADDING * 2 - GAP * (NUM_COLUMNS - 1)) / NUM_COLUMNS;
 
   const { data: users, isLoading: usersLoading } = useSearchUsers(debouncedQuery, activeCategory === 'members');
-  const { data: matchResults, isLoading: matchesLoading, isFetching: matchesFetching } = useSearchMatches(debouncedQuery, activeCategory === 'matches');
+  const { data: matchPages, isLoading: matchesLoading, isFetching: matchesFetching, fetchNextPage: fetchNextMatchPage, hasNextPage: hasNextMatchPage, isFetchingNextPage: isFetchingNextMatchPage } = useSearchMatches(debouncedQuery, activeCategory === 'matches');
+  const matchResults = useMemo(() => {
+    if (!matchPages?.pages) return [];
+    // Flatten all pages, deduplicate, preserve per-page ordering
+    const seen = new Set<number>();
+    const all: Match[] = [];
+    for (const page of matchPages.pages) {
+      for (const m of page.matches) {
+        if (!seen.has(m.id)) { seen.add(m.id); all.push(m); }
+      }
+    }
+    return all;
+  }, [matchPages]);
   const { data: teamResults, isLoading: teamsLoading } = useSearchTeams(debouncedQuery, activeCategory === 'teams');
   const { data: playerResults, isLoading: playersLoading, isFetching: playersFetching } = useSearchPlayers(debouncedQuery, activeCategory === 'players');
   const { data: reviewResults, isLoading: reviewsLoading, isFetching: reviewsFetching } = useSearchReviews(debouncedQuery, activeCategory === 'reviews');
   const { data: listResults, isLoading: listsLoading, isFetching: listsFetching } = useSearchLists(debouncedQuery, activeCategory === 'lists');
 
-  const categories: { key: Category; label: string }[] = [
-    { key: 'matches', label: 'Matches' },
-    { key: 'teams', label: 'Teams' },
-    { key: 'players', label: 'Players and Managers' },
-    { key: 'members', label: 'Members' },
-    { key: 'reviews', label: 'Reviews' },
-    { key: 'lists', label: 'Lists' },
-  ];
+  const hasQuery = isSearching && debouncedQuery.length >= 2;
+  const isLoading = hasQuery && (
+    (activeCategory === 'matches' && matchesLoading) ||
+    (activeCategory === 'teams' && teamsLoading) ||
+    (activeCategory === 'players' && (playersLoading || playersFetching)) ||
+    (activeCategory === 'members' && usersLoading) ||
+    (activeCategory === 'reviews' && (reviewsLoading || reviewsFetching)) ||
+    (activeCategory === 'lists' && (listsLoading || listsFetching))
+  );
 
-  const browseLinks: { label: string; icon: keyof typeof Ionicons.glyphMap; route: keyof SearchStackParamList }[] = [
-    { label: 'Date', icon: 'calendar-outline', route: 'BrowseByDate' },
-    { label: 'Most popular', icon: 'trending-up-outline', route: 'BrowsePopular' },
-    { label: 'Highest rated', icon: 'star-outline', route: 'BrowseHighestRated' },
-    { label: 'Featured lists', icon: 'list-outline', route: 'BrowseFeaturedLists' },
-  ];
+  // Get current results based on active category
+  const currentResults = useMemo(() => {
+    if (!hasQuery) return [];
+    switch (activeCategory) {
+      case 'matches': return matchResults || [];
+      case 'teams': return teamResults || [];
+      case 'players': return playerResults || [];
+      case 'members': return users || [];
+      case 'reviews': return reviewResults || [];
+      case 'lists': return listResults || [];
+      default: return [];
+    }
+  }, [hasQuery, activeCategory, matchResults, teamResults, playerResults, users, reviewResults, listResults]);
 
-  return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
-      {/* Header */}
-      <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }}>
-        <Text style={{ ...typography.h2, color: colors.foreground, textAlign: 'center', marginBottom: spacing.md }}>
-          Search
-        </Text>
-
-        {/* Search input */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.muted, borderRadius: borderRadius.md, marginBottom: spacing.sm, paddingHorizontal: 12 }}>
-          <Ionicons name="search" size={18} color={colors.textSecondary} />
-          <RNTextInput
-            placeholder="Find matches, teams, players and managers..."
-            placeholderTextColor={colors.textSecondary}
-            value={queryStr}
-            onChangeText={(t) => { setQueryStr(t); setVisibleCounts({ matches: 30, teams: 30, players: 30, members: 30, reviews: 30, lists: 30 }); }}
-            onFocus={() => setIsSearching(true)}
-            onBlur={() => { if (!queryStr) setIsSearching(false); }}
-            autoCapitalize="none"
-            autoCorrect={false}
-            style={{
-              flex: 1,
-              paddingLeft: 10,
-              paddingVertical: 10,
-              color: colors.foreground,
-              fontSize: 14,
-            }}
+  const renderItem = useCallback(({ item }: { item: any }) => {
+    switch (activeCategory) {
+      case 'matches':
+        return (
+          <MatchPosterCard
+            match={item}
+            onPress={() => navigation.navigate('MatchDetail', { matchId: item.id })}
+            width={CARD_WIDTH}
           />
-          {queryStr.length > 0 && (
-            <Pressable onPress={() => { setQueryStr(''); setIsSearching(false); Keyboard.dismiss(); }}>
-              <Ionicons name="close" size={18} color={colors.textSecondary} />
-            </Pressable>
-          )}
-        </View>
-
-        {/* Category tabs */}
-        {isSearching && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="always" style={{ marginBottom: spacing.sm }}>
-            <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-              {categories.map((cat) => (
-                <Pressable
-                  key={cat.key}
-                  onPress={() => { if (queryStr.trim()) Keyboard.dismiss(); setActiveCategory(cat.key); }}
-                  hitSlop={8}
-                  style={{
-                    paddingHorizontal: spacing.md,
-                    paddingVertical: spacing.xs + 2,
-                    borderRadius: borderRadius.full,
-                    backgroundColor: activeCategory === cat.key ? colors.primary : colors.muted,
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontSize: 13,
-                      fontWeight: '500',
-                      color: activeCategory === cat.key ? '#14181c' : colors.textSecondary,
-                    }}
-                  >
-                    {cat.label}
-                  </Text>
-                </Pressable>
-              ))}
+        );
+      case 'teams':
+        return (
+          <Pressable
+            onPress={() => navigation.navigate('TeamDetail', { teamId: item.id, teamName: item.name, teamCrest: item.crest })}
+            style={({ pressed }) => ({
+              borderBottomWidth: 1,
+              borderBottomColor: colors.border,
+              opacity: pressed ? 0.7 : 1,
+            })}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.sm + 2, paddingHorizontal: spacing.md }}>
+              <TeamLogo uri={item.crest} size={28} />
+              <Text style={{ ...typography.body, color: colors.foreground, fontSize: 15, flex: 1 }}>{item.name}</Text>
+              <Ionicons name="chevron-forward" size={14} color={colors.textSecondary} />
             </View>
-          </ScrollView>
-        )}
-      </View>
+          </Pressable>
+        );
+      case 'players':
+        return (
+          <Pressable
+            onPress={() => navigation.navigate('PersonDetail', { personId: item.id, personName: shortName(item.name), role: item.position === 'Coach' ? 'manager' : 'player' })}
+            style={({ pressed }) => ({
+              borderBottomWidth: 1,
+              borderBottomColor: colors.border,
+              opacity: pressed ? 0.7 : 1,
+            })}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.sm + 2, paddingHorizontal: spacing.md }}>
+              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.muted, alignItems: 'center', justifyContent: 'center' }}>
+                <Ionicons name={item.position === 'Coach' ? 'person' : 'football'} size={16} color={colors.textSecondary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ ...typography.body, color: colors.foreground, fontSize: 15 }}>{shortName(item.name)}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+                  {item.position && (
+                    <Text style={{ ...typography.caption, color: colors.textSecondary }}>{item.position}</Text>
+                  )}
+                  {item.currentTeam && (
+                    <Text style={{ ...typography.caption, color: colors.textSecondary }}>
+                      {item.position ? ' · ' : ''}{item.currentTeam.name}
+                    </Text>
+                  )}
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={14} color={colors.textSecondary} />
+            </View>
+          </Pressable>
+        );
+      case 'members':
+        return (
+          <Pressable
+            onPress={() => navigation.navigate('UserProfile', { userId: item.id })}
+            style={{
+              borderBottomWidth: 1,
+              borderBottomColor: colors.border,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', padding: spacing.sm, paddingHorizontal: spacing.md }}>
+              <Avatar uri={item.avatar} name={item.displayName} size={44} />
+              <View style={{ marginLeft: spacing.sm, flex: 1 }}>
+                <Text style={{ ...typography.bodyBold, color: colors.foreground }}>{item.displayName}</Text>
+                <Text style={{ ...typography.caption, color: colors.textSecondary }}>@{item.username}</Text>
+              </View>
+            </View>
+          </Pressable>
+        );
+      case 'reviews':
+        return (
+          <ReviewCard
+            review={item}
+            onPress={() => navigation.navigate('ReviewDetail', { reviewId: item.id })}
+          />
+        );
+      case 'lists':
+        return (
+          <ListPreviewCard
+            list={item}
+            onPress={() => navigation.navigate('ListDetail', { listId: item.id })}
+            onMatchPress={(matchId) => navigation.navigate('MatchDetail', { matchId })}
+          />
+        );
+      default:
+        return null;
+    }
+  }, [activeCategory, colors, spacing, typography, navigation, CARD_WIDTH]);
 
-      <ScrollView indicatorStyle={isDark ? 'white' : 'default'} style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 0 }} keyboardShouldPersistTaps="always" keyboardDismissMode="on-drag" onScroll={handleScroll} scrollEventThrottle={400}>
-        {/* Default browse view */}
-        {!isSearching && (
+  const keyExtractor = useCallback((item: any) => String(item.id), []);
+
+  // Content to show when NOT searching (browse view) or when searching with no query yet (recent searches)
+  const renderNonResultContent = () => {
+    if (!isSearching) {
+      return (
+        <ScrollView indicatorStyle={isDark ? 'white' : 'default'} style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 0 }} keyboardShouldPersistTaps="always" keyboardDismissMode="on-drag">
           <View style={{ paddingVertical: spacing.lg, paddingHorizontal: spacing.md }}>
             <Text style={{ ...typography.h4, color: colors.foreground, marginBottom: spacing.md }}>
               Browse By
             </Text>
             <View style={{ backgroundColor: colors.card, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' }}>
-              {browseLinks.map((link, i) => (
+              {BROWSE_LINKS.map((link, i) => (
                 <Pressable
                   key={link.label}
                   onPress={() => navigation.navigate(link.route as any)}
@@ -237,11 +325,15 @@ export function SearchScreen() {
               ))}
             </View>
           </View>
-        )}
+        </ScrollView>
+      );
+    }
 
-        {/* Recent searches or empty prompt */}
-        {isSearching && !queryStr && (
-          recentSearches.length > 0 ? (
+    // Searching but no query yet — show recent searches
+    if (!queryStr) {
+      return (
+        <ScrollView indicatorStyle={isDark ? 'white' : 'default'} style={{ flex: 1 }} keyboardShouldPersistTaps="always" keyboardDismissMode="on-drag">
+          {recentSearches.length > 0 ? (
             <View style={{ paddingTop: spacing.md }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm, paddingHorizontal: spacing.md }}>
                 <Text style={{ ...typography.h4, color: colors.foreground }}>Recent Searches</Text>
@@ -292,203 +384,154 @@ export function SearchScreen() {
             <View style={{ alignItems: 'center', paddingTop: spacing.xxl * 2 }}>
               <Text style={{ ...typography.body, color: colors.textSecondary }}>Start typing to search...</Text>
             </View>
-          )
-        )}
+          )}
+        </ScrollView>
+      );
+    }
 
-        {/* Matches results — poster grid */}
-        {isSearching && debouncedQuery.length >= 2 && activeCategory === 'matches' && (
-          <View style={{ paddingHorizontal: HORIZONTAL_PADDING, paddingTop: spacing.md }}>
-            {matchesLoading || matchesFetching ? (
-              <View style={{ marginTop: spacing.xl }}><LoadingSpinner fullScreen={false} /></View>
-            ) : !matchResults || matchResults.length === 0 ? (
-              <View style={{ alignItems: 'center', paddingTop: spacing.lg, paddingHorizontal: spacing.xl }}>
-                <Ionicons name="football-outline" size={32} color={colors.textSecondary} />
-                <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.sm }}>
-                  No matches found
-                </Text>
-              </View>
-            ) : (
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: GAP }}>
-                {matchResults.slice(0, visibleCounts.matches).map((match) => (
-                  <MatchPosterCard
-                    key={match.id}
-                    match={match}
-                    onPress={() => navigation.navigate('MatchDetail', { matchId: match.id })}
-                    width={CARD_WIDTH}
-                  />
-                ))}
-              </View>
-            )}
-          </View>
-        )}
+    return null;
+  };
 
-        {/* Teams results */}
-        {isSearching && debouncedQuery.length >= 2 && activeCategory === 'teams' && (
-          <View style={{ paddingTop: spacing.xs }}>
-            {teamsLoading ? (
-              <View style={{ marginTop: spacing.md }}><LoadingSpinner fullScreen={false} /></View>
-            ) : !teamResults || teamResults.length === 0 ? (
-              <View style={{ alignItems: 'center', paddingTop: spacing.lg, paddingHorizontal: spacing.xl }}>
-                <Ionicons name="shield-outline" size={32} color={colors.textSecondary} />
-                <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.sm }}>
-                  No teams found
-                </Text>
-              </View>
-            ) : (
-              teamResults.slice(0, visibleCounts.teams).map((team, i, arr) => (
+  // Render search results with FlatList (or loading/empty state)
+  const renderSearchResults = () => {
+    if (!hasQuery) return null;
+
+    if (isLoading) {
+      return (
+        <View style={{ flex: 1, marginTop: spacing.xl }}>
+          <LoadingSpinner fullScreen={false} />
+        </View>
+      );
+    }
+
+    if (currentResults.length === 0) {
+      return (
+        <View style={{ flex: 1, alignItems: 'center', paddingTop: spacing.lg, paddingHorizontal: spacing.xl }}>
+          <Ionicons name={EMPTY_ICONS[activeCategory]} size={32} color={colors.textSecondary} />
+          <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.sm }}>
+            {EMPTY_LABELS[activeCategory]}
+          </Text>
+        </View>
+      );
+    }
+
+    if (activeCategory === 'matches') {
+      return (
+        <FlatList
+          key="matches-grid"
+          data={currentResults}
+          keyExtractor={keyExtractor}
+          numColumns={NUM_COLUMNS}
+          columnWrapperStyle={{ gap: GAP }}
+          contentContainerStyle={{ paddingHorizontal: HORIZONTAL_PADDING, paddingTop: spacing.md, gap: GAP, paddingBottom: spacing.xl }}
+          renderItem={renderItem}
+          keyboardShouldPersistTaps="always"
+          keyboardDismissMode="on-drag"
+          indicatorStyle={isDark ? 'white' : 'default'}
+          removeClippedSubviews
+          onEndReached={() => { if (hasNextMatchPage && !isFetchingNextMatchPage) fetchNextMatchPage(); }}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={isFetchingNextMatchPage ? <View style={{ paddingVertical: spacing.md }}><LoadingSpinner fullScreen={false} /></View> : null}
+        />
+      );
+    }
+
+    return (
+      <FlatList
+        key="list"
+        data={currentResults}
+        keyExtractor={keyExtractor}
+        contentContainerStyle={{ paddingTop: spacing.xs, paddingBottom: spacing.xl }}
+        renderItem={renderItem}
+        keyboardShouldPersistTaps="always"
+        keyboardDismissMode="on-drag"
+        indicatorStyle={isDark ? 'white' : 'default'}
+        removeClippedSubviews
+      />
+    );
+  };
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
+      {/* Header */}
+      <Pressable onPress={Keyboard.dismiss} style={{ paddingHorizontal: spacing.md, paddingTop: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+        <Text style={{ ...typography.h2, color: colors.foreground, textAlign: 'center', marginBottom: spacing.md }}>
+          Search
+        </Text>
+
+        {/* Search input */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.muted, borderRadius: borderRadius.md, marginBottom: spacing.sm, paddingHorizontal: 12 }}>
+          <Ionicons name="search" size={18} color={colors.textSecondary} />
+          <RNTextInput
+            placeholder="Find matches, teams, players and managers..."
+            placeholderTextColor={colors.textSecondary}
+            value={queryStr}
+            onChangeText={setQueryStr}
+            onFocus={() => { LayoutAnimation.configureNext(LAYOUT_ANIM); setIsSearching(true); }}
+            onBlur={() => { if (!queryStr) { LayoutAnimation.configureNext(LAYOUT_ANIM); setIsSearching(false); } }}
+            autoCapitalize="none"
+            autoCorrect={false}
+            style={{
+              flex: 1,
+              paddingLeft: 10,
+              paddingVertical: 10,
+              color: colors.foreground,
+              fontSize: 14,
+            }}
+          />
+          {queryStr.length > 0 && (
+            <Pressable onPress={() => {
+              setQueryStr(''); setDebouncedQuery('');
+              if (!keyboardVisibleRef.current) {
+                LayoutAnimation.configureNext(LAYOUT_ANIM);
+                setIsSearching(false);
+              }
+            }}>
+              <Ionicons name="close" size={18} color={colors.textSecondary} />
+            </Pressable>
+          )}
+        </View>
+
+        {/* Category tabs */}
+        {isSearching && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="always" style={{ marginBottom: spacing.sm }}>
+            <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+              {CATEGORIES.map((cat) => (
                 <Pressable
-                  key={team.id}
-                  onPress={() => navigation.navigate('TeamDetail', { teamId: team.id, teamName: team.name, teamCrest: team.crest })}
-                  style={({ pressed }) => ({
-                    borderBottomWidth: i < arr.length - 1 ? 1 : 0,
-                    borderBottomColor: colors.border,
-                    opacity: pressed ? 0.7 : 1,
-                  })}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.sm + 2, paddingHorizontal: spacing.md }}>
-                    <TeamLogo uri={team.crest} size={28} />
-                    <Text style={{ ...typography.body, color: colors.foreground, fontSize: 15, flex: 1 }}>{team.name}</Text>
-                    <Ionicons name="chevron-forward" size={14} color={colors.textSecondary} />
-                  </View>
-                </Pressable>
-              ))
-            )}
-          </View>
-        )}
-
-        {/* Players and Managers results */}
-        {isSearching && debouncedQuery.length >= 2 && activeCategory === 'players' && (
-          <View style={{ paddingTop: spacing.xs }}>
-            {playersLoading || playersFetching ? (
-              <View style={{ marginTop: spacing.md }}><LoadingSpinner fullScreen={false} /></View>
-            ) : !playerResults || playerResults.length === 0 ? (
-              <View style={{ alignItems: 'center', paddingTop: spacing.lg, paddingHorizontal: spacing.xl }}>
-                <Ionicons name="people-outline" size={32} color={colors.textSecondary} />
-                <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.sm }}>
-                  No players found
-                </Text>
-              </View>
-            ) : (
-              playerResults.slice(0, visibleCounts.players).map((player, i, arr) => (
-                <Pressable
-                  key={player.id}
-                  onPress={() => navigation.navigate('PersonDetail', { personId: player.id, personName: shortName(player.name), role: player.position === 'Coach' ? 'manager' : 'player' })}
-                  style={({ pressed }) => ({
-                    borderBottomWidth: i < arr.length - 1 ? 1 : 0,
-                    borderBottomColor: colors.border,
-                    opacity: pressed ? 0.7 : 1,
-                  })}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.sm + 2, paddingHorizontal: spacing.md }}>
-                    <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.muted, alignItems: 'center', justifyContent: 'center' }}>
-                      <Ionicons name={player.position === 'Coach' ? 'person' : 'football'} size={16} color={colors.textSecondary} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ ...typography.body, color: colors.foreground, fontSize: 15 }}>{shortName(player.name)}</Text>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
-                        {player.position && (
-                          <Text style={{ ...typography.caption, color: colors.textSecondary }}>{player.position}</Text>
-                        )}
-                        {player.currentTeam && (
-                          <Text style={{ ...typography.caption, color: colors.textSecondary }}>
-                            {player.position ? ' · ' : ''}{player.currentTeam.name}
-                          </Text>
-                        )}
-                      </View>
-                    </View>
-                    <Ionicons name="chevron-forward" size={14} color={colors.textSecondary} />
-                  </View>
-                </Pressable>
-              ))
-            )}
-          </View>
-        )}
-
-        {/* Members results */}
-        {isSearching && debouncedQuery.length >= 2 && activeCategory === 'members' && (
-          <View style={{ paddingTop: spacing.xs }}>
-            {usersLoading ? (
-              <View style={{ marginTop: spacing.md }}><LoadingSpinner fullScreen={false} /></View>
-            ) : !users || users.length === 0 ? (
-              <View style={{ alignItems: 'center', paddingTop: spacing.lg, paddingHorizontal: spacing.xl }}>
-                <Ionicons name="person-outline" size={32} color={colors.textSecondary} />
-                <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.sm }}>
-                  No members found
-                </Text>
-              </View>
-            ) : (
-              users.slice(0, visibleCounts.members).map((u, i, arr) => (
-                <Pressable
-                  key={u.id}
-                  onPress={() => navigation.navigate('UserProfile', { userId: u.id })}
+                  key={cat.key}
+                  onPress={() => {
+                    if (queryStr.trim()) Keyboard.dismiss();
+                    setActiveCategory(cat.key);
+                  }}
+                  hitSlop={8}
                   style={{
-                    borderBottomWidth: i < arr.length - 1 ? 1 : 0,
-                    borderBottomColor: colors.border,
+                    paddingHorizontal: spacing.md,
+                    paddingVertical: spacing.xs + 2,
+                    borderRadius: borderRadius.full,
+                    backgroundColor: activeCategory === cat.key ? colors.primary : colors.muted,
                   }}
                 >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', padding: spacing.sm, paddingHorizontal: spacing.md }}>
-                    <Avatar uri={u.avatar} name={u.displayName} size={44} />
-                    <View style={{ marginLeft: spacing.sm, flex: 1 }}>
-                      <Text style={{ ...typography.bodyBold, color: colors.foreground }}>{u.displayName}</Text>
-                      <Text style={{ ...typography.caption, color: colors.textSecondary }}>@{u.username}</Text>
-                    </View>
-                  </View>
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      fontWeight: '500',
+                      color: activeCategory === cat.key ? '#14181c' : colors.textSecondary,
+                    }}
+                  >
+                    {cat.label}
+                  </Text>
                 </Pressable>
-              ))
-            )}
-          </View>
+              ))}
+            </View>
+          </ScrollView>
         )}
+      </Pressable>
 
-        {/* Reviews results */}
-        {isSearching && debouncedQuery.length >= 2 && activeCategory === 'reviews' && (
-          <View style={{ paddingTop: spacing.xs }}>
-            {reviewsLoading || reviewsFetching ? (
-              <View style={{ marginTop: spacing.md }}><LoadingSpinner fullScreen={false} /></View>
-            ) : !reviewResults || reviewResults.length === 0 ? (
-              <View style={{ alignItems: 'center', paddingTop: spacing.lg, paddingHorizontal: spacing.xl }}>
-                <Ionicons name="chatbubble-outline" size={32} color={colors.textSecondary} />
-                <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.sm }}>
-                  No reviews found
-                </Text>
-              </View>
-            ) : (
-              reviewResults.slice(0, visibleCounts.reviews).map((review, i, arr) => (
-                <ReviewCard
-                  key={review.id}
-                  review={review}
-                  onPress={() => navigation.navigate('ReviewDetail', { reviewId: review.id })}
-                  isLast={i === arr.length - 1}
-                />
-              ))
-            )}
-          </View>
-        )}
-
-        {/* Lists results */}
-        {isSearching && debouncedQuery.length >= 2 && activeCategory === 'lists' && (
-          <View style={{ paddingTop: spacing.xs }}>
-            {listsLoading || listsFetching ? (
-              <View style={{ marginTop: spacing.md }}><LoadingSpinner fullScreen={false} /></View>
-            ) : !listResults || listResults.length === 0 ? (
-              <View style={{ alignItems: 'center', paddingTop: spacing.lg, paddingHorizontal: spacing.xl }}>
-                <Ionicons name="list-outline" size={32} color={colors.textSecondary} />
-                <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.sm }}>
-                  No lists found
-                </Text>
-              </View>
-            ) : (
-              listResults.slice(0, visibleCounts.lists).map((list) => (
-                <ListPreviewCard
-                  key={list.id}
-                  list={list}
-                  onPress={() => navigation.navigate('ListDetail', { listId: list.id })}
-                  onMatchPress={(matchId) => navigation.navigate('MatchDetail', { matchId })}
-                />
-              ))
-            )}
-          </View>
-        )}
-      </ScrollView>
+      {/* Content area — tap empty space to dismiss keyboard */}
+      <Pressable style={{ flex: 1 }} onPress={Keyboard.dismiss}>
+        {renderNonResultContent()}
+        {renderSearchResults()}
+      </Pressable>
     </SafeAreaView>
   );
 }

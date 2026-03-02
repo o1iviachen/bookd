@@ -1,6 +1,7 @@
 export interface ReviewMedia {
   url: string;
   type: 'image' | 'video';
+  thumbnailUrl?: string;
 }
 
 export interface Review {
@@ -20,4 +21,5 @@ export interface Review {
   editedAt: Date | null;
   userVote: 'up' | 'down' | null;
   matchLabel?: string;
+  flagged?: boolean;
 }

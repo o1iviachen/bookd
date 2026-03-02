@@ -18,6 +18,8 @@ import { ScreenHeader } from '../../components/ui/ScreenHeader';
 import { ActionMenu } from '../../components/ui/ActionMenu';
 import { LikedByModal } from '../../components/ui/LikedByModal';
 import { TeamLogo } from '../../components/match/TeamLogo';
+import { MentionText } from '../../components/ui/MentionText';
+import { MentionInput } from '../../components/ui/MentionInput';
 import { formatRelativeTime } from '../../utils/formatDate';
 import { POPULAR_TEAMS } from '../../utils/constants';
 import { Match } from '../../types/match';
@@ -402,9 +404,7 @@ export function ListDetailScreen({ route, navigation }: any) {
                         {formatRelativeTime(comment.createdAt)}
                       </Text>
                     </View>
-                    <Text style={{ ...typography.body, color: colors.foreground, marginTop: 2 }}>
-                      {comment.text}
-                    </Text>
+                    <MentionText text={comment.text} style={{ marginTop: 2 }} />
                   </View>
                   {comment.userId === user?.uid && (
                     <Pressable
@@ -428,7 +428,7 @@ export function ListDetailScreen({ route, navigation }: any) {
 
       {/* Sticky comment input bar */}
       {user && (
-        <View style={{ borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.background }}>
+        <View style={{ borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.background, zIndex: 10 }}>
           <View style={{
             flexDirection: 'row',
             alignItems: 'center',
@@ -437,22 +437,18 @@ export function ListDetailScreen({ route, navigation }: any) {
             gap: spacing.sm,
           }}>
             <Avatar uri={profile?.avatar || null} name={profile?.displayName || 'You'} size={28} />
-            <RNTextInput
-              placeholder="Add a comment..."
-              placeholderTextColor={colors.textSecondary}
+            <MentionInput
               value={commentText}
               onChangeText={setCommentText}
-              style={{
-                flex: 1,
+              placeholder="Add a comment..."
+              maxLength={500}
+              containerStyle={{ flex: 1 }}
+              inputStyle={{
                 backgroundColor: colors.muted,
                 borderRadius: borderRadius.full,
                 paddingHorizontal: spacing.md,
                 paddingVertical: spacing.sm,
-                color: colors.foreground,
-                fontSize: 14,
               }}
-              multiline
-              maxLength={500}
             />
             <Pressable
               onPress={() => {

@@ -99,13 +99,7 @@ export function RatingChart({ reviews, showStats = false, homeTeamId, awayTeamId
   const selectedHalfStar = selectedBucket % 1 !== 0;
   const selectedEmptyStars = 5 - selectedFullStars - (selectedHalfStar ? 1 : 0);
 
-  // For default state: show average as stars
-  const avgFullStars = Math.floor(avgRating);
-  const avgHalfStar = avgRating % 1 >= 0.25 && avgRating % 1 < 0.75;
-  const avgRoundedUp = avgRating % 1 >= 0.75;
-  const defaultFullStars = avgRoundedUp ? avgFullStars + 1 : avgFullStars;
-  const defaultHalf = avgHalfStar;
-  const defaultEmptyStars = 5 - defaultFullStars - (defaultHalf ? 1 : 0);
+  // For default state (nothing selected): show 5 filled stars
 
   const filterOptions: { key: RatingFilter; label: string }[] = [
     { key: 'everyone', label: 'Everyone' },
@@ -235,14 +229,8 @@ export function RatingChart({ reviews, showStats = false, homeTeamId, awayTeamId
                 </Text>
               )}
               <View style={{ flexDirection: 'row' }}>
-                {Array.from({ length: defaultFullStars }).map((_, s) => (
+                {Array.from({ length: 5 }).map((_, s) => (
                   <Ionicons key={`f${s}`} name="star" size={10} color={colors.primary} />
-                ))}
-                {defaultHalf && (
-                  <Ionicons name="star-half" size={10} color={colors.primary} />
-                )}
-                {Array.from({ length: Math.max(0, defaultEmptyStars) }).map((_, s) => (
-                  <Ionicons key={`e${s}`} name="star-outline" size={10} color={colors.primary} />
                 ))}
               </View>
             </>

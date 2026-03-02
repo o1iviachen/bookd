@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, Text, ActivityIndicator, ViewStyle } from 'react-native';
+import { Pressable, Text, View, ActivityIndicator, ViewStyle } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 
 interface ButtonProps {
@@ -55,7 +55,12 @@ export function Button({
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={text} size="small" />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <ActivityIndicator color={text} size="small" />
+          <Text style={{ color: text, fontSize: s.fontSize, fontWeight: '600' }}>
+            {title}
+          </Text>
+        </View>
       ) : (
         <Text style={{ color: text, fontSize: s.fontSize, fontWeight: '600' }}>
           {title}

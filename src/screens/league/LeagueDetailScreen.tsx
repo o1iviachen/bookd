@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
-import { View, Text, ScrollView, Pressable, LayoutChangeEvent, Animated } from 'react-native';
+import { View, Text, ScrollView, Pressable, LayoutChangeEvent, Animated, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
@@ -80,7 +80,6 @@ export function LeagueDetailScreen({ route, navigation }: any) {
   const defaultTabIndex = initialTab === 'fixtures' ? 1 : 0;
   const [activeTabIndex, setActiveTabIndex] = useState(defaultTabIndex);
   const pagerRef = useRef<PagerView>(null);
-  const lastReportedPage = useRef(defaultTabIndex);
 
   const { data: standings, isLoading: standingsLoading } = useQuery({
     queryKey: ['standings', competitionCode],
@@ -487,20 +486,13 @@ export function LeagueDetailScreen({ route, navigation }: any) {
         style={{ flex: 1 }}
         initialPage={defaultTabIndex}
         offscreenPageLimit={1}
-        onPageScroll={(e: any) => {
-          const page = Math.min(
-            Math.round(e.nativeEvent.position + e.nativeEvent.offset),
-            tabs.length - 1,
-          );
-          if (page !== lastReportedPage.current) {
-            lastReportedPage.current = page;
-            setActiveTabIndex(page);
-          }
-        }}
         onPageSelected={(e: any) => {
+          const page = e.nativeEvent.position;
           // Prevent swiping to hidden knockout page for non-cup leagues
-          if (e.nativeEvent.position >= tabs.length) {
+          if (page >= tabs.length) {
             pagerRef.current?.setPage(tabs.length - 1);
+          } else {
+            setActiveTabIndex(page);
           }
         }}
       >
@@ -529,14 +521,19 @@ export function LeagueDetailScreen({ route, navigation }: any) {
 
             // All cards use the same width based on the widest row
             const maxCardsPerRow = Math.max(...bracketTopHalf.map((r) => r.ties.length), 1);
-            const cardWidthPct = `${100 / maxCardsPerRow}%` as const;
+            // Minimum comfortable card width; bracket scrolls horizontally if needed
+            const MIN_CARD_WIDTH = 130;
+            const screenWidth = Dimensions.get('window').width - pad * 2;
+            const needsHScroll = maxCardsPerRow * MIN_CARD_WIDTH > screenWidth;
+            const bracketWidth = needsHScroll ? maxCardsPerRow * MIN_CARD_WIDTH : screenWidth;
+            const cardWidthPx = bracketWidth / maxCardsPerRow;
 
             const renderBracketRow = (ties: Tie[], stage: string, isFinal: boolean, keyPrefix: string) => (
               <View key={`${keyPrefix}-${stage}`}>
                 <BracketRoundLabel stage={stage} isFinal={isFinal} colors={colors} typography={typography} />
-                <View style={{ flexDirection: 'row', paddingHorizontal: pad, justifyContent: 'center' }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'center' }}>
                   {ties.map((tie, tieIdx) => (
-                    <View key={tieIdx} style={{ width: cardWidthPct, paddingHorizontal: 3 }}>
+                    <View key={tieIdx} style={{ width: cardWidthPx, paddingHorizontal: 3 }}>
                       <BracketTieCard tie={tie} colors={colors} typography={typography} borderRadius={borderRadius} navigation={navigation} isFinal={isFinal} />
                     </View>
                   ))}
@@ -546,15 +543,15 @@ export function LeagueDetailScreen({ route, navigation }: any) {
 
             // Wraps a connector in a centered container spanning N card slots
             const renderConnector = (numSlots: number, connector: React.ReactNode) => (
-              <View style={{ flexDirection: 'row', justifyContent: 'center', paddingHorizontal: pad }}>
-                <View style={{ width: `${(numSlots / maxCardsPerRow) * 100}%` }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'center' }}>
+                <View style={{ width: numSlots * cardWidthPx }}>
                   {connector}
                 </View>
               </View>
             );
 
-            return (
-              <ScrollView indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingTop: spacing.md, paddingBottom: 60 }} nestedScrollEnabled>
+            const bracketContent = (
+              <View style={{ width: needsHScroll ? bracketWidth + pad * 2 : '100%' }}>
                 {/* ── Top half: converging DOWN ── */}
                 {bracketTopHalf.map((round, idx) => {
                   const nextRound = bracketTopHalf[idx + 1];
@@ -714,6 +711,16 @@ export function LeagueDetailScreen({ route, navigation }: any) {
                     {renderBracketRow(bracketThirdPlace, 'THIRD_PLACE', false, 'third')}
                   </View>
                 )}
+              </View>
+            );
+
+            return (
+              <ScrollView indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingTop: spacing.md, paddingBottom: 60 }} nestedScrollEnabled>
+                {needsHScroll ? (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} nestedScrollEnabled>
+                    {bracketContent}
+                  </ScrollView>
+                ) : bracketContent}
               </ScrollView>
             );
           })()}

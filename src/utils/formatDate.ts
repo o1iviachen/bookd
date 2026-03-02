@@ -5,7 +5,7 @@ export function formatMatchDate(dateString: string): string {
   if (isToday(date)) return 'Today';
   if (isYesterday(date)) return 'Yesterday';
   if (isTomorrow(date)) return 'Tomorrow';
-  return format(date, 'EEE, MMM d');
+  return format(date, 'EEE, MMM d, yyyy');
 }
 
 export function formatMatchTime(dateString: string): string {

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useCallback } from 'react';
-import { View, Text, ScrollView, RefreshControl, TextInput as RNTextInput, Pressable } from 'react-native';
+import { View, Text, ScrollView, RefreshControl, TextInput as RNTextInput, Pressable, Keyboard } from 'react-native';
 import PagerView from 'react-native-pager-view';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -38,19 +38,21 @@ const MatchDayPage = React.memo(function MatchDayPage({
   followedTeamIds,
   followedLeagues,
   followedTeamNames,
+  active,
 }: {
   date: Date;
   searchQuery: string;
   followedTeamIds: string[];
   followedLeagues: string[];
   followedTeamNames: string[];
+  active: boolean;
 }) {
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
   const navigation = useNavigation<Nav>();
   const [favouritesExpanded, setFavouritesExpanded] = useState(true);
 
-  const { data: matches, isLoading, refetch, isRefetching } = useMatchesByDate(date);
+  const { data: matches, isLoading, refetch, isRefetching } = useMatchesByDate(date, active);
 
   const filteredMatches = useMemo(() => {
     if (!matches) return [];
@@ -224,6 +226,7 @@ export function MatchesScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const pagerRef = useRef<PagerView>(null);
   const lastReportedPage = useRef(-1);  // will be initialized after initialPageIndex is computed
+  const [activePage, setActivePage] = useState(DATE_RANGE); // tracks which page is currently visible (starts at today)
 
   const today = useMemo(() => new Date(), [todayKey]);
   const dates = useMemo(
@@ -248,15 +251,16 @@ export function MatchesScreen() {
     const idx = dates.findIndex((d) => isSameDay(d, date));
     if (idx >= 0) {
       lastReportedPage.current = idx;
+      setActivePage(idx);
       pagerRef.current?.setPageWithoutAnimation(idx);
     }
   }, [dates]);
 
-  const handlePageScroll = useCallback((e: any) => {
-    const page = Math.round(e.nativeEvent.position + e.nativeEvent.offset);
-    if (page !== lastReportedPage.current && page >= 0 && page < dates.length) {
-      lastReportedPage.current = page;
+  const handlePageSelected = useCallback((e: any) => {
+    const page = e.nativeEvent.position;
+    if (page >= 0 && page < dates.length) {
       setSelectedDate(dates[page]);
+      setActivePage(page);
     }
   }, [dates]);
 
@@ -271,7 +275,7 @@ export function MatchesScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
-      <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+      <Pressable onPress={Keyboard.dismiss} style={{ paddingHorizontal: spacing.md, paddingTop: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }}>
         <Text style={{ ...typography.h2, color: colors.foreground, textAlign: 'center', marginBottom: spacing.md }}>
           Matches
         </Text>
@@ -302,16 +306,16 @@ export function MatchesScreen() {
         </View>
 
         <DatePicker selectedDate={selectedDate} onDateChange={handleDateChange} />
-      </View>
+      </Pressable>
 
       <PagerView
         ref={pagerRef}
         style={{ flex: 1 }}
         initialPage={initialPageIndex}
         offscreenPageLimit={1}
-        onPageScroll={handlePageScroll}
+        onPageSelected={handlePageSelected}
       >
-        {dates.map((date) => (
+        {dates.map((date, index) => (
           <View key={date.toISOString()} style={{ flex: 1 }}>
             <MatchDayPage
               date={date}
@@ -319,6 +323,7 @@ export function MatchesScreen() {
               followedTeamIds={followedTeamIds}
               followedLeagues={followedLeagues}
               followedTeamNames={followedTeamNames}
+              active={Math.abs(index - activePage) <= 1}
             />
           </View>
         ))}

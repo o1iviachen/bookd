@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { View, Text, Pressable, SectionList, useWindowDimensions } from 'react-native';
+import React, { useState, useMemo, useCallback } from 'react';
+import { View, Text, Pressable, FlatList, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -85,21 +85,15 @@ export function BrowseByDateScreen() {
     return filtered;
   }, [matches, filters, minLogs, sort]);
 
-  // Group matches by date for section headers
-  const sections = useMemo(() => {
-    const groups = new Map<string, Match[]>();
-    for (const match of filteredMatches) {
-      const dateKey = new Date(match.kickoff).toISOString().split('T')[0];
-      if (!groups.has(dateKey)) groups.set(dateKey, []);
-      groups.get(dateKey)!.push(match);
-    }
-    return Array.from(groups.entries())
-      .sort(([a], [b]) => sort === 'date_desc' ? b.localeCompare(a) : a.localeCompare(b))
-      .map(([dateKey, data]) => ({
-        title: format(new Date(dateKey + 'T12:00:00'), 'EEEE, MMMM d'),
-        data: [data],
-      }));
-  }, [filteredMatches, sort]);
+  const renderItem = useCallback(({ item }: { item: Match }) => (
+    <MatchPosterCard
+      match={item}
+      onPress={() => navigation.navigate('MatchDetail', { matchId: item.id })}
+      width={CARD_WIDTH}
+    />
+  ), [navigation, CARD_WIDTH]);
+
+  const keyExtractor = useCallback((item: Match) => String(item.id), []);
 
   const goToPrevMonth = () => setSelectedMonth((m) => subMonths(m, 1));
   const goToNextMonth = () => setSelectedMonth((m) => addMonths(m, 1));
@@ -155,7 +149,7 @@ export function BrowseByDateScreen() {
 
       {isLoading ? (
         <View style={{ flex: 1, justifyContent: 'center' }}><LoadingSpinner fullScreen={false} /></View>
-      ) : sections.length === 0 ? (
+      ) : filteredMatches.length === 0 ? (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
           <Ionicons name="football-outline" size={48} color={colors.textSecondary} />
           <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.md }}>
@@ -163,29 +157,15 @@ export function BrowseByDateScreen() {
           </Text>
         </View>
       ) : (
-        <SectionList
+        <FlatList
+          data={filteredMatches}
+          renderItem={renderItem}
+          keyExtractor={keyExtractor}
+          numColumns={NUM_COLUMNS}
+          columnWrapperStyle={{ gap: GAP }}
+          contentContainerStyle={{ paddingHorizontal: HORIZONTAL_PADDING, paddingTop: spacing.md, gap: GAP, paddingBottom: 40 }}
           indicatorStyle={isDark ? 'white' : 'default'}
-          sections={sections}
-          keyExtractor={(item, index) => index.toString()}
-          contentContainerStyle={{ paddingBottom: 40 }}
-          stickySectionHeadersEnabled={false}
-          renderSectionHeader={({ section }) => (
-            <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 14, paddingHorizontal: HORIZONTAL_PADDING, paddingTop: spacing.md, paddingBottom: spacing.sm }}>
-              {section.title}
-            </Text>
-          )}
-          renderItem={({ item: dayMatches }) => (
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: HORIZONTAL_PADDING, gap: GAP }}>
-              {dayMatches.map((match) => (
-                <MatchPosterCard
-                  key={match.id}
-                  match={match}
-                  onPress={() => navigation.navigate('MatchDetail', { matchId: match.id })}
-                  width={CARD_WIDTH}
-                />
-              ))}
-            </View>
-          )}
+          removeClippedSubviews
         />
       )}
     </SafeAreaView>

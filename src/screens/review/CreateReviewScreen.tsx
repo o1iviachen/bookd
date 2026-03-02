@@ -19,6 +19,7 @@ import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { ReviewMedia } from '../../types/review';
 import { TextInput as RNTextInput } from 'react-native';
 import { isTextClean } from '../../utils/moderation';
+import { MentionInput } from '../../components/ui/MentionInput';
 
 interface LocalMedia {
   uri: string;
@@ -613,24 +614,21 @@ export function CreateReviewScreen({ route, navigation }: any) {
           <Text style={{ ...typography.bodyBold, color: colors.foreground, marginBottom: spacing.sm }}>
             Your Review
           </Text>
-          <RNTextInput
-            placeholder="What did you think of this match?"
-            placeholderTextColor={colors.textSecondary}
+          <MentionInput
             value={text}
             onChangeText={setText}
+            placeholder="What did you think of this match?"
             multiline
-            numberOfLines={6}
-            textAlignVertical="top"
-            style={{
+            containerStyle={{ marginBottom: spacing.lg, zIndex: 10 }}
+            inputStyle={{
               backgroundColor: colors.accent,
-              color: colors.foreground,
               borderRadius: borderRadius.md,
               padding: spacing.md,
               fontSize: 15,
               minHeight: 120,
               borderWidth: 1,
               borderColor: colors.border,
-              marginBottom: spacing.lg,
+              textAlignVertical: 'top',
             }}
           />
 

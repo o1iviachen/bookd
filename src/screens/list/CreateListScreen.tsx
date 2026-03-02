@@ -10,6 +10,7 @@ import { useCreateList } from '../../hooks/useLists';
 import { TextInput } from '../../components/ui/TextInput';
 import { Button } from '../../components/ui/Button';
 import { ProfileStackParamList } from '../../types/navigation';
+import { isTextClean } from '../../utils/moderation';
 
 type Props = NativeStackScreenProps<ProfileStackParamList, 'CreateList'>;
 
@@ -27,6 +28,10 @@ export function CreateListScreen({ navigation }: Props) {
   const handleCreate = () => {
     if (!name.trim()) {
       Alert.alert('Name Required', 'Please enter a list name.');
+      return;
+    }
+    if (!isTextClean(name) || !isTextClean(description)) {
+      Alert.alert('Content Warning', 'Your list contains inappropriate language. Please revise.');
       return;
     }
     if (!user || !profile) return;

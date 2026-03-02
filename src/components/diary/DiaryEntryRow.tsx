@@ -24,6 +24,7 @@ export function DiaryEntryRow({ review, match, isLiked, onPress, onMatchPress }:
   const dayName = format(review.createdAt, 'EEE');
   const isFinished = match?.status === 'FINISHED';
   const hasText = review.text.trim().length > 0;
+  const hasMedia = review.media && review.media.length > 0;
 
   return (
     <Pressable
@@ -88,12 +89,15 @@ export function DiaryEntryRow({ review, match, isLiked, onPress, onMatchPress }:
 
         {/* Rating + like + review indicators */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
-          <StarRating rating={review.rating} size={12} />
+          {review.rating > 0 && <StarRating rating={review.rating} size={12} />}
           {isLiked && (
             <Ionicons name="heart" size={12} color="#ef4444" />
           )}
           {hasText && (
             <Ionicons name="reorder-three-outline" size={14} color={colors.textSecondary} />
+          )}
+          {hasMedia && (
+            <Ionicons name="image-outline" size={12} color={colors.textSecondary} />
           )}
         </View>
       </View>

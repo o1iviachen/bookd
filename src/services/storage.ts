@@ -21,10 +21,17 @@ async function compressImage(
 
 /**
  * Convert a local file URI to a blob for upload.
+ * Uses XMLHttpRequest which handles all URI schemes (file://, ph://, content://) on React Native.
  */
 async function uriToBlob(uri: string): Promise<Blob> {
-  const response = await fetch(uri);
-  return response.blob();
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.onload = () => resolve(xhr.response as Blob);
+    xhr.onerror = () => reject(new Error(`Failed to convert URI to blob: ${uri}`));
+    xhr.responseType = 'blob';
+    xhr.open('GET', uri, true);
+    xhr.send(null);
+  });
 }
 
 /**
@@ -60,11 +67,33 @@ export async function uploadReviewMedia(
     ext = 'jpg';
   } else {
     blob = await uriToBlob(uri);
-    ext = 'mp4';
+    // Preserve original extension (iOS uses .mov, Android uses .mp4)
+    const uriExt = uri.split('.').pop()?.toLowerCase();
+    ext = uriExt === 'mov' ? 'mov' : 'mp4';
   }
 
   const fileName = `${Date.now()}_${index}.${ext}`;
   const storageRef = ref(storage, `reviews/${userId}/${reviewId}/${fileName}`);
-  await uploadBytesResumable(storageRef, blob);
+  const contentType = mediaType === 'video' ? (ext === 'mov' ? 'video/quicktime' : 'video/mp4') : 'image/jpeg';
+  const metadata = { contentType };
+  await uploadBytesResumable(storageRef, blob, metadata);
+  return getDownloadURL(storageRef);
+}
+
+/**
+ * Upload a video thumbnail image.
+ * Returns the download URL.
+ */
+export async function uploadThumbnail(
+  userId: string,
+  reviewId: string,
+  uri: string,
+  index: number
+): Promise<string> {
+  const compressed = await compressImage(uri, 600, 0.8);
+  const blob = await uriToBlob(compressed);
+  const fileName = `${Date.now()}_thumb_${index}.jpg`;
+  const storageRef = ref(storage, `reviews/${userId}/${reviewId}/${fileName}`);
+  await uploadBytesResumable(storageRef, blob, { contentType: 'image/jpeg' });
   return getDownloadURL(storageRef);
 }

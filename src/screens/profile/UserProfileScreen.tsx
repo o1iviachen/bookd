@@ -16,6 +16,7 @@ import { StarRating } from '../../components/ui/StarRating';
 import { Button } from '../../components/ui/Button';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { ScreenHeader } from '../../components/ui/ScreenHeader';
+import { RatingChart } from '../../components/profile/RatingChart';
 import { POPULAR_TEAMS } from '../../utils/constants';
 import { Match } from '../../types/match';
 
@@ -76,10 +77,12 @@ export function UserProfileScreen({ route, navigation }: any) {
     const userReviewsForMatch = allUserReviews.filter((r) => r.matchId === matchId);
     if (userReviewsForMatch.length === 1) {
       navigation.navigate('ReviewDetail', { reviewId: userReviewsForMatch[0].id });
+    } else if (userReviewsForMatch.length > 1) {
+      navigation.navigate('UserMatchReviews', { matchId, userId, username: profile?.username || '' });
     } else {
       navigation.navigate('MatchDetail', { matchId });
     }
-  }, [reviews, navigation]);
+  }, [reviews, navigation, userId, profile]);
 
   const handleFollowToggle = async () => {
     if (!currentUser || followMutation.isPending || unfollowMutation.isPending) return;
@@ -252,7 +255,7 @@ export function UserProfileScreen({ route, navigation }: any) {
 
         {/* Recent Activity */}
         {recentReviews.length > 0 && (
-          <View style={{ paddingHorizontal: HORIZONTAL_PADDING, paddingVertical: spacing.md, backgroundColor: `${colors.accent}30`, borderBottomWidth: 1, borderColor: colors.border }}>
+          <View style={{ paddingHorizontal: HORIZONTAL_PADDING, paddingVertical: spacing.md, backgroundColor: `${colors.accent}30`, borderColor: colors.border }}>
             <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: spacing.sm }}>
               Recent Activity
             </Text>
@@ -265,6 +268,7 @@ export function UserProfileScreen({ route, navigation }: any) {
                 {recentReviews.map((review) => {
                   const match = recentMatchMap.get(review.matchId);
                   const hasText = review.text.trim().length > 0;
+                  const hasMedia = review.media && review.media.length > 0;
                   return match ? (
                     <View key={review.id} style={{ width: CARD_WIDTH }}>
                       <MatchPosterCard
@@ -273,9 +277,12 @@ export function UserProfileScreen({ route, navigation }: any) {
                         width={CARD_WIDTH}
                       />
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 4 }}>
-                        <StarRating rating={review.rating} size={10} />
+                        {review.rating > 0 && <StarRating rating={review.rating} size={10} />}
                         {hasText && (
                           <Ionicons name="reorder-three-outline" size={12} color={colors.textSecondary} style={{ marginLeft: 1 }} />
+                        )}
+                        {hasMedia && (
+                          <Ionicons name="image-outline" size={10} color={colors.textSecondary} style={{ marginLeft: 1 }} />
                         )}
                       </View>
                     </View>
@@ -285,6 +292,9 @@ export function UserProfileScreen({ route, navigation }: any) {
             )}
           </View>
         )}
+
+        {/* Rating distribution */}
+        {reviews && reviews.length > 0 && <RatingChart reviews={reviews} />}
 
         {/* Navigation links */}
         <View style={{ marginTop: spacing.md, paddingHorizontal: spacing.md }}>

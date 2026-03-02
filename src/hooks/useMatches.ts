@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import { useQuery, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
 import { getMatchesByDate, getMatchById, getMatchesByDateRange } from '../services/matchService';
 import { getMatchDetail, searchMatchesQuery } from '../services/footballApi';
 import { addDays } from 'date-fns';
@@ -72,11 +72,12 @@ export function useMatchesRange(from: Date, to: Date) {
 }
 
 export function useSearchMatches(queryStr: string, active = true) {
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: ['searchMatches', queryStr],
-    queryFn: () => searchMatchesQuery(queryStr),
+    queryFn: ({ pageParam }) => searchMatchesQuery(queryStr, pageParam),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     enabled: queryStr.length >= 2 && active,
     staleTime: 2 * 60 * 1000,
-    placeholderData: keepPreviousData,
   });
 }

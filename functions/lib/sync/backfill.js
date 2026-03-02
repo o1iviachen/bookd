@@ -36,11 +36,14 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.LEAGUE_TIER = void 0;
+exports.getLeagueTier = getLeagueTier;
 exports.runBackfill = runBackfill;
 exports.buildTeamsFromMatches = buildTeamsFromMatches;
 exports.buildPlayersAndEnrichTeams = buildPlayersAndEnrichTeams;
 exports.fetchTeamColors = fetchTeamColors;
 exports.enrichPlayersFromSquads = enrichPlayersFromSquads;
+exports.generateSearchPrefixes = generateSearchPrefixes;
 exports.backfillPlayerNameLower = backfillPlayerNameLower;
 const config_1 = require("../config");
 const syncMatches_1 = require("./syncMatches");
@@ -51,6 +54,33 @@ const apiFootball_1 = require("../apiFootball");
 const config_2 = require("../config");
 const axios_1 = __importDefault(require("axios"));
 const db = admin.firestore();
+// League tier for player popularity ranking (lower = more popular)
+// Players on top-tier teams sort first in search results
+exports.LEAGUE_TIER = {
+    // Tier 1 — Top 5 European leagues + Champions League
+    PL: 1, CL: 1, PD: 1, BL1: 1, SA: 1, FL1: 1,
+    // Tier 2 — Other European cups + strong leagues
+    EL: 2, ECL: 2, ELC: 2, DED: 2, PPL: 2,
+    // Tier 3 — National cups + mid-tier leagues
+    FAC: 3, EFL: 3, SPL: 3, SL: 3, BEL: 3, BSA: 3, ARG: 3,
+    // Tier 4 — Other leagues
+    MLS: 4, LMX: 4, SAU: 4, JPL: 4, AUS: 4,
+    // Tier 5 — International (players appear here but primarily belong to a club)
+    WC: 5, EURO: 5, NL: 5, CA: 5,
+};
+const DEFAULT_LEAGUE_TIER = 6;
+/** Get the best (lowest) league tier for a set of competition codes */
+function getLeagueTier(competitionCodes) {
+    if (!competitionCodes || competitionCodes.length === 0)
+        return DEFAULT_LEAGUE_TIER;
+    let best = DEFAULT_LEAGUE_TIER;
+    for (const code of competitionCodes) {
+        const tier = exports.LEAGUE_TIER[code];
+        if (tier !== undefined && tier < best)
+            best = tier;
+    }
+    return best;
+}
 /**
  * Backfills historical match data for all leagues and seasons.
  * This is an HTTP-triggered function meant to be called once (or per-league).
@@ -268,6 +298,7 @@ async function buildPlayersAndEnrichTeams() {
                     name: p.name,
                     nameLower: (p.name || '').toLowerCase(),
                     searchName: extractSearchName(p.name || ''),
+                    searchPrefixes: generateSearchPrefixes(p.name || ''),
                     position: p.position || null,
                     nationality: null,
                     dateOfBirth: null,
@@ -475,9 +506,11 @@ async function enrichPlayersFromSquads(batchLimit = 50, offset = 0) {
     let playersEnriched = 0;
     let apiCalls = 0;
     for (const teamDoc of teamsSnap.docs) {
-        const teamId = teamDoc.data().id;
-        const teamName = teamDoc.data().name;
-        const teamCrest = teamDoc.data().crest;
+        const teamData = teamDoc.data();
+        const teamId = teamData.id;
+        const teamName = teamData.name;
+        const teamCrest = teamData.crest;
+        const teamTier = getLeagueTier(teamData.competitionCodes);
         try {
             // Fetch all pages of players for this team+season
             const allPlayers = [];
@@ -510,9 +543,11 @@ async function enrichPlayersFromSquads(batchLimit = 50, offset = 0) {
                 if (!(p === null || p === void 0 ? void 0 : p.id))
                     continue;
                 // Prefer p.name — it's the common/display name from API-Football (e.g. "Cristiano Ronaldo")
-                // firstname + lastname gives the full legal name (e.g. "Cristiano Ronaldo dos Santos Aveiro")
+                // Fallback: first word of firstname + lastname (avoids middle names leaking in)
+                // e.g. firstname="Trent John", lastname="Alexander-Arnold" → "Trent Alexander-Arnold"
+                const firstWord = (p.firstname || '').split(/\s+/)[0];
                 const fullName = p.name
-                    || ((p.firstname && p.lastname) ? `${p.firstname} ${p.lastname}` : `${p.firstname || ''} ${p.lastname || ''}`.trim());
+                    || (firstWord && p.lastname ? `${firstWord} ${p.lastname}` : p.firstname || p.lastname || '');
                 // Derive position from statistics if available
                 const pos = ((_d = (_c = (_b = entry.statistics) === null || _b === void 0 ? void 0 : _b[0]) === null || _c === void 0 ? void 0 : _c.games) === null || _d === void 0 ? void 0 : _d.position) || null;
                 const playerRef = db.collection(config_1.COLLECTIONS.PLAYERS).doc(String(p.id));
@@ -523,11 +558,13 @@ async function enrichPlayersFromSquads(batchLimit = 50, offset = 0) {
                     name: fullName,
                     nameLower: fullName.toLowerCase(),
                     searchName,
+                    searchPrefixes: generateSearchPrefixes(fullName),
                     photo: p.photo || null,
                     nationality: p.nationality || null,
                     dateOfBirth: ((_e = p.birth) === null || _e === void 0 ? void 0 : _e.date) || null,
                     position: pos ? mapSquadPosition(pos) : undefined,
                     currentTeam: { id: teamId, name: teamName, crest: teamCrest },
+                    leagueTier: teamTier,
                     syncedAt: admin.firestore.FieldValue.serverTimestamp(),
                 }, { merge: true });
                 batchCount++;
@@ -579,20 +616,37 @@ function extractSearchName(name) {
         // Simple names: "Cristiano Ronaldo" → "ronaldo", "Neymar" → "neymar"
         return parts.length > 1 ? parts[parts.length - 1] : lower;
     }
-    // For long names (3+ words), find the SECOND word as surname if it's meaningful,
-    // otherwise walk backwards skipping particles
-    // "Cristiano Ronaldo dos Santos Aveiro" → parts[1] = "ronaldo" (meaningful)
-    // Check if parts[1] is a common surname (not a particle)
-    if (!NAME_PARTICLES.has(parts[1]) && parts[1].length > 2) {
-        return parts[1];
-    }
-    // Walk backwards to find a meaningful last name
+    // Walk backward to find the last meaningful (non-particle) word
+    let lastNameIdx = -1;
     for (let i = parts.length - 1; i >= 1; i--) {
         if (!NAME_PARTICLES.has(parts[i]) && parts[i].length > 2) {
-            return parts[i];
+            lastNameIdx = i;
+            break;
         }
     }
-    return parts[parts.length - 1];
+    if (lastNameIdx === -1)
+        lastNameIdx = parts.length - 1;
+    // Walk backward from lastNameIdx to collect preceding particles
+    let startIdx = lastNameIdx;
+    while (startIdx > 1 && NAME_PARTICLES.has(parts[startIdx - 1]) && parts[startIdx - 1].length <= 3) {
+        startIdx--;
+    }
+    return parts.slice(startIdx, lastNameIdx + 1).join(' ');
+}
+/**
+ * Generates prefix tokens for search. For each word in the name,
+ * creates prefixes from 2 chars to the full word.
+ * "Kevin De Bruyne" → ["ke","kev","kevi","kevin","de","br","bru","bruy","bruyn","bruyne"]
+ */
+function generateSearchPrefixes(name) {
+    const words = name.toLowerCase().trim().split(/\s+/);
+    const prefixes = new Set();
+    for (const word of words) {
+        for (let i = 2; i <= word.length; i++) {
+            prefixes.add(word.substring(0, i));
+        }
+    }
+    return Array.from(prefixes);
 }
 /**
  * Backfills nameLower and searchName fields for all existing player docs.

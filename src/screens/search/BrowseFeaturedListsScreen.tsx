@@ -2,15 +2,20 @@ import React from 'react';
 import { View, Text, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { useRecentLists } from '../../hooks/useLists';
+import { ListPreviewCard } from '../../components/list/ListPreviewCard';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
+import { SearchStackParamList } from '../../types/navigation';
+
+type Nav = NativeStackNavigationProp<SearchStackParamList, 'BrowseFeaturedLists'>;
 
 export function BrowseFeaturedListsScreen() {
   const { theme, isDark } = useTheme();
-  const { colors, spacing, typography, borderRadius } = theme;
-  const navigation = useNavigation();
+  const { colors, spacing, typography } = theme;
+  const navigation = useNavigation<Nav>();
   const { data: lists, isLoading } = useRecentLists();
 
   return (
@@ -24,7 +29,7 @@ export function BrowseFeaturedListsScreen() {
         <View style={{ width: 60 }} />
       </View>
 
-      <ScrollView indicatorStyle={isDark ? 'white' : 'default'} style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 100, paddingHorizontal: spacing.md, paddingTop: spacing.md }}>
+      <ScrollView indicatorStyle={isDark ? 'white' : 'default'} style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 100 }}>
         {isLoading ? (
           <View style={{ marginTop: spacing.xxl }}><LoadingSpinner fullScreen={false} /></View>
         ) : !lists || lists.length === 0 ? (
@@ -36,24 +41,12 @@ export function BrowseFeaturedListsScreen() {
           </View>
         ) : (
           lists.map((list) => (
-            <Pressable
+            <ListPreviewCard
               key={list.id}
-              style={{
-                paddingVertical: spacing.md,
-                borderBottomWidth: 1,
-                borderBottomColor: colors.border,
-              }}
-            >
-              <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 17 }}>{list.name}</Text>
-              {list.description ? (
-                <Text style={{ ...typography.body, color: colors.textSecondary, marginTop: spacing.xs }} numberOfLines={2}>
-                  {list.description}
-                </Text>
-              ) : null}
-              <Text style={{ ...typography.small, color: colors.textSecondary, marginTop: spacing.xs }}>
-                {list.username} · {list.matchIds.length} matches
-              </Text>
-            </Pressable>
+              list={list}
+              onPress={() => navigation.navigate('ListDetail', { listId: list.id })}
+              onMatchPress={(matchId) => navigation.navigate('MatchDetail', { matchId })}
+            />
           ))
         )}
       </ScrollView>

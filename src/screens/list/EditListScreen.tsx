@@ -13,6 +13,7 @@ import { Button } from '../../components/ui/Button';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { MatchPickerModal } from '../../components/match/MatchPickerModal';
 import { Match } from '../../types/match';
+import { isTextClean } from '../../utils/moderation';
 
 function SwipeableMatchRow({
   children,
@@ -114,6 +115,10 @@ export function EditListScreen({ route, navigation }: any) {
   const handleSave = () => {
     if (!name.trim()) {
       Alert.alert('Name Required', 'Please enter a list name.');
+      return;
+    }
+    if (!isTextClean(name) || !isTextClean(description)) {
+      Alert.alert('Content Warning', 'Your list contains inappropriate language. Please revise.');
       return;
     }
 

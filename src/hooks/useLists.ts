@@ -33,7 +33,7 @@ export function useRecentLists() {
   return useQuery({
     queryKey: ['lists', 'recent'],
     queryFn: getRecentLists,
-    staleTime: 60 * 1000,
+    staleTime: 5 * 60 * 1000,
     retry: 2,
   });
 }
@@ -43,7 +43,7 @@ export function useListsForMatch(matchId: number) {
     queryKey: ['lists', 'match', matchId],
     queryFn: () => getListsContainingMatch(matchId),
     enabled: !!matchId,
-    staleTime: 60 * 1000,
+    staleTime: 5 * 60 * 1000,
   });
 }
 
@@ -134,7 +134,7 @@ export function useLikedLists(userId: string) {
   return useQuery({
     queryKey: ['lists', 'liked', userId],
     queryFn: () => getListsLikedByUser(userId),
-    staleTime: 60 * 1000,
+    staleTime: 5 * 60 * 1000,
     enabled: !!userId,
   });
 }
@@ -144,7 +144,7 @@ export function useListLikedBy(listId: string) {
     queryKey: ['listLikedBy', listId],
     queryFn: () => getListLikedBy(listId),
     enabled: !!listId,
-    staleTime: 30 * 1000,
+    staleTime: 5 * 60 * 1000,
   });
 }
 
@@ -166,7 +166,7 @@ export function useListComments(listId: string) {
     queryKey: ['listComments', listId],
     queryFn: () => getCommentsForList(listId),
     enabled: !!listId,
-    staleTime: 15 * 1000,
+    staleTime: 5 * 60 * 1000,
   });
 }
 

@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.backfillPlayerIds = exports.migratePlayerNames = exports.enrichPlayers = exports.enrichTeams = exports.buildPlayers = exports.syncAllDetails = exports.syncDetailsForLeague = exports.manualSync = exports.buildTeams = exports.backfill = exports.detailBackfill = exports.liveSync = exports.dailySync = void 0;
+exports.backfillPlayerIds = exports.migratePlayerNames = exports.enrichPlayers = exports.enrichTeams = exports.buildPlayers = exports.migrateLeagueTier = exports.migrateSearchPrefixes = exports.fixPlayerNames = exports.migrateHasDetails = exports.syncDetailsForLeague = exports.manualSync = exports.buildTeams = exports.backfill = exports.detailBackfill = exports.liveSync = exports.dailySync = exports.moderateReviewMedia = exports.sendPushNotification = void 0;
 const functions = __importStar(require("firebase-functions"));
 const admin = __importStar(require("firebase-admin"));
 admin.initializeApp();
@@ -42,6 +42,12 @@ const syncStandings_1 = require("./sync/syncStandings");
 const syncDetails_1 = require("./sync/syncDetails");
 const syncLive_1 = require("./sync/syncLive");
 const backfill_1 = require("./sync/backfill");
+// ─── Push Notifications ───
+var notifications_1 = require("./notifications");
+Object.defineProperty(exports, "sendPushNotification", { enumerable: true, get: function () { return notifications_1.sendPushNotification; } });
+// ─── Content Moderation ───
+var moderateMedia_1 = require("./moderateMedia");
+Object.defineProperty(exports, "moderateReviewMedia", { enumerable: true, get: function () { return moderateMedia_1.moderateReviewMedia; } });
 // ─── Scheduled Functions ───
 /**
  * Daily sync: runs at 06:00 UTC every day.
@@ -84,49 +90,28 @@ exports.liveSync = functions
 });
 /**
  * Detail backfill: runs every 5 minutes.
- * Syncs lineups/stats/events for finished matches that are missing details.
- * Processes 50 matches per run (~200 API calls, well within 300 req/min limit).
- * Also backfills playerIds for any newly synced docs.
+ * Queries matches with hasDetails == false to find exactly the ones needing work.
+ * Processes ~7 matches per run (4 API calls each = ~28 calls/run).
+ * 288 runs/day × ~7 matches = ~2,000 matches/day, within the 7,500 API calls/day quota.
+ * ~50 Firestore reads per run instead of ~55,000 with the old full-scan approach.
  */
 exports.detailBackfill = functions
     .runWith({ timeoutSeconds: 540, memory: '512MB' })
     .pubsub.schedule('every 5 minutes')
     .onRun(async () => {
-    var _a, _b;
-    const result = await (0, syncDetails_1.syncAllMissingDetails)(50);
-    if (result.synced > 0) {
-        console.log(`[detailBackfill] Synced ${result.synced} match details (${result.remaining} remaining)`);
-        // Backfill playerIds for newly synced docs
-        const db = admin.firestore();
-        const snapshot = await db.collection('matchDetails').limit(500).get();
-        const batch = db.batch();
-        let updated = 0;
-        for (const doc of snapshot.docs) {
-            const data = doc.data();
-            if (data.playerIds && Array.isArray(data.playerIds) && data.playerIds.length > 0)
-                continue;
-            const playerIds = [];
-            for (const arr of [data.homeLineup, data.homeBench, data.awayLineup, data.awayBench]) {
-                if (Array.isArray(arr)) {
-                    for (const p of arr) {
-                        if (p === null || p === void 0 ? void 0 : p.id)
-                            playerIds.push(p.id);
-                    }
-                }
-            }
-            if ((_a = data.homeCoach) === null || _a === void 0 ? void 0 : _a.id)
-                playerIds.push(data.homeCoach.id);
-            if ((_b = data.awayCoach) === null || _b === void 0 ? void 0 : _b.id)
-                playerIds.push(data.awayCoach.id);
-            if (playerIds.length > 0) {
-                batch.update(doc.ref, { playerIds });
-                updated++;
-            }
-        }
-        if (updated > 0) {
-            await batch.commit();
-            console.log(`[detailBackfill] Backfilled playerIds for ${updated} docs`);
-        }
+    const db = admin.firestore();
+    // Query only matches that are missing details
+    const snapshot = await db.collection('matches')
+        .where('status', '==', 'FINISHED')
+        .where('hasDetails', '==', false)
+        .limit(7)
+        .get();
+    if (snapshot.empty)
+        return;
+    const fixtureIds = snapshot.docs.map((d) => d.data().id);
+    const synced = await (0, syncDetails_1.syncMatchDetails)(fixtureIds);
+    if (synced > 0) {
+        console.log(`[detailBackfill] Synced ${synced} match details`);
     }
 });
 // ─── HTTP Functions (admin/backfill) ───
@@ -238,16 +223,10 @@ exports.syncDetailsForLeague = functions
         }
         const snapshot = await q.get();
         const allIds = snapshot.docs.map((d) => d.data().id);
-        // Check which ones already have details
-        const missingIds = [];
-        for (const id of allIds) {
-            const detailDoc = await db.collection('matchDetails').doc(String(id)).get();
-            if (!detailDoc.exists) {
-                missingIds.push(id);
-            }
-            if (missingIds.length >= batchLimit)
-                break;
-        }
+        // Batch-check which ones already have details
+        const detailRefs = allIds.map((id) => db.collection('matchDetails').doc(String(id)));
+        const detailSnaps = await db.getAll(...detailRefs);
+        const missingIds = allIds.filter((_, i) => !detailSnaps[i].exists).slice(0, batchLimit);
         if (missingIds.length === 0) {
             res.json({ success: true, synced: 0, remaining: 0, message: 'All details already synced' });
             return;
@@ -268,21 +247,246 @@ exports.syncDetailsForLeague = functions
     }
 });
 /**
- * Bulk sync ALL missing match details across all leagues.
- * Processes up to `limit` matches per call (default 50).
- * Call repeatedly until remaining=0.
- *   GET /syncAllDetails?limit=50
+ * One-time migration: sets hasDetails flag on all match documents.
+ * - Matches WITH details in matchDetails collection → hasDetails: true
+ * - Matches WITHOUT details → hasDetails: false
+ * This enables the efficient detailBackfill query (where hasDetails == false).
+ *   GET /migrateHasDetails
  */
-exports.syncAllDetails = functions
+exports.migrateHasDetails = functions
     .runWith({ timeoutSeconds: 540, memory: '1GB' })
     .https.onRequest(async (req, res) => {
-    const batchLimit = req.query.limit ? parseInt(req.query.limit, 10) : 50;
     try {
-        const result = await (0, syncDetails_1.syncAllMissingDetails)(batchLimit);
-        res.json({ success: true, ...result });
+        const db = admin.firestore();
+        const BATCH_SIZE = 500;
+        // Step 1: Get all matchDetails IDs (these matches have details)
+        const detailsSnapshot = await db.collection('matchDetails').select().get();
+        const detailIds = new Set(detailsSnapshot.docs.map((d) => d.id));
+        console.log(`[migrateHasDetails] Found ${detailIds.size} matchDetails docs`);
+        // Step 2: Iterate all finished matches and set hasDetails accordingly
+        let lastDoc = null;
+        let markedTrue = 0;
+        let markedFalse = 0;
+        while (true) {
+            let q = db.collection('matches')
+                .where('status', '==', 'FINISHED')
+                .limit(BATCH_SIZE);
+            if (lastDoc) {
+                q = q.startAfter(lastDoc);
+            }
+            const snapshot = await q.get();
+            if (snapshot.empty)
+                break;
+            const batch = db.batch();
+            for (const doc of snapshot.docs) {
+                const fixtureId = String(doc.data().id);
+                const hasDetails = detailIds.has(fixtureId);
+                batch.update(doc.ref, { hasDetails });
+                if (hasDetails)
+                    markedTrue++;
+                else
+                    markedFalse++;
+            }
+            await batch.commit();
+            lastDoc = snapshot.docs[snapshot.docs.length - 1];
+            console.log(`[migrateHasDetails] Processed ${markedTrue + markedFalse} matches so far...`);
+        }
+        res.json({
+            success: true,
+            markedTrue,
+            markedFalse,
+            total: markedTrue + markedFalse,
+        });
     }
     catch (err) {
-        console.error('[syncAllDetails] Error:', err);
+        console.error('[migrateHasDetails] Error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+/**
+ * One-time migration: fix player names by applying shortName() logic.
+ * Rewrites name, nameLower, searchName for all player docs.
+ *   GET /fixPlayerNames
+ */
+exports.fixPlayerNames = functions
+    .runWith({ timeoutSeconds: 540, memory: '1GB' })
+    .https.onRequest(async (req, res) => {
+    try {
+        const db = admin.firestore();
+        const BATCH_SIZE = 500;
+        // Same sets as client-side formatName.ts
+        const PARTICLES = new Set([
+            'de', 'da', 'do', 'dos', 'das', 'di', 'del', 'della', 'degli',
+            'van', 'von', 'den', 'der', 'el', 'al', 'bin', 'ibn',
+            'le', 'la', 'les', 'du', 'des',
+        ]);
+        const FILLERS = new Set([
+            'santos', 'silva', 'souza', 'sousa', 'oliveira', 'lima', 'pereira',
+            'ferreira', 'almeida', 'costa', 'rodrigues', 'martins', 'araujo',
+            'aveiro', 'junior', 'neto', 'filho', 'cuccittini',
+        ]);
+        function fixName(fullName) {
+            if (!fullName)
+                return fullName;
+            const parts = fullName.trim().split(/\s+/);
+            if (parts.length <= 2)
+                return fullName.trim();
+            const first = parts[0];
+            let lastNameIdx = -1;
+            for (let i = parts.length - 1; i >= 1; i--) {
+                const lower = parts[i].toLowerCase();
+                if (!FILLERS.has(lower) && !PARTICLES.has(lower)) {
+                    lastNameIdx = i;
+                    break;
+                }
+            }
+            if (lastNameIdx === -1)
+                lastNameIdx = parts.length - 1;
+            let startIdx = lastNameIdx;
+            while (startIdx > 1 && PARTICLES.has(parts[startIdx - 1].toLowerCase())) {
+                startIdx--;
+            }
+            return `${first} ${parts.slice(startIdx, lastNameIdx + 1).join(' ')}`;
+        }
+        function extractSearch(name) {
+            const lower = name.toLowerCase().trim();
+            const dotMatch = lower.match(/^[a-z]\.\s+(.+)$/);
+            if (dotMatch)
+                return dotMatch[1];
+            const parts = lower.split(/\s+/);
+            if (parts.length <= 1)
+                return lower;
+            return parts[parts.length - 1];
+        }
+        let lastDoc = null;
+        let fixed = 0;
+        let unchanged = 0;
+        while (true) {
+            let q = db.collection('players').limit(BATCH_SIZE);
+            if (lastDoc)
+                q = q.startAfter(lastDoc);
+            const snapshot = await q.get();
+            if (snapshot.empty)
+                break;
+            const batch = db.batch();
+            let batchWrites = 0;
+            for (const doc of snapshot.docs) {
+                const data = doc.data();
+                const oldName = data.name || '';
+                const newName = fixName(oldName);
+                if (newName !== oldName) {
+                    batch.update(doc.ref, {
+                        name: newName,
+                        nameLower: newName.toLowerCase(),
+                        searchName: extractSearch(newName),
+                    });
+                    batchWrites++;
+                    fixed++;
+                }
+                else {
+                    unchanged++;
+                }
+            }
+            if (batchWrites > 0)
+                await batch.commit();
+            lastDoc = snapshot.docs[snapshot.docs.length - 1];
+            console.log(`[fixPlayerNames] Processed ${fixed + unchanged} players (${fixed} fixed, ${unchanged} unchanged)`);
+        }
+        res.json({ success: true, fixed, unchanged, total: fixed + unchanged });
+    }
+    catch (err) {
+        console.error('[fixPlayerNames] Error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+/**
+ * One-time migration: add searchPrefixes array to all player docs.
+ * Enables word-level search via array-contains queries.
+ *   GET /migrateSearchPrefixes
+ */
+exports.migrateSearchPrefixes = functions
+    .runWith({ timeoutSeconds: 540, memory: '1GB' })
+    .https.onRequest(async (req, res) => {
+    try {
+        const db = admin.firestore();
+        const BATCH_SIZE = 500;
+        let lastDoc = null;
+        let updated = 0;
+        while (true) {
+            let q = db.collection('players').limit(BATCH_SIZE);
+            if (lastDoc)
+                q = q.startAfter(lastDoc);
+            const snapshot = await q.get();
+            if (snapshot.empty)
+                break;
+            const batch = db.batch();
+            for (const doc of snapshot.docs) {
+                const data = doc.data();
+                if (data.name) {
+                    batch.update(doc.ref, {
+                        searchPrefixes: (0, backfill_1.generateSearchPrefixes)(data.name),
+                    });
+                    updated++;
+                }
+            }
+            await batch.commit();
+            lastDoc = snapshot.docs[snapshot.docs.length - 1];
+            console.log(`[migrateSearchPrefixes] Processed ${updated} players`);
+        }
+        res.json({ success: true, updated });
+    }
+    catch (err) {
+        console.error('[migrateSearchPrefixes] Error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+/**
+ * Migrate leagueTier onto all player docs based on their currentTeam's competitionCodes.
+ *   GET /migrateLeagueTier
+ */
+exports.migrateLeagueTier = functions
+    .runWith({ timeoutSeconds: 540, memory: '1GB' })
+    .https.onRequest(async (req, res) => {
+    var _a;
+    try {
+        const db = admin.firestore();
+        // Build a map of teamId → competitionCodes from all team docs
+        const teamCompCodes = new Map();
+        const teamsSnap = await db.collection('teams').get();
+        for (const d of teamsSnap.docs) {
+            const data = d.data();
+            if (data.id && data.competitionCodes) {
+                teamCompCodes.set(data.id, data.competitionCodes);
+            }
+        }
+        console.log(`[migrateLeagueTier] Loaded ${teamCompCodes.size} teams`);
+        // Paginate through all player docs
+        let updated = 0;
+        let lastDoc = null;
+        while (true) {
+            let q = db.collection('players').orderBy('id').limit(500);
+            if (lastDoc)
+                q = q.startAfter(lastDoc);
+            const snap = await q.get();
+            if (snap.empty)
+                break;
+            const batch = db.batch();
+            for (const d of snap.docs) {
+                const data = d.data();
+                const teamId = (_a = data.currentTeam) === null || _a === void 0 ? void 0 : _a.id;
+                const codes = teamId ? teamCompCodes.get(teamId) : undefined;
+                const tier = (0, backfill_1.getLeagueTier)(codes);
+                batch.update(d.ref, { leagueTier: tier });
+            }
+            await batch.commit();
+            updated += snap.docs.length;
+            lastDoc = snap.docs[snap.docs.length - 1];
+            console.log(`[migrateLeagueTier] Processed ${updated} players`);
+        }
+        res.json({ success: true, updated });
+    }
+    catch (err) {
+        console.error('[migrateLeagueTier] Error:', err);
         res.status(500).json({ error: err.message });
     }
 });

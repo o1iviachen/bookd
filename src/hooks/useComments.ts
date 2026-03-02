@@ -10,7 +10,7 @@ export function useCommentsForReview(reviewId: string) {
   return useQuery({
     queryKey: ['comments', reviewId],
     queryFn: () => getCommentsForReview(reviewId),
-    staleTime: 15 * 1000,
+    staleTime: 5 * 60 * 1000,
     enabled: !!reviewId,
   });
 }

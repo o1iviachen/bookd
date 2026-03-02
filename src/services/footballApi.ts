@@ -15,6 +15,7 @@ import {
   where,
   limit,
   orderBy,
+  startAfter,
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { Match, Coach } from '../types/match';
@@ -636,6 +637,7 @@ export interface SearchablePlayer {
   name: string;
   position: string | null;
   currentTeam: { id: number; name: string; crest: string } | null;
+  leagueTier: number;
 }
 
 // Fetch all teams once — cached by React Query, filtered client-side
@@ -659,49 +661,47 @@ export async function getAllTeams(): Promise<SearchableTeam[]> {
   }
 }
 
-// Search players using Firestore prefix queries on both name and nameLower fields.
-// Also searches by last-name prefix to handle "L. Messi" format names.
+// Search players using Firestore array-contains on searchPrefixes field.
 export async function searchPlayersQuery(queryStr: string): Promise<SearchablePlayer[]> {
   try {
     if (queryStr.length < 2) return [];
 
     const lower = queryStr.trim().toLowerCase();
+    const words = lower.split(/\s+/).filter((w) => w.length >= 2);
+    if (words.length === 0) return [];
 
-    const seen = new Set<number>();
+    // Pick the longest word for array-contains (most selective)
+    const queryWord = words.reduce((a, b) => (a.length >= b.length ? a : b));
+
+    const snap = await getDocs(query(
+      collection(db, PLAYERS),
+      where('searchPrefixes', 'array-contains', queryWord),
+      limit(50)
+    ));
+
     const results: SearchablePlayer[] = [];
+    for (const d of snap.docs) {
+      const p = d.data();
+      if (!p.id || !p.name) continue;
 
-    const addResult = (p: Record<string, any>) => {
-      if (p.id && p.name && !seen.has(p.id)) {
-        seen.add(p.id);
-        results.push({
-          id: p.id,
-          name: p.name,
-          position: p.position || null,
-          currentTeam: p.currentTeam || null,
-        });
-      }
-    };
+      // Client-side: ensure ALL search words appear as prefixes of name words
+      const nameWords = (p.name as string).toLowerCase().split(/\s+/);
+      const allMatch = words.every((sw) =>
+        nameWords.some((nw) => nw.startsWith(sw))
+      );
+      if (!allMatch) continue;
 
-    // Two parallel queries: nameLower prefix + searchName (last name) prefix
-    const snapshots = await Promise.all([
-      getDocs(query(
-        collection(db, PLAYERS),
-        where('nameLower', '>=', lower),
-        where('nameLower', '<=', lower + '\uf8ff'),
-        limit(30)
-      )),
-      getDocs(query(
-        collection(db, PLAYERS),
-        where('searchName', '>=', lower),
-        where('searchName', '<=', lower + '\uf8ff'),
-        limit(30)
-      )),
-    ]);
-    for (const snap of snapshots) {
-      for (const d of snap.docs) {
-        addResult(d.data());
-      }
+      results.push({
+        id: p.id,
+        name: p.name,
+        position: p.position || null,
+        currentTeam: p.currentTeam || null,
+        leagueTier: p.leagueTier ?? 6,
+      });
     }
+
+    // Sort by league tier (top-tier players first), then alphabetically
+    results.sort((a, b) => a.leagueTier - b.leagueTier || a.name.localeCompare(b.name));
 
     return results.slice(0, 50);
   } catch (err) {
@@ -710,16 +710,26 @@ export async function searchPlayersQuery(queryStr: string): Promise<SearchablePl
   }
 }
 
-// Search matches by team name — searches current season
-export async function searchMatchesQuery(queryStr: string): Promise<Match[]> {
+// Search matches by team name — paginated, no cap
+export interface MatchSearchPage {
+  matches: Match[];
+  nextCursor: string | null;
+}
+
+const MATCH_PAGE_SIZE = 100;
+
+export async function searchMatchesQuery(
+  queryStr: string,
+  cursor?: string,
+): Promise<MatchSearchPage> {
   try {
-    if (queryStr.length < 2) return [];
+    if (queryStr.length < 2) return { matches: [], nextCursor: null };
 
     const allTeams = await getCachedTeams();
 
     // Split query into individual search terms (by space, comma, or dash)
     const terms = queryStr.toLowerCase().split(/[\s,\-]+/).filter((t) => t.length >= 2);
-    if (terms.length === 0) return [];
+    if (terms.length === 0) return { matches: [], nextCursor: null };
 
     // For each term, find matching team IDs
     const teamIdSets: Set<number>[] = [];
@@ -738,32 +748,70 @@ export async function searchMatchesQuery(queryStr: string): Promise<Match[]> {
 
     // Cap at 30 teams (Firestore 'in' operator limit)
     const teamIdsToQuery = [...allMatchingIds].slice(0, 30);
-    if (teamIdsToQuery.length === 0) return [];
+    if (teamIdsToQuery.length === 0) return { matches: [], nextCursor: null };
 
-    // Fetch matches for all matched teams
-    const snapshots = await Promise.all([
-      getDocs(query(
-        collection(db, MATCHES),
-        where('homeTeam.id', 'in', teamIdsToQuery),
-        orderBy('kickoff', 'desc'),
-        limit(80)
-      )),
-      getDocs(query(
-        collection(db, MATCHES),
-        where('awayTeam.id', 'in', teamIdsToQuery),
-        orderBy('kickoff', 'desc'),
-        limit(80)
-      )),
-    ]);
+    // On first page, fetch ALL head-to-head matches between matched teams
+    // so they always appear first regardless of pagination
+    const h2hMatches: Match[] = [];
+    const h2hIds = new Set<string>();
 
-    // Deduplicate and build match list
+    if (!cursor && teamIdsToQuery.length >= 2 && teamIdsToQuery.length <= 6) {
+      // Build pairwise queries: A vs B (both home/away directions)
+      const pairQueries: ReturnType<typeof query>[] = [];
+      for (let i = 0; i < teamIdsToQuery.length; i++) {
+        for (let j = i + 1; j < teamIdsToQuery.length; j++) {
+          const a = teamIdsToQuery[i];
+          const b = teamIdsToQuery[j];
+          // A home, B away
+          pairQueries.push(
+            query(collection(db, MATCHES), where('homeTeam.id', '==', a), where('awayTeam.id', '==', b), orderBy('kickoff', 'desc'))
+          );
+          // B home, A away
+          pairQueries.push(
+            query(collection(db, MATCHES), where('homeTeam.id', '==', b), where('awayTeam.id', '==', a), orderBy('kickoff', 'desc'))
+          );
+        }
+      }
+
+      const h2hSnaps = await Promise.all(pairQueries.map((q) => getDocs(q)));
+      for (const snap of h2hSnaps) {
+        for (const d of snap.docs) {
+          if (h2hIds.has(d.id)) continue;
+          h2hIds.add(d.id);
+          const data = d.data() as Record<string, any>;
+          if (isValidMatch(data)) {
+            h2hMatches.push(docToMatch(data));
+          }
+        }
+      }
+
+      // Sort head-to-head by date (newest first)
+      h2hMatches.sort((a, b) => new Date(b.kickoff).getTime() - new Date(a.kickoff).getTime());
+    }
+
+    // Build paginated queries for home/away
+    const homeQ = cursor
+      ? query(collection(db, MATCHES), where('homeTeam.id', 'in', teamIdsToQuery), orderBy('kickoff', 'desc'), startAfter(cursor), limit(MATCH_PAGE_SIZE))
+      : query(collection(db, MATCHES), where('homeTeam.id', 'in', teamIdsToQuery), orderBy('kickoff', 'desc'), limit(MATCH_PAGE_SIZE));
+    const awayQ = cursor
+      ? query(collection(db, MATCHES), where('awayTeam.id', 'in', teamIdsToQuery), orderBy('kickoff', 'desc'), startAfter(cursor), limit(MATCH_PAGE_SIZE))
+      : query(collection(db, MATCHES), where('awayTeam.id', 'in', teamIdsToQuery), orderBy('kickoff', 'desc'), limit(MATCH_PAGE_SIZE));
+
+    const snapshots = await Promise.all([getDocs(homeQ), getDocs(awayQ)]);
+
+    // Track the oldest kickoff from raw results for the next cursor
+    let oldestKickoff: string | null = null;
     const seen = new Set<string>();
     const allMatches: Match[] = [];
+
     for (const snap of snapshots) {
       for (const d of snap.docs) {
-        if (seen.has(d.id)) continue;
-        seen.add(d.id);
         const data = d.data();
+        const kickoff = data.kickoff as string;
+        if (!oldestKickoff || kickoff < oldestKickoff) oldestKickoff = kickoff;
+
+        if (seen.has(d.id) || h2hIds.has(d.id)) continue;
+        seen.add(d.id);
         if (isValidMatch(data)) {
           allMatches.push(docToMatch(data));
         }
@@ -791,10 +839,17 @@ export async function searchMatchesQuery(queryStr: string): Promise<Match[]> {
       return new Date(b.kickoff).getTime() - new Date(a.kickoff).getTime();
     });
 
-    return allMatches;
+    // Prepend head-to-head matches on first page
+    const finalMatches = h2hMatches.length > 0 ? [...h2hMatches, ...allMatches] : allMatches;
+
+    // Determine if there are more pages
+    const hasMore = snapshots.some((s) => s.docs.length === MATCH_PAGE_SIZE);
+    const nextCursor = hasMore && oldestKickoff ? oldestKickoff : null;
+
+    return { matches: finalMatches, nextCursor };
   } catch (err) {
     console.error('[searchMatchesQuery] Firestore query failed:', err);
-    return [];
+    return { matches: [], nextCursor: null };
   }
 }
 

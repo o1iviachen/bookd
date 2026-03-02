@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, Pressable, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,6 +11,17 @@ import { NotificationPreferences } from '../../types/user';
 
 type ToggleItem = { label: string; description: string; key: keyof NotificationPreferences };
 
+const DEFAULT_PREFS: NotificationPreferences = {
+  pushEnabled: true,
+  emailEnabled: false,
+  reviewLikes: true,
+  reviewComments: true,
+  commentLikes: true,
+  listLikes: true,
+  listComments: true,
+  follows: true,
+};
+
 export function NotificationSettingsScreen() {
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
@@ -18,30 +29,38 @@ export function NotificationSettingsScreen() {
   const { user } = useAuth();
   const { data: profile } = useUserProfile(user?.uid || '');
 
-  const prefs: NotificationPreferences = profile?.notificationPreferences || {
-    pushEnabled: true,
-    emailEnabled: false,
-    reviewLikes: true,
-    reviewComments: true,
-    commentLikes: true,
-    listLikes: true,
-    listComments: true,
-    follows: true,
+  const [prefs, setPrefs] = useState<NotificationPreferences>(DEFAULT_PREFS);
+
+  // Sync from profile on load
+  useEffect(() => {
+    if (profile?.notificationPreferences) {
+      setPrefs(profile.notificationPreferences);
+    }
+  }, [profile?.notificationPreferences]);
+
+  const applyPrefs = (updated: NotificationPreferences) => {
+    setPrefs(updated);
+    if (user) updateUserProfile(user.uid, { notificationPreferences: updated });
   };
 
   const toggle = (key: keyof NotificationPreferences, value: boolean) => {
-    if (!user) return;
-    updateUserProfile(user.uid, {
-      notificationPreferences: { ...prefs, [key]: value },
+    applyPrefs({ ...prefs, [key]: value });
+  };
+
+  const toggleAllPush = (enabled: boolean) => {
+    applyPrefs({
+      ...prefs,
+      pushEnabled: enabled,
+      reviewLikes: enabled,
+      reviewComments: enabled,
+      commentLikes: enabled,
+      listLikes: enabled,
+      listComments: enabled,
+      follows: enabled,
     });
   };
 
-  const channels: ToggleItem[] = [
-    { label: 'Push Notifications', description: 'Receive push notifications on your device', key: 'pushEnabled' },
-    { label: 'Email Notifications', description: 'Receive notifications via email', key: 'emailEnabled' },
-  ];
-
-  const activityItems: ToggleItem[] = [
+  const pushItems: ToggleItem[] = [
     { label: 'Review Likes', description: 'When someone likes your review', key: 'reviewLikes' },
     { label: 'Review Comments', description: 'When someone comments on your review', key: 'reviewComments' },
     { label: 'Comment Likes', description: 'When someone likes your comment', key: 'commentLikes' },
@@ -49,41 +68,6 @@ export function NotificationSettingsScreen() {
     { label: 'List Comments', description: 'When someone comments on your list', key: 'listComments' },
     { label: 'New Followers', description: 'When someone starts following you', key: 'follows' },
   ];
-
-  const renderGroup = (title: string, items: ToggleItem[]) => (
-    <View style={{ marginTop: spacing.lg, paddingHorizontal: spacing.md }}>
-      <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: spacing.sm, marginLeft: spacing.xs }}>
-        {title}
-      </Text>
-      <View style={{ backgroundColor: colors.card, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' }}>
-        {items.map((item, i) => (
-          <View
-            key={item.key}
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              paddingVertical: spacing.md,
-              paddingHorizontal: spacing.md,
-              borderTopWidth: i > 0 ? 1 : 0,
-              borderTopColor: colors.border,
-            }}
-          >
-            <View style={{ flex: 1, marginRight: spacing.md }}>
-              <Text style={{ ...typography.body, color: colors.foreground }}>{item.label}</Text>
-              <Text style={{ ...typography.small, color: colors.textSecondary, marginTop: 2 }}>{item.description}</Text>
-            </View>
-            <Switch
-              value={prefs[item.key]}
-              onValueChange={(v) => toggle(item.key, v)}
-              trackColor={{ false: colors.muted, true: colors.primary }}
-              thumbColor="#fff"
-            />
-          </View>
-        ))}
-      </View>
-    </View>
-  );
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
@@ -97,8 +81,77 @@ export function NotificationSettingsScreen() {
       </View>
 
       <ScrollView indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: 40 }}>
-        {renderGroup('Channels', channels)}
-        {renderGroup('Activity', activityItems)}
+        {/* Email */}
+        <View style={{ marginTop: spacing.lg, paddingHorizontal: spacing.md }}>
+          <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: spacing.sm, marginLeft: spacing.xs }}>
+            Email
+          </Text>
+          <View style={{ backgroundColor: colors.card, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: spacing.md, paddingHorizontal: spacing.md }}>
+              <View style={{ flex: 1, marginRight: spacing.md }}>
+                <Text style={{ ...typography.body, color: colors.foreground }}>Email Communication</Text>
+                <Text style={{ ...typography.small, color: colors.textSecondary, marginTop: 2 }}>Receive updates and announcements via email</Text>
+              </View>
+              <Switch
+                value={prefs.emailEnabled}
+                onValueChange={(v) => toggle('emailEnabled', v)}
+                trackColor={{ false: colors.muted, true: colors.primary }}
+                thumbColor="#fff"
+              />
+            </View>
+          </View>
+        </View>
+
+        {/* Push Notifications */}
+        <View style={{ marginTop: spacing.lg, paddingHorizontal: spacing.md }}>
+          <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: spacing.sm, marginLeft: spacing.xs }}>
+            Push Notifications
+          </Text>
+          <View style={{ backgroundColor: colors.card, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' }}>
+            {/* Master toggle */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: spacing.md, paddingHorizontal: spacing.md }}>
+              <View style={{ flex: 1, marginRight: spacing.md }}>
+                <Text style={{ ...typography.body, color: colors.foreground, fontWeight: '600' }}>Allow Push Notifications</Text>
+                <Text style={{ ...typography.small, color: colors.textSecondary, marginTop: 2 }}>Receive notifications on your device</Text>
+              </View>
+              <Switch
+                value={prefs.pushEnabled}
+                onValueChange={toggleAllPush}
+                trackColor={{ false: colors.muted, true: colors.primary }}
+                thumbColor="#fff"
+              />
+            </View>
+
+            {/* Individual push items */}
+            {pushItems.map((item) => (
+              <View
+                key={item.key}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  paddingVertical: spacing.md,
+                  paddingHorizontal: spacing.md,
+                  borderTopWidth: 1,
+                  borderTopColor: colors.border,
+                  opacity: prefs.pushEnabled ? 1 : 0.4,
+                }}
+              >
+                <View style={{ flex: 1, marginRight: spacing.md }}>
+                  <Text style={{ ...typography.body, color: colors.foreground }}>{item.label}</Text>
+                  <Text style={{ ...typography.small, color: colors.textSecondary, marginTop: 2 }}>{item.description}</Text>
+                </View>
+                <Switch
+                  value={prefs[item.key]}
+                  onValueChange={(v) => toggle(item.key, v)}
+                  trackColor={{ false: colors.muted, true: colors.primary }}
+                  thumbColor="#fff"
+                  disabled={!prefs.pushEnabled}
+                />
+              </View>
+            ))}
+          </View>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );

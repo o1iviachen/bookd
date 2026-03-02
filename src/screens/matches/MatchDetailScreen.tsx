@@ -30,7 +30,7 @@ import { formatFullDate, formatMatchTime } from '../../utils/formatDate';
 import { getStadiumImageUrl } from '../../utils/stadiumImages';
 import { MatchesStackParamList } from '../../types/navigation';
 import { MatchDetail, MatchPlayer, MatchGoal, MatchBooking, MatchSubstitution } from '../../services/footballApi';
-import { shortName } from '../../utils/formatName';
+import { shortName, lastName } from '../../utils/formatName';
 import { MatchPosterCard } from '../../components/match/MatchPosterCard';
 import { User } from '../../types/user';
 
@@ -63,9 +63,8 @@ export function MatchDetailScreen({ route, navigation }: Props) {
     pagerRef.current?.setPage(index);
   }, []);
 
-  const handlePageScroll = useCallback((e: any) => {
-    const { position, offset } = e.nativeEvent;
-    setActiveTabIndex(Math.round(position + offset));
+  const handlePageSelected = useCallback((e: any) => {
+    setActiveTabIndex(e.nativeEvent.position);
   }, []);
 
   const { data: match, isLoading } = useMatch(matchId);
@@ -329,7 +328,7 @@ export function MatchDetailScreen({ route, navigation }: Props) {
         ref={pagerRef}
         style={{ flex: 1 }}
         initialPage={0}
-        onPageScroll={handlePageScroll}
+        onPageSelected={handlePageSelected}
       >
         {/* ─── Reviews Page ─── */}
         <View key="reviews" style={{ flex: 1 }}>
@@ -780,9 +779,7 @@ function PitchPlayerDot({
   const DOT_SIZE = 36;
   const TOUCH_WIDTH = 56;
   // Show last name only for pitch diagram
-  const shortened = shortName(player.name);
-  const displayParts = shortened.split(' ');
-  const displayName = displayParts.length > 1 ? displayParts[displayParts.length - 1] : shortened;
+  const displayName = lastName(player.name);
 
   const hasEvents = events && (events.goals > 0 || events.yellowCard || events.redCard || events.subbedOutMin !== null);
 
@@ -1256,11 +1253,11 @@ function InfoSection({ matchDetail, match, colors, spacing, typography, borderRa
           <StatRow label="Total Shots" home={stats.shots[0]} away={stats.shots[1]} colors={colors} spacing={spacing} typography={typography} />
           <StatRow label="Shots on Target" home={stats.shotsOnTarget[0]} away={stats.shotsOnTarget[1]} colors={colors} spacing={spacing} typography={typography} />
           <StatRow label="Corners" home={stats.corners[0]} away={stats.corners[1]} colors={colors} spacing={spacing} typography={typography} />
+          <StatRow label="Saves" home={stats.saves[0]} away={stats.saves[1]} colors={colors} spacing={spacing} typography={typography} />
           <StatRow label="Fouls" home={stats.fouls[0]} away={stats.fouls[1]} colors={colors} spacing={spacing} typography={typography} />
           <StatRow label="Offsides" home={stats.offsides[0]} away={stats.offsides[1]} colors={colors} spacing={spacing} typography={typography} />
           <StatRow label="Yellow Cards" home={stats.yellowCards[0]} away={stats.yellowCards[1]} colors={colors} spacing={spacing} typography={typography} />
           <StatRow label="Red Cards" home={stats.redCards[0]} away={stats.redCards[1]} colors={colors} spacing={spacing} typography={typography} />
-          <StatRow label="Saves" home={stats.saves[0]} away={stats.saves[1]} colors={colors} spacing={spacing} typography={typography} />
         </View>
       ) : (
         <View style={{ alignItems: 'center', paddingVertical: spacing.lg, marginBottom: spacing.lg }}>

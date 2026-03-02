@@ -46,6 +46,26 @@ async function getUserVote(reviewId: string, userId: string): Promise<'up' | 'do
   return voteSnap.data().voteType;
 }
 
+/** Batch-fetch all votes by a user across reviews in a single collectionGroup query. */
+async function getUserVotesMap(userId: string): Promise<Map<string, 'up' | 'down'>> {
+  try {
+    const votesQuery = query(
+      collectionGroup(db, 'votes'),
+      where('userId', '==', userId),
+    );
+    const snapshot = await getDocs(votesQuery);
+    const map = new Map<string, 'up' | 'down'>();
+    snapshot.docs.forEach((d) => {
+      const reviewId = d.ref.parent.parent?.id;
+      if (reviewId) map.set(reviewId, d.data().voteType);
+    });
+    return map;
+  } catch {
+    // Index may not exist yet — return empty so reviews still load
+    return new Map();
+  }
+}
+
 export async function createReview(
   matchId: number,
   userId: string,
@@ -79,13 +99,11 @@ export async function getReviewsForMatch(matchId: number, currentUserId?: string
     collection(db, 'reviews'),
     where('matchId', '==', matchId),
   );
-  const snapshot = await getDocs(q);
-  const reviews = await Promise.all(
-    snapshot.docs.map(async (d) => {
-      const vote = currentUserId ? await getUserVote(d.id, currentUserId) : null;
-      return docToReview(d, vote);
-    })
-  );
+  const [snapshot, votesMap] = await Promise.all([
+    getDocs(q),
+    currentUserId ? getUserVotesMap(currentUserId) : Promise.resolve(new Map<string, 'up' | 'down'>()),
+  ]);
+  const reviews = snapshot.docs.map((d) => docToReview(d, votesMap.get(d.id) || null));
   reviews.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   return reviews.filter((r) => !r.flagged || r.userId === currentUserId);
 }
@@ -95,13 +113,11 @@ export async function getReviewsForUser(userId: string, currentUserId?: string):
     collection(db, 'reviews'),
     where('userId', '==', userId),
   );
-  const snapshot = await getDocs(q);
-  const reviews = await Promise.all(
-    snapshot.docs.map(async (d) => {
-      const vote = currentUserId ? await getUserVote(d.id, currentUserId) : null;
-      return docToReview(d, vote);
-    })
-  );
+  const [snapshot, votesMap] = await Promise.all([
+    getDocs(q),
+    currentUserId ? getUserVotesMap(currentUserId) : Promise.resolve(new Map<string, 'up' | 'down'>()),
+  ]);
+  const reviews = snapshot.docs.map((d) => docToReview(d, votesMap.get(d.id) || null));
   reviews.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   return reviews;
 }
@@ -112,22 +128,23 @@ export async function getRecentReviews(currentUserId?: string): Promise<Review[]
     orderBy('createdAt', 'desc'),
     limit(30)
   );
-  const snapshot = await getDocs(q);
-  const reviews = await Promise.all(
-    snapshot.docs.map(async (d) => {
-      const vote = currentUserId ? await getUserVote(d.id, currentUserId) : null;
-      return docToReview(d, vote);
-    })
-  );
+  const [snapshot, votesMap] = await Promise.all([
+    getDocs(q),
+    currentUserId ? getUserVotesMap(currentUserId) : Promise.resolve(new Map<string, 'up' | 'down'>()),
+  ]);
+  const reviews = snapshot.docs.map((d) => docToReview(d, votesMap.get(d.id) || null));
   return reviews.filter((r) => !r.flagged || r.userId === currentUserId);
 }
 
-/** Returns matchIds ranked by number of reviews this week, most logged first. */
+/** Returns top 20 matchIds from this week ranked by number of logs. */
 export async function getPopularMatchIdsThisWeek(): Promise<{ matchId: number; count: number }[]> {
+  const oneWeekAgo = new Date();
+  oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+
   const q = query(
     collection(db, 'reviews'),
+    where('createdAt', '>=', oneWeekAgo),
     orderBy('createdAt', 'desc'),
-    limit(500)
   );
   const snapshot = await getDocs(q);
 
@@ -139,15 +156,16 @@ export async function getPopularMatchIdsThisWeek(): Promise<{ matchId: number; c
 
   return [...counts.entries()]
     .map(([matchId, count]) => ({ matchId, count }))
-    .sort((a, b) => b.count - a.count);
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 20);
 }
 
-/** Returns matchIds ranked by average rating (all time), with review count. */
+/** Returns top 20 matchIds ranked by average rating, with review count. */
 export async function getHighestRatedMatchIds(): Promise<{ matchId: number; avgRating: number; count: number }[]> {
   const q = query(
     collection(db, 'reviews'),
     orderBy('createdAt', 'desc'),
-    limit(500)
+    limit(200)
   );
   const snapshot = await getDocs(q);
 
@@ -165,7 +183,8 @@ export async function getHighestRatedMatchIds(): Promise<{ matchId: number; avgR
 
   return [...totals.entries()]
     .map(([matchId, { sum, count }]) => ({ matchId, avgRating: sum / count, count }))
-    .sort((a, b) => b.avgRating - a.avgRating || b.count - a.count);
+    .sort((a, b) => b.avgRating - a.avgRating || b.count - a.count)
+    .slice(0, 20);
 }
 
 export async function getReviewById(reviewId: string, currentUserId?: string): Promise<Review | null> {
@@ -197,7 +216,7 @@ export async function voteOnReview(
       });
     } else {
       // Switch vote
-      await setDoc(voteRef, { voteType });
+      await setDoc(voteRef, { voteType, userId });
       await updateDoc(reviewRef, {
         [existingVote === 'up' ? 'upvotes' : 'downvotes']: increment(-1),
         [voteType === 'up' ? 'upvotes' : 'downvotes']: increment(1),
@@ -206,7 +225,7 @@ export async function voteOnReview(
     }
   } else {
     // New vote
-    await setDoc(voteRef, { voteType });
+    await setDoc(voteRef, { voteType, userId });
     await updateDoc(reviewRef, {
       [voteType === 'up' ? 'upvotes' : 'downvotes']: increment(1),
     });
@@ -238,17 +257,17 @@ export async function getReviewUpvoterIds(reviewId: string): Promise<string[]> {
 }
 
 export async function getReviewsUpvotedByUser(userId: string, currentUserId?: string): Promise<Review[]> {
+  // Query only this user's upvotes (requires 'userId' field on vote docs)
   const votesQuery = query(
     collectionGroup(db, 'votes'),
+    where('userId', '==', userId),
     where('voteType', '==', 'up')
   );
   const votesSnapshot = await getDocs(votesQuery);
   const reviewIds: string[] = [];
   votesSnapshot.docs.forEach((d) => {
-    if (d.id === userId) {
-      const reviewId = d.ref.parent.parent?.id;
-      if (reviewId) reviewIds.push(reviewId);
-    }
+    const reviewId = d.ref.parent.parent?.id;
+    if (reviewId) reviewIds.push(reviewId);
   });
 
   if (reviewIds.length === 0) return [];
@@ -257,8 +276,7 @@ export async function getReviewsUpvotedByUser(userId: string, currentUserId?: st
     reviewIds.map(async (id) => {
       const reviewSnap = await getDoc(doc(db, 'reviews', id));
       if (!reviewSnap.exists()) return null;
-      const vote = currentUserId ? await getUserVote(id, currentUserId) : null;
-      return docToReview(reviewSnap, vote);
+      return docToReview(reviewSnap);
     })
   );
   return reviews.filter(Boolean) as Review[];

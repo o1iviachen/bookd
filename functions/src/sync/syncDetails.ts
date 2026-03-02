@@ -40,6 +40,11 @@ export async function syncMatchDetails(fixtureIds: number[], force = false): Pro
         syncedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
+      // Mark the match as having details so we never re-scan it
+      await db.collection(COLLECTIONS.MATCHES).doc(String(fixtureId)).update({
+        hasDetails: true,
+      });
+
       synced++;
       console.log(`[syncDetails] Synced details for fixture ${fixtureId}`);
     } catch (err: any) {
@@ -57,56 +62,33 @@ export async function syncMatchDetails(fixtureIds: number[], force = false): Pro
 
 /**
  * Finds recently finished matches that are missing details and syncs them.
- * Checks the last 30 days to catch any matches missed by previous failed syncs.
+ * Checks the last 7 days to catch any matches missed by previous failed syncs.
+ * Uses batch existence checks instead of N+1 getDoc calls.
+ * Also marks synced matches with hasDetails: true.
  */
 export async function syncMissingDetails(): Promise<number> {
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
   const matchesSnapshot = await db
     .collection(COLLECTIONS.MATCHES)
     .where('status', '==', 'FINISHED')
-    .where('kickoff', '>=', thirtyDaysAgo.toISOString())
+    .where('kickoff', '>=', sevenDaysAgo.toISOString())
     .get();
 
-  const fixtureIds: number[] = [];
-  for (const doc of matchesSnapshot.docs) {
-    fixtureIds.push(doc.data().id);
-  }
+  if (matchesSnapshot.empty) return 0;
 
-  if (fixtureIds.length === 0) return 0;
+  const fixtureIds = matchesSnapshot.docs.map((d) => d.data().id as number);
 
-  console.log(`[syncMissingDetails] Found ${fixtureIds.length} recent finished matches to check`);
-  return await syncMatchDetails(fixtureIds);
-}
+  // Batch-check which details already exist using getAll instead of N+1 getDoc
+  const detailRefs = fixtureIds.map((id) =>
+    db.collection(COLLECTIONS.MATCH_DETAILS).doc(String(id))
+  );
+  const detailSnaps = await db.getAll(...detailRefs);
+  const missingIds = fixtureIds.filter((_, i) => !detailSnaps[i].exists);
 
-/**
- * Bulk syncs all finished matches missing details across all leagues.
- * Processes up to `limit` matches per call. Returns count and whether more remain.
- */
-export async function syncAllMissingDetails(batchLimit = 50): Promise<{ synced: number; remaining: number }> {
-  // Find ALL finished matches
-  const matchesSnapshot = await db
-    .collection(COLLECTIONS.MATCHES)
-    .where('status', '==', 'FINISHED')
-    .get();
+  if (missingIds.length === 0) return 0;
 
-  // Check which ones are missing details
-  const missingIds: number[] = [];
-  for (const matchDoc of matchesSnapshot.docs) {
-    const fixtureId = matchDoc.data().id;
-    const detailDoc = await db.collection(COLLECTIONS.MATCH_DETAILS).doc(String(fixtureId)).get();
-    if (!detailDoc.exists) {
-      missingIds.push(fixtureId);
-    }
-    if (missingIds.length >= batchLimit) break;
-  }
-
-  if (missingIds.length === 0) {
-    return { synced: 0, remaining: 0 };
-  }
-
-  const totalMissing = matchesSnapshot.docs.length; // approximate
-  const synced = await syncMatchDetails(missingIds);
-  return { synced, remaining: Math.max(0, totalMissing - synced) };
+  console.log(`[syncMissingDetails] Found ${missingIds.length} missing details out of ${fixtureIds.length} recent finished matches`);
+  return await syncMatchDetails(missingIds);
 }

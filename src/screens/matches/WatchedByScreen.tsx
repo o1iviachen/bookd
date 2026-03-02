@@ -25,8 +25,11 @@ interface WatcherEntry {
   profile: User;
   rating: number;
   hasText: boolean;
+  hasMedia: boolean;
   likedMatch: boolean;
   username: string;
+  reviewCount: number;
+  singleReviewId: string | null;
 }
 
 export function WatchedByScreen({ route, navigation }: any) {
@@ -46,9 +49,8 @@ export function WatchedByScreen({ route, navigation }: any) {
     pagerRef.current?.setPage(index);
   }, []);
 
-  const handlePageScroll = useCallback((e: any) => {
-    const { position, offset } = e.nativeEvent;
-    setActiveTabIndex(Math.round(position + offset));
+  const handlePageSelected = useCallback((e: any) => {
+    setActiveTabIndex(e.nativeEvent.position);
   }, []);
 
 
@@ -87,13 +89,17 @@ export function WatchedByScreen({ route, navigation }: any) {
       if (!latestReview) return;
       const allUserReviews = userAllMap.get(profile.id) || [];
       const hasAnyText = allUserReviews.some((r) => (r.text?.trim().length || 0) > 0);
+      const hasAnyMedia = allUserReviews.some((r) => r.media && r.media.length > 0);
       entries.push({
         userId: profile.id,
         profile,
         rating: latestReview.rating,
         hasText: hasAnyText,
+        hasMedia: hasAnyMedia,
         likedMatch: profile.likedMatchIds?.some((id) => String(id) === String(matchId)) || false,
         username: profile.displayName || profile.username,
+        reviewCount: allUserReviews.length,
+        singleReviewId: allUserReviews.length === 1 ? allUserReviews[0].id : null,
       });
     });
     return entries;
@@ -116,7 +122,7 @@ export function WatchedByScreen({ route, navigation }: any) {
         ref={pagerRef}
         style={{ flex: 1 }}
         initialPage={initialIndex}
-        onPageScroll={handlePageScroll}
+        onPageSelected={handlePageSelected}
       >
         {TABS.map((tab, tabIdx) => {
           const tabWatchers = tabIdx === 1
@@ -140,7 +146,11 @@ export function WatchedByScreen({ route, navigation }: any) {
                   contentContainerStyle={{ paddingBottom: spacing.xl }}
                   renderItem={({ item }) => {
                     const handlePress = () => {
-                      navigation.navigate('UserMatchReviews', { matchId, userId: item.userId, username: item.username });
+                      if (item.singleReviewId) {
+                        navigation.navigate('ReviewDetail', { reviewId: item.singleReviewId });
+                      } else {
+                        navigation.navigate('UserMatchReviews', { matchId, userId: item.userId, username: item.username });
+                      }
                     };
 
                     return (
@@ -172,6 +182,9 @@ export function WatchedByScreen({ route, navigation }: any) {
                           )}
                           {item.hasText && (
                             <Ionicons name="reorder-three-outline" size={14} color={colors.textSecondary} />
+                          )}
+                          {item.hasMedia && (
+                            <Ionicons name="image-outline" size={13} color={colors.textSecondary} />
                           )}
                         </View>
                       </Pressable>

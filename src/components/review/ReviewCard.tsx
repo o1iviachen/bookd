@@ -8,7 +8,9 @@ import { useVoteOnReview } from '../../hooks/useReviews';
 import { useUserProfile } from '../../hooks/useUser';
 import { Avatar } from '../ui/Avatar';
 import { StarRating } from '../ui/StarRating';
+import { MentionText } from '../ui/MentionText';
 import { VoteButtons } from './VoteButtons';
+import { MediaViewer } from '../ui/MediaViewer';
 import { Review } from '../../types/review';
 import { formatRelativeTime } from '../../utils/formatDate';
 import { TeamLogo } from '../match/TeamLogo';
@@ -38,6 +40,7 @@ export function ReviewCard({ review, onPress, commentCount, isLast }: ReviewCard
 
   const [spoilerRevealed, setSpoilerRevealed] = useState(false);
   const showSpoilerOverlay = review.isSpoiler && !spoilerRevealed;
+  const [mediaViewerIndex, setMediaViewerIndex] = useState(-1);
 
   const handleLike = () => {
     if (!user) return;
@@ -74,7 +77,7 @@ export function ReviewCard({ review, onPress, commentCount, isLast }: ReviewCard
               ))}
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: 2 }}>
-              <StarRating rating={review.rating} size={12} />
+              {review.rating > 0 && <StarRating rating={review.rating} size={12} />}
               {reviewerLikedMatch && (
                 <Ionicons name="heart" size={12} color="#ef4444" />
               )}
@@ -82,11 +85,6 @@ export function ReviewCard({ review, onPress, commentCount, isLast }: ReviewCard
                 {formatRelativeTime(review.createdAt)}
                 {review.editedAt ? ' (edited)' : ''}
               </Text>
-              {review.isSpoiler && (
-                <View style={{ backgroundColor: '#f59e0b', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 }}>
-                  <Text style={{ fontSize: 9, fontWeight: '700', color: '#000' }}>SPOILER</Text>
-                </View>
-              )}
             </View>
           </View>
         </View>
@@ -112,12 +110,11 @@ export function ReviewCard({ review, onPress, commentCount, isLast }: ReviewCard
         ) : (
           <>
             {review.text ? (
-              <Text
-                style={{ ...typography.body, color: colors.foreground, marginBottom: spacing.sm, lineHeight: 22 }}
+              <MentionText
+                text={review.text}
+                style={{ marginBottom: spacing.sm, lineHeight: 22 }}
                 numberOfLines={onPress ? 3 : undefined}
-              >
-                {review.text}
-              </Text>
+              />
             ) : null}
 
             {/* Media gallery */}
@@ -129,8 +126,9 @@ export function ReviewCard({ review, onPress, commentCount, isLast }: ReviewCard
                 contentContainerStyle={{ gap: spacing.xs }}
               >
                 {review.media.map((item, index) => (
-                  <View
+                  <Pressable
                     key={index}
+                    onPress={() => setMediaViewerIndex(index)}
                     style={{
                       width: 120,
                       height: 120,
@@ -140,7 +138,7 @@ export function ReviewCard({ review, onPress, commentCount, isLast }: ReviewCard
                     }}
                   >
                     <Image
-                      source={{ uri: item.url }}
+                      source={{ uri: item.type === 'video' && item.thumbnailUrl ? item.thumbnailUrl : item.url }}
                       style={{ width: 120, height: 120 }}
                       contentFit="cover"
                     />
@@ -149,7 +147,7 @@ export function ReviewCard({ review, onPress, commentCount, isLast }: ReviewCard
                         <Ionicons name="videocam" size={10} color="#fff" />
                       </View>
                     )}
-                  </View>
+                  </Pressable>
                 ))}
               </ScrollView>
             )}
@@ -192,6 +190,14 @@ export function ReviewCard({ review, onPress, commentCount, isLast }: ReviewCard
       </Pressable>
       {!isLast && (
         <View style={{ height: 1, backgroundColor: colors.border }} />
+      )}
+      {review.media && review.media.length > 0 && (
+        <MediaViewer
+          visible={mediaViewerIndex >= 0}
+          media={review.media}
+          initialIndex={Math.max(mediaViewerIndex, 0)}
+          onClose={() => setMediaViewerIndex(-1)}
+        />
       )}
     </View>
   );

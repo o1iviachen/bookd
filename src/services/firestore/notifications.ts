@@ -61,11 +61,11 @@ export async function getNotificationsForUser(userId: string): Promise<AppNotifi
   const q = query(
     collection(db, 'notifications'),
     where('recipientId', '==', userId),
+    orderBy('createdAt', 'desc'),
+    limit(50),
   );
   const snapshot = await getDocs(q);
-  const notifications = snapshot.docs.map(docToNotification);
-  notifications.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-  return notifications.slice(0, 50);
+  return snapshot.docs.map(docToNotification);
 }
 
 export async function markNotificationRead(notificationId: string): Promise<void> {

@@ -1,51 +1,40 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, KeyboardAvoidingView, Platform, ScrollView, Dimensions, Pressable, Keyboard, TextInput as RNTextInput } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, KeyboardAvoidingView, Platform, ScrollView, Dimensions, Pressable } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
-import { useAuth } from '../../context/AuthContext';
+import { resetPassword } from '../../services/auth';
 import { TextInput } from '../../components/ui/TextInput';
 import { Button } from '../../components/ui/Button';
 import { AuthStackParamList } from '../../types/navigation';
 
-type Props = NativeStackScreenProps<AuthStackParamList, 'Login'>;
+type Props = NativeStackScreenProps<AuthStackParamList, 'ForgotPassword'>;
 
 const { height } = Dimensions.get('window');
 
-export function LoginScreen({ navigation }: Props) {
+export function ForgotPasswordScreen({ navigation }: Props) {
   const { theme, isDark } = useTheme();
-  const { signIn } = useAuth();
   const { colors, spacing, typography } = theme;
 
-  const scrollRef = useRef<ScrollView>(null);
-  const passwordRef = useRef<RNTextInput>(null);
-
-  useEffect(() => {
-    const event = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const sub = Keyboard.addListener(event, () => {
-      setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
-    });
-    return () => sub.remove();
-  }, []);
-
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [sent, setSent] = useState(false);
 
-  const handleLogin = async () => {
-    if (!email || !password) {
-      setError('Please fill in all fields');
+  const handleResetPassword = async () => {
+    if (!email) {
+      setError('Please enter your email or username');
       return;
     }
     setError('');
     setLoading(true);
     try {
-      await signIn(email, password);
+      await resetPassword(email);
+      setSent(true);
     } catch (e: any) {
-      setError(e.message || 'Failed to sign in');
+      setError(e.message || 'Failed to send reset email');
     } finally {
       setLoading(false);
     }
@@ -56,14 +45,14 @@ export function LoginScreen({ navigation }: Props) {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={{ flex: 1, backgroundColor: colors.background }}
     >
-      <ScrollView indicatorStyle={isDark ? 'white' : 'default'}
-        ref={scrollRef}
+      <ScrollView
+        indicatorStyle={isDark ? 'white' : 'default'}
         bounces={false}
         contentContainerStyle={{ flexGrow: 1 }}
         keyboardShouldPersistTaps="handled"
       >
         {/* Hero image area */}
-        <View style={{ height: height * 0.45 }}>
+        <View style={{ height: height * 0.55 }}>
           <Image
             source={require('../../../assets/stadium-background.jpg')}
             style={{ width: '100%', height: '100%' }}
@@ -106,10 +95,20 @@ export function LoginScreen({ navigation }: Props) {
             style={{
               ...typography.h2,
               color: colors.foreground,
+              marginBottom: spacing.sm,
+            }}
+          >
+            Reset Password
+          </Text>
+
+          <Text
+            style={{
+              ...typography.body,
+              color: colors.textSecondary,
               marginBottom: spacing.lg,
             }}
           >
-            Log In
+            Enter your email or username and we'll send you a link to reset your password.
           </Text>
 
           {error ? (
@@ -124,40 +123,64 @@ export function LoginScreen({ navigation }: Props) {
             </Text>
           ) : null}
 
-          <TextInput
-            label="Email or Username"
-            placeholder="you@example.com or username"
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            returnKeyType="next"
-            onSubmitEditing={() => passwordRef.current?.focus()}
-            blurOnSubmit={false}
-          />
-          <TextInput
-            ref={passwordRef}
-            label="Password"
-            placeholder="Your password"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            returnKeyType="go"
-            onSubmitEditing={handleLogin}
-          />
+          {sent ? (
+            <View
+              style={{
+                backgroundColor: colors.card,
+                borderRadius: 12,
+                padding: spacing.lg,
+                alignItems: 'center',
+                gap: spacing.md,
+              }}
+            >
+              <Ionicons name="checkmark-circle" size={48} color={colors.primary} />
+              <Text
+                style={{
+                  ...typography.bodyBold,
+                  color: colors.foreground,
+                  textAlign: 'center',
+                }}
+              >
+                Check Your Email
+              </Text>
+              <Text
+                style={{
+                  ...typography.body,
+                  color: colors.textSecondary,
+                  textAlign: 'center',
+                }}
+              >
+                A password reset link has been sent. Check your inbox and follow the instructions.
+              </Text>
+              <Button
+                title="Back to Login"
+                onPress={() => navigation.goBack()}
+                size="lg"
+                style={{ marginTop: spacing.md, width: '100%' }}
+              />
+            </View>
+          ) : (
+            <>
+              <TextInput
+                label="Email or Username"
+                placeholder="you@example.com or username"
+                value={email}
+                onChangeText={setEmail}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                returnKeyType="go"
+                onSubmitEditing={handleResetPassword}
+              />
 
-          <Pressable onPress={() => navigation.navigate('ForgotPassword')} style={{ alignSelf: 'flex-end', marginTop: -spacing.sm, marginBottom: spacing.md }}>
-            <Text style={{ ...typography.caption, color: colors.primary, fontWeight: '600' }}>
-              Forgot Password?
-            </Text>
-          </Pressable>
-
-          <Button
-            title="Log In"
-            onPress={handleLogin}
-            loading={loading}
-            size="lg"
-            style={{ marginTop: spacing.sm }}
-          />
+              <Button
+                title="Send Reset Link"
+                onPress={handleResetPassword}
+                loading={loading}
+                size="lg"
+                style={{ marginTop: spacing.sm }}
+              />
+            </>
+          )}
 
           <Text
             style={{
@@ -166,10 +189,10 @@ export function LoginScreen({ navigation }: Props) {
               textAlign: 'center',
               marginTop: spacing.lg,
             }}
-            onPress={() => navigation.navigate('SignUp')}
+            onPress={() => navigation.goBack()}
           >
-            Don't have an account?{' '}
-            <Text style={{ color: colors.primary, fontWeight: '600' }}>Sign Up</Text>
+            Remember your password?{' '}
+            <Text style={{ color: colors.primary, fontWeight: '600' }}>Log In</Text>
           </Text>
         </View>
       </ScrollView>

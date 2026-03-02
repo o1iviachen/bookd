@@ -208,6 +208,17 @@ export async function getEmailByUsername(username: string): Promise<string | nul
   return snapshot.docs[0].data().email || null;
 }
 
+export async function getUserByUsername(username: string): Promise<User | null> {
+  const q = query(
+    collection(db, 'users'),
+    where('username', '==', username.toLowerCase()),
+    limit(1)
+  );
+  const snapshot = await getDocs(q);
+  if (snapshot.empty) return null;
+  return docToUser(snapshot.docs[0]);
+}
+
 export async function searchUsers(searchQuery: string): Promise<User[]> {
   const q = query(
     collection(db, 'users'),

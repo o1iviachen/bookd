@@ -23,7 +23,7 @@ export function useReviewsForMatch(matchId: number) {
   return useQuery({
     queryKey: ['reviews', 'match', matchId, user?.uid],
     queryFn: () => getReviewsForMatch(matchId, user?.uid),
-    staleTime: 30 * 1000,
+    staleTime: 5 * 60 * 1000,
   });
 }
 
@@ -32,7 +32,7 @@ export function useReviewsForUser(userId: string) {
   return useQuery({
     queryKey: ['reviews', 'user', userId, user?.uid],
     queryFn: () => getReviewsForUser(userId, user?.uid),
-    staleTime: 30 * 1000,
+    staleTime: 5 * 60 * 1000,
     enabled: !!userId,
   });
 }
@@ -42,7 +42,7 @@ export function useRecentReviews() {
   return useQuery({
     queryKey: ['reviews', 'recent', user?.uid],
     queryFn: () => getRecentReviews(user?.uid),
-    staleTime: 30 * 1000,
+    staleTime: 5 * 60 * 1000,
     retry: 2,
   });
 }
@@ -51,7 +51,7 @@ export function usePopularMatchIdsThisWeek() {
   return useQuery({
     queryKey: ['reviews', 'popularThisWeek'],
     queryFn: () => getPopularMatchIdsThisWeek(),
-    staleTime: 5 * 60 * 1000,
+    staleTime: Infinity,
   });
 }
 
@@ -59,7 +59,7 @@ export function useHighestRatedMatchIds() {
   return useQuery({
     queryKey: ['reviews', 'highestRated'],
     queryFn: () => getHighestRatedMatchIds(),
-    staleTime: 5 * 60 * 1000,
+    staleTime: Infinity,
   });
 }
 
@@ -164,7 +164,7 @@ export function useLikedReviews(userId: string) {
   return useQuery({
     queryKey: ['reviews', 'liked', userId],
     queryFn: () => getReviewsUpvotedByUser(userId, user?.uid),
-    staleTime: 60 * 1000,
+    staleTime: 10 * 60 * 1000,
     enabled: !!userId,
   });
 }
@@ -173,7 +173,7 @@ export function useReviewUpvoters(reviewId: string, enabled: boolean) {
   return useQuery({
     queryKey: ['reviewUpvoters', reviewId],
     queryFn: () => getReviewUpvoterIds(reviewId),
-    staleTime: 60 * 1000,
+    staleTime: 10 * 60 * 1000,
     enabled: enabled && !!reviewId,
   });
 }
@@ -182,7 +182,7 @@ export function useAvgRatings(matchIds: number[]) {
   return useQuery({
     queryKey: ['avgRatings', matchIds],
     queryFn: () => getAvgRatingsForMatches(matchIds),
-    staleTime: 60 * 1000,
+    staleTime: 10 * 60 * 1000,
     enabled: matchIds.length > 0,
   });
 }

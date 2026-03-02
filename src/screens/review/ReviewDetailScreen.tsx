@@ -17,10 +17,14 @@ import { ScreenHeader } from '../../components/ui/ScreenHeader';
 import { ActionMenu } from '../../components/ui/ActionMenu';
 import { LikedByModal } from '../../components/ui/LikedByModal';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { MentionText } from '../../components/ui/MentionText';
+import { MentionInput } from '../../components/ui/MentionInput';
 import { TeamLogo } from '../../components/match/TeamLogo';
+import { MediaViewer } from '../../components/ui/MediaViewer';
 import { POPULAR_TEAMS } from '../../utils/constants';
 import { useAuth } from '../../context/AuthContext';
 import { formatRelativeTime, formatMatchDate } from '../../utils/formatDate';
+import { isTextClean } from '../../utils/moderation';
 import { Comment } from '../../services/firestore/comments';
 import { User } from '../../types/user';
 
@@ -42,6 +46,7 @@ export function ReviewDetailScreen({ route, navigation }: any) {
   const [showMenu, setShowMenu] = useState(false);
   const [showLikes, setShowLikes] = useState(false);
   const [spoilerRevealed, setSpoilerRevealed] = useState(false);
+  const [mediaViewerIndex, setMediaViewerIndex] = useState(-1);
   const scrollRef = useRef<ScrollView>(null);
   const inputRef = useRef<TextInput>(null);
 
@@ -121,6 +126,10 @@ export function ReviewDetailScreen({ route, navigation }: any) {
 
   const handleSubmitComment = async () => {
     if (!user || !commentText.trim()) return;
+    if (!isTextClean(commentText)) {
+      Alert.alert('Content Warning', 'Your comment contains inappropriate language. Please revise.');
+      return;
+    }
     try {
       await createComment.mutateAsync({
         reviewId: review.id,
@@ -260,7 +269,7 @@ export function ReviewDetailScreen({ route, navigation }: any) {
                   })}
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: 2 }}>
-                  <StarRating rating={review.rating} size={16} />
+                  {review.rating > 0 && <StarRating rating={review.rating} size={16} />}
                   {isMatchLiked && (
                     <Ionicons name="heart" size={12} color="#ef4444" />
                   )}
@@ -268,11 +277,6 @@ export function ReviewDetailScreen({ route, navigation }: any) {
                     {formatRelativeTime(review.createdAt)}
                     {review.editedAt ? ' (edited)' : ''}
                   </Text>
-                  {review.isSpoiler && (
-                    <View style={{ backgroundColor: '#f59e0b', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 }}>
-                      <Text style={{ fontSize: 9, fontWeight: '700', color: '#000' }}>SPOILER</Text>
-                    </View>
-                  )}
                 </View>
               </View>
               </Pressable>
@@ -298,43 +302,46 @@ export function ReviewDetailScreen({ route, navigation }: any) {
               </Pressable>
             ) : (
               <>
-                {review.text ? (
-                  <Text style={{ ...typography.body, color: colors.foreground, lineHeight: 24, fontSize: 16, marginBottom: spacing.md }}>
-                    {review.text}
-                  </Text>
-                ) : null}
+            {review.text ? (
+              <MentionText
+                text={review.text}
+                fontSize={16}
+                style={{ lineHeight: 24, marginBottom: spacing.md }}
+              />
+            ) : null}
 
-                {/* Media gallery */}
-                {review.media && review.media.length > 0 && (
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    style={{ marginBottom: spacing.md }}
-                    contentContainerStyle={{ gap: spacing.sm }}
+            {/* Media gallery */}
+            {review.media && review.media.length > 0 && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={{ marginBottom: spacing.md }}
+                contentContainerStyle={{ gap: spacing.sm }}
+              >
+                {review.media.map((item, index) => (
+                  <Pressable
+                    key={index}
+                    onPress={() => setMediaViewerIndex(index)}
+                    style={{
+                      width: 200,
+                      height: 200,
+                      borderRadius: borderRadius.md,
+                      overflow: 'hidden',
+                      backgroundColor: colors.accent,
+                    }}
                   >
-                    {review.media.map((item, index) => (
-                      <View
-                        key={index}
-                        style={{
-                          width: 200,
-                          height: 200,
-                          borderRadius: borderRadius.md,
-                          overflow: 'hidden',
-                          backgroundColor: colors.accent,
-                        }}
-                      >
-                        <Image
-                          source={{ uri: item.url }}
-                          style={{ width: 200, height: 200 }}
-                          contentFit="cover"
-                        />
-                        {item.type === 'video' && (
-                          <View style={{ position: 'absolute', bottom: 6, left: 6, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
-                            <Ionicons name="videocam" size={12} color="#fff" />
-                          </View>
-                        )}
+                    <Image
+                      source={{ uri: item.type === 'video' && item.thumbnailUrl ? item.thumbnailUrl : item.url }}
+                      style={{ width: 200, height: 200 }}
+                      contentFit="cover"
+                    />
+                    {item.type === 'video' && (
+                      <View style={{ position: 'absolute', bottom: 6, left: 6, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
+                        <Ionicons name="videocam" size={12} color="#fff" />
                       </View>
-                    ))}
+                    )}
+                  </Pressable>
+                ))}
               </ScrollView>
             )}
               </>
@@ -448,7 +455,7 @@ export function ReviewDetailScreen({ route, navigation }: any) {
 
         {/* Comment input bar */}
         {user && (
-          <View style={{ borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.background }}>
+          <View style={{ borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.background, zIndex: 10 }}>
             {/* Replying-to indicator */}
             {replyingTo && (
               <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingTop: spacing.sm, gap: spacing.xs }}>
@@ -468,23 +475,19 @@ export function ReviewDetailScreen({ route, navigation }: any) {
               gap: spacing.sm,
             }}>
               <Avatar uri={profile?.avatar || null} name={profile?.displayName || 'You'} size={28} />
-              <TextInput
-                ref={inputRef}
+              <MentionInput
+                inputRef={inputRef}
                 value={commentText}
                 onChangeText={setCommentText}
                 placeholder={replyingTo ? `Reply to @${replyingTo.username}...` : 'Add a comment...'}
-                placeholderTextColor={colors.textSecondary}
-                style={{
-                  flex: 1,
+                maxLength={500}
+                containerStyle={{ flex: 1 }}
+                inputStyle={{
                   backgroundColor: colors.muted,
                   borderRadius: borderRadius.full,
                   paddingHorizontal: spacing.md,
                   paddingVertical: spacing.sm,
-                  color: colors.foreground,
-                  fontSize: 14,
                 }}
-                multiline
-                maxLength={500}
               />
               <Pressable
                 onPress={handleSubmitComment}
@@ -501,6 +504,14 @@ export function ReviewDetailScreen({ route, navigation }: any) {
           </View>
         )}
       </KeyboardAvoidingView>
+      {review.media && review.media.length > 0 && (
+        <MediaViewer
+          visible={mediaViewerIndex >= 0}
+          media={review.media}
+          initialIndex={Math.max(mediaViewerIndex, 0)}
+          onClose={() => setMediaViewerIndex(-1)}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -573,7 +584,7 @@ function CommentRow({
             {formatRelativeTime(comment.createdAt)}
           </Text>
         </View>
-        <CommentText text={comment.text} colors={colors} typography={typography} fontSize={isReply ? 14 : 15} />
+        <MentionText text={comment.text} fontSize={isReply ? 14 : 15} style={{ marginTop: 2 }} />
 
         {/* Like + Reply + Delete actions */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: 6 }}>
@@ -613,23 +624,6 @@ function CommentRow({
         </View>
       </View>
     </View>
-  );
-}
-
-/* ─── Comment text with @mention highlighting ─── */
-
-function CommentText({ text, colors, typography, fontSize = 15 }: { text: string; colors: any; typography: any; fontSize?: number }) {
-  const parts = text.split(/(@\w+)/g);
-  return (
-    <Text style={{ ...typography.body, color: colors.foreground, marginTop: 2, lineHeight: 20, fontSize }}>
-      {parts.map((part, i) =>
-        part.startsWith('@') ? (
-          <Text key={i} style={{ color: colors.primary, fontWeight: '600' }}>{part}</Text>
-        ) : (
-          <Text key={i}>{part}</Text>
-        )
-      )}
-    </Text>
   );
 }
 
