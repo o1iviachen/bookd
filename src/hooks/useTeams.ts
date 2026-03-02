@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
 import { getTeamDetail, getTeamMatches, getAllTeams, searchPlayersQuery, getMatchesForPerson, PersonMatchAppearance } from '../services/footballApi';
 
 export function useTeamDetail(teamId: number) {
@@ -57,14 +57,14 @@ export function usePersonMatches(personId: number) {
   });
 }
 
-// Search players via Firestore prefix query — fast, no bulk fetch
+// Search players via Firestore prefix query — paginated, ordered by leagueTier
 export function useSearchPlayers(query: string, active = true) {
-  const { data, isLoading, isFetching } = useQuery({
+  return useInfiniteQuery({
     queryKey: ['searchPlayers', query],
-    queryFn: () => searchPlayersQuery(query),
+    queryFn: ({ pageParam }) => searchPlayersQuery(query, pageParam),
+    initialPageParam: undefined as { leagueTier: number; docId: string } | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     enabled: query.length >= 2 && active,
     staleTime: 2 * 60 * 1000,
   });
-
-  return { data: data || [], isLoading: isLoading && query.length >= 2, isFetching };
 }

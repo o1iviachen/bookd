@@ -224,7 +224,7 @@ async function buildTeamsFromMatches() {
  * Also enriches team docs with coach and squad data.
  */
 async function buildPlayersAndEnrichTeams() {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l;
     const playersMap = new Map();
     const teamCoaches = new Map();
     const teamSquads = new Map();
@@ -286,8 +286,10 @@ async function buildPlayersAndEnrichTeams() {
         const awayTeamName = (_d = matchData === null || matchData === void 0 ? void 0 : matchData.awayTeam) === null || _d === void 0 ? void 0 : _d.name;
         const homeTeamCrest = (_e = matchData === null || matchData === void 0 ? void 0 : matchData.homeTeam) === null || _e === void 0 ? void 0 : _e.crest;
         const awayTeamCrest = (_f = matchData === null || matchData === void 0 ? void 0 : matchData.awayTeam) === null || _f === void 0 ? void 0 : _f.crest;
+        const competitionCode = ((_g = matchData === null || matchData === void 0 ? void 0 : matchData.competition) === null || _g === void 0 ? void 0 : _g.code) || '';
         // Helper to upsert a player — always update currentTeam if this match is newer
-        const upsertPlayer = (p, teamId, teamName, teamCrest) => {
+        const upsertPlayer = (p, teamId, teamName, teamCrest, compCode) => {
+            var _a;
             if (!p.id)
                 return;
             const prev = playerLatestKickoff.get(p.id) || '';
@@ -304,19 +306,23 @@ async function buildPlayersAndEnrichTeams() {
                     dateOfBirth: null,
                     photo: null,
                     currentTeam: teamId ? { id: teamId, name: teamName, crest: teamCrest } : null,
+                    leagueTier: getLeagueTier(compCode ? [compCode] : []),
                 });
                 playerLatestKickoff.set(p.id, kickoff);
             }
             else if (isNewer && teamId) {
                 const existing = playersMap.get(p.id);
                 existing.currentTeam = { id: teamId, name: teamName, crest: teamCrest };
+                const newTier = getLeagueTier(compCode ? [compCode] : []);
+                if (newTier < ((_a = existing.leagueTier) !== null && _a !== void 0 ? _a : 6))
+                    existing.leagueTier = newTier;
                 playerLatestKickoff.set(p.id, kickoff);
             }
         };
         // Process home lineup + bench
         const homeAllPlayers = [...(d.homeLineup || []), ...(d.homeBench || [])];
         for (const p of homeAllPlayers) {
-            upsertPlayer(p, homeTeamId, homeTeamName, homeTeamCrest);
+            upsertPlayer(p, homeTeamId, homeTeamName, homeTeamCrest, competitionCode);
             if (isCurrentSeason && homeTeamId && p.id) {
                 if (!teamSquads.has(homeTeamId))
                     teamSquads.set(homeTeamId, new Map());
@@ -329,7 +335,7 @@ async function buildPlayersAndEnrichTeams() {
         // Process away lineup + bench
         const awayAllPlayers = [...(d.awayLineup || []), ...(d.awayBench || [])];
         for (const p of awayAllPlayers) {
-            upsertPlayer(p, awayTeamId, awayTeamName, awayTeamCrest);
+            upsertPlayer(p, awayTeamId, awayTeamName, awayTeamCrest, competitionCode);
             if (isCurrentSeason && awayTeamId && p.id) {
                 if (!teamSquads.has(awayTeamId))
                     teamSquads.set(awayTeamId, new Map());
@@ -341,19 +347,19 @@ async function buildPlayersAndEnrichTeams() {
         }
         // Coaches — only from current season for team enrichment
         if (isCurrentSeason) {
-            if (((_g = d.homeCoach) === null || _g === void 0 ? void 0 : _g.id) && homeTeamId) {
+            if (((_h = d.homeCoach) === null || _h === void 0 ? void 0 : _h.id) && homeTeamId) {
                 teamCoaches.set(homeTeamId, { id: d.homeCoach.id, name: d.homeCoach.name });
             }
-            if (((_h = d.awayCoach) === null || _h === void 0 ? void 0 : _h.id) && awayTeamId) {
+            if (((_j = d.awayCoach) === null || _j === void 0 ? void 0 : _j.id) && awayTeamId) {
                 teamCoaches.set(awayTeamId, { id: d.awayCoach.id, name: d.awayCoach.name });
             }
         }
         // Coaches as player docs
-        if ((_j = d.homeCoach) === null || _j === void 0 ? void 0 : _j.id) {
-            upsertPlayer({ id: d.homeCoach.id, name: d.homeCoach.name, position: 'Coach' }, homeTeamId, homeTeamName, homeTeamCrest);
+        if ((_k = d.homeCoach) === null || _k === void 0 ? void 0 : _k.id) {
+            upsertPlayer({ id: d.homeCoach.id, name: d.homeCoach.name, position: 'Coach' }, homeTeamId, homeTeamName, homeTeamCrest, competitionCode);
         }
-        if ((_k = d.awayCoach) === null || _k === void 0 ? void 0 : _k.id) {
-            upsertPlayer({ id: d.awayCoach.id, name: d.awayCoach.name, position: 'Coach' }, awayTeamId, awayTeamName, awayTeamCrest);
+        if ((_l = d.awayCoach) === null || _l === void 0 ? void 0 : _l.id) {
+            upsertPlayer({ id: d.awayCoach.id, name: d.awayCoach.name, position: 'Coach' }, awayTeamId, awayTeamName, awayTeamCrest, competitionCode);
         }
     }
     console.log(`[buildPlayers] Processed all details: ${playersMap.size} players, ${teamSquads.size} teams with squads`);

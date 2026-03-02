@@ -640,6 +640,13 @@ export interface SearchablePlayer {
   leagueTier: number;
 }
 
+export interface PlayerSearchPage {
+  players: SearchablePlayer[];
+  nextCursor: { leagueTier: number; docId: string } | null;
+}
+
+const PLAYER_PAGE_SIZE = 30;
+
 // Fetch all teams once — cached by React Query, filtered client-side
 export async function getAllTeams(): Promise<SearchableTeam[]> {
   try {
@@ -662,27 +669,42 @@ export async function getAllTeams(): Promise<SearchableTeam[]> {
 }
 
 // Search players using Firestore array-contains on searchPrefixes field.
-export async function searchPlayersQuery(queryStr: string): Promise<SearchablePlayer[]> {
+// Paginated with orderBy('leagueTier') so top-tier players come first.
+export async function searchPlayersQuery(
+  queryStr: string,
+  cursor?: { leagueTier: number; docId: string },
+): Promise<PlayerSearchPage> {
   try {
-    if (queryStr.length < 2) return [];
+    if (queryStr.length < 2) return { players: [], nextCursor: null };
 
     const lower = queryStr.trim().toLowerCase();
     const words = lower.split(/\s+/).filter((w) => w.length >= 2);
-    if (words.length === 0) return [];
+    if (words.length === 0) return { players: [], nextCursor: null };
 
     // Pick the longest word for array-contains (most selective)
     const queryWord = words.reduce((a, b) => (a.length >= b.length ? a : b));
 
-    const snap = await getDocs(query(
+    // Fetch more than page size to account for client-side filtering
+    const fetchLimit = PLAYER_PAGE_SIZE * 3;
+
+    const constraints = [
       collection(db, PLAYERS),
       where('searchPrefixes', 'array-contains', queryWord),
-      limit(50)
-    ));
+      orderBy('leagueTier'),
+      ...(cursor ? [startAfter(cursor.leagueTier, cursor.docId)] : []),
+      limit(fetchLimit),
+    ] as Parameters<typeof query>;
+
+    const snap = await getDocs(query(...constraints));
 
     const results: SearchablePlayer[] = [];
+    let lastDoc: { leagueTier: number; docId: string } | null = null;
+
     for (const d of snap.docs) {
-      const p = d.data();
+      const p = d.data() as Record<string, any>;
       if (!p.id || !p.name) continue;
+
+      lastDoc = { leagueTier: p.leagueTier ?? 6, docId: d.id };
 
       // Client-side: ensure ALL search words appear as prefixes of name words
       const nameWords = (p.name as string).toLowerCase().split(/\s+/);
@@ -700,13 +722,17 @@ export async function searchPlayersQuery(queryStr: string): Promise<SearchablePl
       });
     }
 
-    // Sort by league tier (top-tier players first), then alphabetically
+    // Secondary sort by name within same tier
     results.sort((a, b) => a.leagueTier - b.leagueTier || a.name.localeCompare(b.name));
 
-    return results.slice(0, 50);
+    const page = results.slice(0, PLAYER_PAGE_SIZE);
+    const hasMore = snap.docs.length === fetchLimit;
+    const nextCursor = hasMore && lastDoc ? lastDoc : null;
+
+    return { players: page, nextCursor };
   } catch (err) {
     console.error('[searchPlayersQuery] Firestore query failed:', err);
-    return [];
+    return { players: [], nextCursor: null };
   }
 }
 
@@ -750,43 +776,52 @@ export async function searchMatchesQuery(
     const teamIdsToQuery = [...allMatchingIds].slice(0, 30);
     if (teamIdsToQuery.length === 0) return { matches: [], nextCursor: null };
 
-    // On first page, fetch ALL head-to-head matches between matched teams
-    // so they always appear first regardless of pagination
+    // On first page, fetch head-to-head matches — only for multi-term searches
+    // where different terms match different teams (e.g., "manchester city liverpool")
     const h2hMatches: Match[] = [];
     const h2hIds = new Set<string>();
 
-    if (!cursor && teamIdsToQuery.length >= 2 && teamIdsToQuery.length <= 6) {
-      // Build pairwise queries: A vs B (both home/away directions)
+    if (!cursor && teamIdSets.length >= 2) {
+      // Cross-pair: pick top team from each term, pair across terms
       const pairQueries: ReturnType<typeof query>[] = [];
-      for (let i = 0; i < teamIdsToQuery.length; i++) {
-        for (let j = i + 1; j < teamIdsToQuery.length; j++) {
-          const a = teamIdsToQuery[i];
-          const b = teamIdsToQuery[j];
-          // A home, B away
-          pairQueries.push(
-            query(collection(db, MATCHES), where('homeTeam.id', '==', a), where('awayTeam.id', '==', b), orderBy('kickoff', 'desc'))
-          );
-          // B home, A away
-          pairQueries.push(
-            query(collection(db, MATCHES), where('homeTeam.id', '==', b), where('awayTeam.id', '==', a), orderBy('kickoff', 'desc'))
-          );
+      const pairs: [number, number][] = [];
+
+      for (let i = 0; i < teamIdSets.length && pairs.length < 4; i++) {
+        for (let j = i + 1; j < teamIdSets.length && pairs.length < 4; j++) {
+          // Pick top team per term (shortest name = most popular)
+          const pickBest = (ids: Set<number>) => [...ids]
+            .map((id) => allTeams.find((t) => t.id === id)!)
+            .filter(Boolean)
+            .sort((a, b) => a.name.length - b.name.length)[0];
+          const a = pickBest(teamIdSets[i]);
+          const b = pickBest(teamIdSets[j]);
+          if (a && b && a.id !== b.id) pairs.push([a.id, b.id]);
         }
       }
 
-      const h2hSnaps = await Promise.all(pairQueries.map((q) => getDocs(q)));
-      for (const snap of h2hSnaps) {
-        for (const d of snap.docs) {
-          if (h2hIds.has(d.id)) continue;
-          h2hIds.add(d.id);
-          const data = d.data() as Record<string, any>;
-          if (isValidMatch(data)) {
-            h2hMatches.push(docToMatch(data));
+      for (const [a, b] of pairs) {
+        pairQueries.push(
+          query(collection(db, MATCHES), where('homeTeam.id', '==', a), where('awayTeam.id', '==', b), orderBy('kickoff', 'desc'))
+        );
+        pairQueries.push(
+          query(collection(db, MATCHES), where('homeTeam.id', '==', b), where('awayTeam.id', '==', a), orderBy('kickoff', 'desc'))
+        );
+      }
+
+      if (pairQueries.length > 0) {
+        const h2hSnaps = await Promise.all(pairQueries.map((q) => getDocs(q)));
+        for (const snap of h2hSnaps) {
+          for (const d of snap.docs) {
+            if (h2hIds.has(d.id)) continue;
+            h2hIds.add(d.id);
+            const data = d.data() as Record<string, any>;
+            if (isValidMatch(data)) {
+              h2hMatches.push(docToMatch(data));
+            }
           }
         }
+        h2hMatches.sort((a, b) => new Date(b.kickoff).getTime() - new Date(a.kickoff).getTime());
       }
-
-      // Sort head-to-head by date (newest first)
-      h2hMatches.sort((a, b) => new Date(b.kickoff).getTime() - new Date(a.kickoff).getTime());
     }
 
     // Build paginated queries for home/away

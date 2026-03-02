@@ -142,7 +142,11 @@ export function SearchScreen() {
     return all;
   }, [matchPages]);
   const { data: teamResults, isLoading: teamsLoading } = useSearchTeams(debouncedQuery, activeCategory === 'teams');
-  const { data: playerResults, isLoading: playersLoading, isFetching: playersFetching } = useSearchPlayers(debouncedQuery, activeCategory === 'players');
+  const { data: playerPages, isLoading: playersLoading, isFetching: playersFetching, fetchNextPage: fetchNextPlayerPage, hasNextPage: hasNextPlayerPage, isFetchingNextPage: isFetchingNextPlayerPage } = useSearchPlayers(debouncedQuery, activeCategory === 'players');
+  const playerResults = useMemo(() => {
+    if (!playerPages?.pages) return [];
+    return playerPages.pages.flatMap((p) => p.players);
+  }, [playerPages]);
   const { data: reviewResults, isLoading: reviewsLoading, isFetching: reviewsFetching } = useSearchReviews(debouncedQuery, activeCategory === 'reviews');
   const { data: listResults, isLoading: listsLoading, isFetching: listsFetching } = useSearchLists(debouncedQuery, activeCategory === 'lists');
 
@@ -436,6 +440,13 @@ export function SearchScreen() {
       );
     }
 
+    const handleEndReached = activeCategory === 'players' && hasNextPlayerPage && !isFetchingNextPlayerPage
+      ? () => fetchNextPlayerPage()
+      : undefined;
+    const footerComponent = activeCategory === 'players' && isFetchingNextPlayerPage
+      ? <View style={{ paddingVertical: spacing.md }}><LoadingSpinner fullScreen={false} /></View>
+      : null;
+
     return (
       <FlatList
         key="list"
@@ -447,6 +458,9 @@ export function SearchScreen() {
         keyboardDismissMode="on-drag"
         indicatorStyle={isDark ? 'white' : 'default'}
         removeClippedSubviews
+        onEndReached={handleEndReached}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={footerComponent}
       />
     );
   };
