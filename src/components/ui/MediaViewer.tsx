@@ -15,8 +15,15 @@ interface MediaViewerProps {
   onClose: () => void;
 }
 
-function VideoItem({ item }: { item: ReviewMedia }) {
+function VideoItem({ item, isActive }: { item: ReviewMedia; isActive: boolean }) {
   const [loading, setLoading] = useState(true);
+  const videoRef = useRef<Video>(null);
+
+  React.useEffect(() => {
+    if (!isActive) {
+      videoRef.current?.pauseAsync();
+    }
+  }, [isActive]);
 
   const onStatus = useCallback((status: AVPlaybackStatus) => {
     if (status.isLoaded && loading) setLoading(false);
@@ -25,11 +32,12 @@ function VideoItem({ item }: { item: ReviewMedia }) {
   return (
     <View style={{ width: SCREEN_WIDTH, height: SCREEN_HEIGHT, justifyContent: 'center', alignItems: 'center' }}>
       <Video
+        ref={videoRef}
         source={{ uri: item.url }}
         style={{ width: SCREEN_WIDTH, height: SCREEN_WIDTH * 1.2 }}
         resizeMode={ResizeMode.CONTAIN}
         useNativeControls
-        shouldPlay
+        shouldPlay={isActive}
         onPlaybackStatusUpdate={onStatus}
       />
       {loading && (
@@ -45,11 +53,10 @@ function VideoItem({ item }: { item: ReviewMedia }) {
 export function MediaViewer({ visible, media, initialIndex, onClose }: MediaViewerProps) {
   const insets = useSafeAreaInsets();
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
-  const flatListRef = useRef<FlatList>(null);
 
-  const renderItem = ({ item }: { item: ReviewMedia }) => {
+  const renderItem = ({ item, index }: { item: ReviewMedia; index: number }) => {
     if (item.type === 'video') {
-      return <VideoItem item={item} />;
+      return <VideoItem item={item} isActive={index === currentIndex} />;
     }
     return (
       <Pressable
@@ -105,7 +112,6 @@ export function MediaViewer({ visible, media, initialIndex, onClose }: MediaView
         )}
 
         <FlatList
-          ref={flatListRef}
           data={media}
           renderItem={renderItem}
           keyExtractor={(_, i) => String(i)}

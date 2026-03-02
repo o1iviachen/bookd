@@ -504,11 +504,11 @@ export function ReviewDetailScreen({ route, navigation }: any) {
           </View>
         )}
       </KeyboardAvoidingView>
-      {review.media && review.media.length > 0 && (
+      {review.media && review.media.length > 0 && mediaViewerIndex >= 0 && (
         <MediaViewer
-          visible={mediaViewerIndex >= 0}
+          visible
           media={review.media}
-          initialIndex={Math.max(mediaViewerIndex, 0)}
+          initialIndex={mediaViewerIndex}
           onClose={() => setMediaViewerIndex(-1)}
         />
       )}

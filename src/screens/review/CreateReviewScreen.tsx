@@ -337,7 +337,8 @@ export function CreateReviewScreen({ route, navigation }: any) {
             Alert.alert('Video Too Long', 'Videos must be 1 minute or shorter.');
             return;
           }
-          addVideoWithThumbnail(asset.uri, asset.duration || undefined, asset.width, asset.height);
+          // Delay to let the system picker dismiss animation finish before showing thumbnail picker
+          setTimeout(() => addVideoWithThumbnail(asset.uri, asset.duration || undefined, asset.width, asset.height), 500);
         } else {
           setMediaItems((prev) => [...prev, { uri: asset.uri, type: 'image' as const }].slice(0, 4 - existingMedia.length));
         }
@@ -371,6 +372,8 @@ export function CreateReviewScreen({ route, navigation }: any) {
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dragAnim = useRef(new RNAnimated.ValueXY()).current;
   const itemRects = useRef<{ x: number; y: number; w: number; h: number }[]>([]);
+  const mediaContainerRef = useRef<View>(null);
+  const mediaContainerPos = useRef({ x: 0, y: 0 });
 
   // Refs so PanResponder closures always have fresh data
   const existingMediaRef = useRef(existingMedia);
@@ -429,8 +432,9 @@ export function CreateReviewScreen({ route, navigation }: any) {
     onPanResponderTerminationRequest: () => !isDragActive.current,
     onPanResponderGrant: (evt) => {
       isDragActive.current = false;
-      const { locationX, locationY } = evt.nativeEvent;
-      const idx = findItemAt(locationX, locationY);
+      const lx = evt.nativeEvent.pageX - mediaContainerPos.current.x;
+      const ly = evt.nativeEvent.pageY - mediaContainerPos.current.y;
+      const idx = findItemAt(lx, ly);
       touchedItemIdx.current = idx;
       if (idx >= 0 && itemRects.current.length > 1) {
         longPressTimer.current = setTimeout(() => {
@@ -562,7 +566,7 @@ export function CreateReviewScreen({ route, navigation }: any) {
   const totalMediaCount = mediaItems.length + existingMedia.length;
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         {/* Header */}
         <View style={{ flexDirection: 'row', alignItems: 'center', padding: spacing.md }}>
@@ -575,7 +579,7 @@ export function CreateReviewScreen({ route, navigation }: any) {
           <View style={{ width: 24 }} />
         </View>
 
-        <ScrollView indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ padding: spacing.md, paddingBottom: 100 }}>
+        <ScrollView indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ padding: spacing.md, paddingBottom: spacing.md }}>
           {/* Match info */}
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, marginBottom: spacing.lg }}>
             <TeamLogo uri={match.homeTeam.crest} size={28} />
@@ -637,6 +641,12 @@ export function CreateReviewScreen({ route, navigation }: any) {
             Photos and Videos
           </Text>
           <View
+            ref={mediaContainerRef}
+            onLayout={() => {
+              mediaContainerRef.current?.measure((x, y, w, h, pageX, pageY) => {
+                mediaContainerPos.current = { x: pageX, y: pageY };
+              });
+            }}
             {...mediaDragPanResponder.panHandlers}
             style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.lg }}
           >
