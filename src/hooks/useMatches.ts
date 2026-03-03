@@ -46,7 +46,7 @@ export function useMatchesByDate(date: Date, enabled = true) {
       const hasLive = matches?.some(
         (m) => m.status === 'IN_PLAY' || m.status === 'PAUSED'
       );
-      return hasLive ? 60000 : false;
+      return hasLive ? 10000 : false;
     },
   });
 }
@@ -55,7 +55,15 @@ export function useMatch(matchId: number) {
   return useQuery({
     queryKey: ['match', matchId],
     queryFn: () => getMatchById(matchId),
-    staleTime: 5 * 60 * 1000,
+    staleTime: (query) => {
+      const match = query.state.data;
+      return match?.status === 'FINISHED' ? Infinity : 30 * 1000;
+    },
+    refetchInterval: (query) => {
+      const match = query.state.data;
+      const isLive = match?.status === 'IN_PLAY' || match?.status === 'PAUSED';
+      return isLive ? 10000 : false;
+    },
     retry: 1,
   });
 }
@@ -64,7 +72,15 @@ export function useMatchDetail(matchId: number) {
   return useQuery({
     queryKey: ['matchDetail', matchId],
     queryFn: () => getMatchDetail(matchId),
-    staleTime: 5 * 60 * 1000,
+    staleTime: (query) => {
+      const detail = query.state.data;
+      return detail?.match.status === 'FINISHED' ? Infinity : 30 * 1000;
+    },
+    refetchInterval: (query) => {
+      const detail = query.state.data;
+      const isLive = detail?.match.status === 'IN_PLAY' || detail?.match.status === 'PAUSED';
+      return isLive ? 10000 : false;
+    },
     retry: 1,
   });
 }
