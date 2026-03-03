@@ -79,6 +79,11 @@ service cloud.firestore {
       allow delete: if request.auth != null && request.auth.uid == resource.data.userId;
     }
 
+    // ─── Reports (written by Cloud Function admin SDK only) ───
+    match /reports/{reportId} {
+      allow read, write: if false;
+    }
+
     // ─── Notifications ───
     match /notifications/{notifId} {
       allow read: if request.auth != null && request.auth.uid == resource.data.recipientId;

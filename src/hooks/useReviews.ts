@@ -15,6 +15,7 @@ import {
   getReviewUpvoterIds,
   getReviewsUpvotedByUser,
   searchReviews,
+  getReviewsForMatches,
 } from '../services/firestore/reviews';
 import { ReviewMedia } from '../types/review';
 import { useAuth } from '../context/AuthContext';
@@ -99,6 +100,7 @@ export function useCreateReview() {
       tags: string[];
       media?: ReviewMedia[];
       isSpoiler?: boolean;
+      motmPlayerId?: number;
     }) =>
       createReview(
         params.matchId,
@@ -109,7 +111,8 @@ export function useCreateReview() {
         params.text,
         params.tags,
         params.media || [],
-        params.isSpoiler || false
+        params.isSpoiler || false,
+        params.motmPlayerId,
       ),
     onSuccess: (_, params) => {
       queryClient.invalidateQueries({ queryKey: ['reviews', 'match', params.matchId] });
@@ -131,6 +134,7 @@ export function useUpdateReview() {
         tags?: string[];
         media?: ReviewMedia[];
         isSpoiler?: boolean;
+        motmPlayerId?: number | null;
       };
     }) => updateReview(params.reviewId, params.data),
     onSuccess: (_, params) => {
@@ -209,6 +213,15 @@ export function useReviewUpvoters(reviewId: string, enabled: boolean) {
     queryFn: () => getReviewUpvoterIds(reviewId),
     staleTime: 10 * 60 * 1000,
     enabled: enabled && !!reviewId,
+  });
+}
+
+export function useReviewsForMatches(matchIds: number[]) {
+  return useQuery({
+    queryKey: ['reviews', 'matches', matchIds],
+    queryFn: () => getReviewsForMatches(matchIds),
+    staleTime: 5 * 60 * 1000,
+    enabled: matchIds.length > 0,
   });
 }
 

@@ -7,8 +7,9 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
-import { useMatch } from '../../hooks/useMatches';
+import { useMatch, useMatchDetail } from '../../hooks/useMatches';
 import { useCreateReview, useUpdateReview, useReview } from '../../hooks/useReviews';
+import { MOTMPickerModal } from '../../components/review/MOTMPickerModal';
 import { useUserProfile, useAddCustomTag, useMarkWatched, useToggleWatched, useToggleLiked } from '../../hooks/useUser';
 import { uploadReviewMedia } from '../../services/storage';
 import { TeamLogo } from '../../components/match/TeamLogo';
@@ -19,6 +20,7 @@ import { ReviewMedia } from '../../types/review';
 import { TextInput as RNTextInput } from 'react-native';
 import { isTextClean } from '../../utils/moderation';
 import { MentionInput } from '../../components/ui/MentionInput';
+import { shortName } from '../../utils/formatName';
 
 interface LocalMedia {
   uri: string;
@@ -34,6 +36,7 @@ export function CreateReviewScreen({ route, navigation }: any) {
   const { matchId, reviewId } = route.params;
   const isEditMode = !!reviewId;
   const { data: match, isLoading } = useMatch(matchId);
+  const { data: matchDetail } = useMatchDetail(matchId);
   const { data: existingReview, isLoading: reviewLoading } = useReview(reviewId || '');
   const createReview = useCreateReview();
   const updateReviewMutation = useUpdateReview();
@@ -56,6 +59,8 @@ export function CreateReviewScreen({ route, navigation }: any) {
   const [uploading, setUploading] = useState(false);
   const [initialized, setInitialized] = useState(!isEditMode);
   const [previewImageUri, setPreviewImageUri] = useState<string | null>(null);
+  const [motmPlayerId, setMotmPlayerId] = useState<number | null>(null);
+  const [showMotmModal, setShowMotmModal] = useState(false);
 
   const isWatched = profile?.watchedMatchIds?.some((id) => String(id) === String(matchId)) || rating > 0 || text.trim().length > 0;
 
@@ -79,6 +84,7 @@ export function CreateReviewScreen({ route, navigation }: any) {
       setSelectedTags(existingReview.tags);
       setExistingMedia(existingReview.media || []);
       setIsSpoiler(existingReview.isSpoiler || false);
+      setMotmPlayerId(existingReview.motmPlayerId ?? null);
       setInitialized(true);
     }
   }, [isEditMode, existingReview, initialized]);
@@ -281,6 +287,33 @@ export function CreateReviewScreen({ route, navigation }: any) {
 
   const hasReviewText = text.trim().length > 0;
 
+  // MOTM: derive played players (starters + subs who came on)
+  const motmData = useMemo(() => {
+    if (!matchDetail || !match || match.status !== 'FINISHED') return null;
+    if (matchDetail.homeLineup.length === 0 && matchDetail.awayLineup.length === 0) return null;
+
+    const subInIds = new Set(matchDetail.substitutions.map((s) => s.playerIn.id));
+
+    const homePlayed = [
+      ...matchDetail.homeLineup,
+      ...matchDetail.homeBench.filter((p) => subInIds.has(p.id)),
+    ];
+    const awayPlayed = [
+      ...matchDetail.awayLineup,
+      ...matchDetail.awayBench.filter((p) => subInIds.has(p.id)),
+    ];
+
+    const allPlayed = [...homePlayed, ...awayPlayed];
+    const selectedName = motmPlayerId
+      ? (() => {
+          const p = allPlayed.find((pl) => pl.id === motmPlayerId);
+          return p ? shortName(p.name) : null;
+        })()
+      : null;
+
+    return { homePlayed, awayPlayed, selectedName };
+  }, [matchDetail, match, motmPlayerId]);
+
   const handleSubmit = async () => {
     if (!user) return;
 
@@ -311,6 +344,7 @@ export function CreateReviewScreen({ route, navigation }: any) {
             tags: selectedTags,
             media: allMedia,
             isSpoiler,
+            motmPlayerId: motmPlayerId ?? null,
           },
         });
       } else {
@@ -327,6 +361,7 @@ export function CreateReviewScreen({ route, navigation }: any) {
           tags: selectedTags,
           media: allMedia,
           isSpoiler,
+          ...(motmPlayerId !== null && { motmPlayerId }),
         });
       }
 
@@ -535,6 +570,32 @@ export function CreateReviewScreen({ route, navigation }: any) {
             )}
           </View>
 
+          {/* Man of the Match picker (finished matches with lineup only) */}
+          {motmData && (
+            <Pressable
+              onPress={() => setShowMotmModal(true)}
+              style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                paddingVertical: spacing.sm,
+                marginBottom: spacing.lg,
+                opacity: pressed ? 0.7 : 1,
+              })}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                <Text style={{ fontSize: 16 }}>⭐</Text>
+                <Text style={{ ...typography.body, color: colors.foreground }}>Man of the Match</Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+                <Text style={{ ...typography.body, color: motmData.selectedName ? colors.primary : colors.textSecondary }}>
+                  {motmData.selectedName || 'Select player'}
+                </Text>
+                <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+              </View>
+            </Pressable>
+          )}
+
           {/* Tags — user custom */}
           <Text style={{ ...typography.bodyBold, color: colors.foreground, marginBottom: spacing.sm }}>
             Tags
@@ -663,6 +724,21 @@ export function CreateReviewScreen({ route, navigation }: any) {
           />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* MOTM picker modal */}
+      {matchDetail && motmData && (
+        <MOTMPickerModal
+          visible={showMotmModal}
+          onClose={() => setShowMotmModal(false)}
+          matchDetail={matchDetail}
+          homeTeamName={match?.homeTeam.name || ''}
+          awayTeamName={match?.awayTeam.name || ''}
+          homeTeamCrest={match?.homeTeam.crest || ''}
+          awayTeamCrest={match?.awayTeam.crest || ''}
+          selectedPlayerId={motmPlayerId}
+          onSelect={setMotmPlayerId}
+        />
+      )}
 
       {/* Image preview modal */}
       <Modal visible={!!previewImageUri} transparent animationType="none">

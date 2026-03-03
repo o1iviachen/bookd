@@ -113,6 +113,15 @@ export function MatchDetailScreen({ route, navigation }: Props) {
   const { data: matchLists } = useListsForMatch(matchId);
   const { data: matchDetail } = useMatchDetail(matchId);
 
+  // Compute MOTM winner from reviews
+  const motmWinnerId = useMemo(() => {
+    const votes = (reviews || []).filter((r) => r.motmPlayerId);
+    if (votes.length === 0) return null;
+    const counts = new Map<number, number>();
+    for (const r of votes) counts.set(r.motmPlayerId!, (counts.get(r.motmPlayerId!) || 0) + 1);
+    return [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+  }, [reviews]);
+
   // Fetch reviewer team affiliations for ratings filter
   const reviewerUserIds = useMemo(() => (reviews || []).map((r) => r.userId), [reviews]);
   const { data: reviewerTeamMap } = useReviewerTeamIds(reviewerUserIds);
@@ -346,7 +355,7 @@ export function MatchDetailScreen({ route, navigation }: Props) {
       <Animated.ScrollView
         style={{ backgroundColor: colors.background }}
         indicatorStyle={isDark ? 'white' : 'default'}
-        contentContainerStyle={{ paddingBottom: 40 }}
+        contentContainerStyle={{ paddingBottom: 16 }}
         onScroll={handleScroll}
         onScrollEndDrag={handleScrollEndDrag}
         scrollEventThrottle={16}
@@ -393,8 +402,8 @@ export function MatchDetailScreen({ route, navigation }: Props) {
                 showStats
                 homeTeamId={match.homeTeam.id}
                 awayTeamId={match.awayTeam.id}
-                homeTeamName={match.homeTeam.shortName}
-                awayTeamName={match.awayTeam.shortName}
+                homeTeamName={match.homeTeam.name}
+                awayTeamName={match.awayTeam.name}
                 reviewerTeamMap={reviewerTeamMap}
               />
             )}
@@ -468,7 +477,7 @@ export function MatchDetailScreen({ route, navigation }: Props) {
 
           {/* ─── Lineup tab ─── */}
           <View style={{ width: screenWidth }}>
-            <LineupSection matchDetail={matchDetail || null} match={match} colors={colors} spacing={spacing} typography={typography} navigation={navigation} />
+            <LineupSection matchDetail={matchDetail || null} match={match} colors={colors} spacing={spacing} typography={typography} navigation={navigation} motmWinnerId={motmWinnerId} />
           </View>
 
           {/* ─── Info tab ─── */}
@@ -848,13 +857,14 @@ function assignPlayersToRows(players: MatchPlayer[], formation: number[]): Match
 }
 
 function PitchPlayerDot({
-  player, x, y, teamColor, events, onPress,
+  player, x, y, teamColor, events, onPress, isMOTM,
 }: {
   player: MatchPlayer;
   x: number; y: number;
   teamColor: string;
   events: { goals: number; ownGoals: number; yellowCard: boolean; redCard: boolean; subbedOutMin: number | null } | undefined;
   onPress: () => void;
+  isMOTM?: boolean;
 }) {
   const DOT_SIZE = 36;
   const TOUCH_WIDTH = 56;
@@ -880,11 +890,11 @@ function PitchPlayerDot({
           width: DOT_SIZE,
           height: DOT_SIZE,
           borderRadius: DOT_SIZE / 2,
-          backgroundColor: teamColor,
+          backgroundColor: isMOTM ? 'rgba(245,158,11,0.9)' : teamColor,
           alignItems: 'center',
           justifyContent: 'center',
           borderWidth: 2,
-          borderColor: 'rgba(255,255,255,0.5)',
+          borderColor: isMOTM ? '#f59e0b' : 'rgba(255,255,255,0.5)',
         }}>
           <Text style={{ fontSize: 13, fontWeight: '800', color: '#fff' }}>
             {player.shirtNumber ?? ''}
@@ -915,6 +925,12 @@ function PitchPlayerDot({
             <Text style={{ fontSize: 9, color: '#fff', fontWeight: '700' }}>↓</Text>
           </View>
         )}
+        {/* MOTM star — bottom right */}
+        {isMOTM && (
+          <View style={{ position: 'absolute', bottom: -4, right: -4 }}>
+            <Text style={{ fontSize: 12 }}>⭐</Text>
+          </View>
+        )}
       </View>
       {/* Player name */}
       <Text style={{ fontSize: 9, fontWeight: '700', color: '#fff', textAlign: 'center', marginTop: 2, textShadowColor: 'rgba(0,0,0,0.9)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 }} numberOfLines={1}>
@@ -925,12 +941,13 @@ function PitchPlayerDot({
 }
 
 function FormationPitch({
-  matchDetail, match, navigation, pitchWidth,
+  matchDetail, match, navigation, pitchWidth, motmWinnerId,
 }: {
   matchDetail: MatchDetail;
   match: any;
   navigation: any;
   pitchWidth: number;
+  motmWinnerId?: number | null;
 }) {
   const pitchHeight = pitchWidth * 1.7;
   const halfHeight = pitchHeight / 2;
@@ -1017,6 +1034,7 @@ function FormationPitch({
               y={pos.y}
               teamColor="rgba(20,20,30,0.65)"
               events={playerEvents.get(player.id)}
+              isMOTM={motmWinnerId === player.id}
               onPress={() => navigation.navigate('PersonDetail', { personId: player.id, personName: shortName(player.name), role: 'player' })}
             />
           );
@@ -1035,6 +1053,7 @@ function FormationPitch({
               y={pos.y}
               teamColor="rgba(255,255,255,0.2)"
               events={playerEvents.get(player.id)}
+              isMOTM={motmWinnerId === player.id}
               onPress={() => navigation.navigate('PersonDetail', { personId: player.id, personName: shortName(player.name), role: 'player' })}
             />
           );
@@ -1044,11 +1063,12 @@ function FormationPitch({
   );
 }
 
-function BenchPlayerRow({ player, substitution, colors, spacing, typography, onPress }: {
+function BenchPlayerRow({ player, substitution, colors, spacing, typography, onPress, isMOTM }: {
   player: MatchPlayer;
   substitution?: MatchSubstitution;
   colors: any; spacing: any; typography: any;
   onPress: () => void;
+  isMOTM?: boolean;
 }) {
   return (
     <Pressable onPress={onPress} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
@@ -1058,7 +1078,8 @@ function BenchPlayerRow({ player, substitution, colors, spacing, typography, onP
             {player.shirtNumber}
           </Text>
         )}
-        <Text style={{ ...typography.body, color: colors.foreground, fontSize: 14, flex: 1 }} numberOfLines={1}>
+        {isMOTM && <Text style={{ fontSize: 13 }}>⭐</Text>}
+        <Text style={{ ...typography.body, color: isMOTM ? '#f59e0b' : colors.foreground, fontSize: 14, flex: 1, fontWeight: isMOTM ? '700' : '400' }} numberOfLines={1}>
           {shortName(player.name)}
         </Text>
         {substitution && (
@@ -1076,7 +1097,7 @@ function BenchPlayerRow({ player, substitution, colors, spacing, typography, onP
   );
 }
 
-function LineupSection({ matchDetail, match, colors, spacing, typography, navigation }: { matchDetail: MatchDetail | null; match: any; colors: any; spacing: any; typography: any; navigation: any }) {
+function LineupSection({ matchDetail, match, colors, spacing, typography, navigation, motmWinnerId }: { matchDetail: MatchDetail | null; match: any; colors: any; spacing: any; typography: any; navigation: any; motmWinnerId?: number | null }) {
   const { width: screenWidth } = useWindowDimensions();
   const pitchWidth = screenWidth - spacing.md * 2;
 
@@ -1119,6 +1140,7 @@ function LineupSection({ matchDetail, match, colors, spacing, typography, naviga
           match={match}
           navigation={navigation}
           pitchWidth={pitchWidth}
+          motmWinnerId={motmWinnerId}
         />
       )}
 
@@ -1133,7 +1155,7 @@ function LineupSection({ matchDetail, match, colors, spacing, typography, naviga
               <Text style={{ ...typography.caption, color: colors.textSecondary }}>Starting XI</Text>
             </View>
             {matchDetail.homeLineup.map((p) => (
-              <BenchPlayerRow key={p.id} player={p} colors={colors} spacing={spacing} typography={typography} onPress={() => navigation.navigate('PersonDetail', { personId: p.id, personName: shortName(p.name), role: 'player' })} />
+              <BenchPlayerRow key={p.id} player={p} colors={colors} spacing={spacing} typography={typography} isMOTM={motmWinnerId === p.id} onPress={() => navigation.navigate('PersonDetail', { personId: p.id, personName: shortName(p.name), role: 'player' })} />
             ))}
           </View>
           <View style={{ height: 1, backgroundColor: colors.border, marginBottom: spacing.md }} />
@@ -1145,7 +1167,7 @@ function LineupSection({ matchDetail, match, colors, spacing, typography, naviga
               <Text style={{ ...typography.caption, color: colors.textSecondary }}>Starting XI</Text>
             </View>
             {matchDetail.awayLineup.map((p) => (
-              <BenchPlayerRow key={p.id} player={p} colors={colors} spacing={spacing} typography={typography} onPress={() => navigation.navigate('PersonDetail', { personId: p.id, personName: shortName(p.name), role: 'player' })} />
+              <BenchPlayerRow key={p.id} player={p} colors={colors} spacing={spacing} typography={typography} isMOTM={motmWinnerId === p.id} onPress={() => navigation.navigate('PersonDetail', { personId: p.id, personName: shortName(p.name), role: 'player' })} />
             ))}
           </View>
         </>
@@ -1169,6 +1191,7 @@ function LineupSection({ matchDetail, match, colors, spacing, typography, naviga
               colors={colors}
               spacing={spacing}
               typography={typography}
+              isMOTM={motmWinnerId === p.id}
               onPress={() => navigation.navigate('PersonDetail', { personId: p.id, personName: shortName(p.name), role: 'player' })}
             />
           ))}
@@ -1187,7 +1210,7 @@ function LineupSection({ matchDetail, match, colors, spacing, typography, naviga
         </View>
       )}
 
-      <View style={{ height: 1, backgroundColor: colors.border, marginVertical: spacing.md }} />
+      <View style={{ height: 1, backgroundColor: colors.border, marginVertical: spacing.md, marginHorizontal: -spacing.md }} />
 
       {/* Away Substitutes */}
       {matchDetail.awayBench.length > 0 && (
@@ -1207,6 +1230,7 @@ function LineupSection({ matchDetail, match, colors, spacing, typography, naviga
               colors={colors}
               spacing={spacing}
               typography={typography}
+              isMOTM={motmWinnerId === p.id}
               onPress={() => navigation.navigate('PersonDetail', { personId: p.id, personName: shortName(p.name), role: 'player' })}
             />
           ))}

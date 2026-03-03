@@ -15,6 +15,69 @@ export { sendPushNotification } from './notifications';
 // ─── Content Moderation ───
 export { moderateReviewMedia } from './moderateMedia';
 
+// ─── User Account ───
+export { deleteAccount } from './user';
+
+// ─── Reports ───
+export { submitReport } from './report';
+
+/**
+ * One-time migration: backfill kickoff + season into matchDetails docs.
+ * Required so getMatchesForPerson can sort by kickoff DESC (most recent first).
+ * Safe to re-run — skips docs that already have a kickoff field.
+ *   GET /backfillMatchDetailKickoffs
+ */
+export const backfillMatchDetailKickoffs = functions
+  .runWith({ timeoutSeconds: 540, memory: '512MB' })
+  .https.onRequest(async (_req, res) => {
+    try {
+      const db = admin.firestore();
+      const BATCH_SIZE = 500;
+      let lastDoc: FirebaseFirestore.QueryDocumentSnapshot | null = null;
+      let updated = 0;
+      let skipped = 0;
+
+      while (true) {
+        let q: FirebaseFirestore.Query = db.collection('matchDetails').limit(BATCH_SIZE);
+        if (lastDoc) q = q.startAfter(lastDoc);
+
+        const snap = await q.get();
+        if (snap.empty) break;
+
+        const needsKickoff = snap.docs.filter((d) => !d.data().kickoff);
+        skipped += snap.docs.length - needsKickoff.length;
+
+        if (needsKickoff.length > 0) {
+          const matchRefs = needsKickoff.map((d) =>
+            db.collection('matches').doc(String(d.data().matchId))
+          );
+          const matchSnaps = await db.getAll(...matchRefs);
+
+          const batch = db.batch();
+          for (let i = 0; i < needsKickoff.length; i++) {
+            const matchData = matchSnaps[i].data();
+            if (matchData?.kickoff) {
+              batch.update(needsKickoff[i].ref, {
+                kickoff: matchData.kickoff,
+                season: matchData.season ?? null,
+              });
+              updated++;
+            }
+          }
+          await batch.commit();
+        }
+
+        lastDoc = snap.docs[snap.docs.length - 1];
+        console.log(`[backfillMatchDetailKickoffs] ${updated + skipped} processed (${updated} updated, ${skipped} skipped)`);
+      }
+
+      res.json({ success: true, updated, skipped, total: updated + skipped });
+    } catch (err: any) {
+      console.error('[backfillMatchDetailKickoffs] Error:', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
 // ─── Scheduled Functions ───
 
 /**
@@ -64,15 +127,15 @@ export const liveSync = functions
   });
 
 /**
- * Detail backfill: runs every 5 minutes.
+ * Detail backfill: runs every 2 minutes.
  * Queries matches with hasDetails == false to find exactly the ones needing work.
- * Processes ~7 matches per run (4 API calls each = ~28 calls/run).
- * 288 runs/day × ~7 matches = ~2,000 matches/day, within the 7,500 API calls/day quota.
+ * Processes ~28 matches per run (4 API calls each = ~112 calls/run).
+ * 720 runs/day × ~28 matches = ~20,160 matches/day, exactly 10x the original rate.
  * ~50 Firestore reads per run instead of ~55,000 with the old full-scan approach.
  */
 export const detailBackfill = functions
   .runWith({ timeoutSeconds: 540, memory: '512MB' })
-  .pubsub.schedule('every 5 minutes')
+  .pubsub.schedule('every 2 minutes')
   .onRun(async () => {
     const db = admin.firestore();
 
@@ -80,7 +143,7 @@ export const detailBackfill = functions
     const snapshot = await db.collection('matches')
       .where('status', '==', 'FINISHED')
       .where('hasDetails', '==', false)
-      .limit(7)
+      .limit(28)
       .get();
 
     if (snapshot.empty) return;

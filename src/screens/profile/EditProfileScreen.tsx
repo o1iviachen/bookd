@@ -15,6 +15,8 @@ import { Button } from '../../components/ui/Button';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { ProfileStackParamList } from '../../types/navigation';
 import { useQueryClient } from '@tanstack/react-query';
+import { isUsernameClean, isDisplayNameClean } from '../../utils/moderation';
+import { isUsernameReserved } from '../../utils/reservedUsernames';
 
 type Props = NativeStackScreenProps<ProfileStackParamList, 'EditProfile'>;
 
@@ -63,6 +65,18 @@ export function EditProfileScreen({ navigation }: Props) {
     if (!user) return;
     if (!username.trim() || username.trim().length < 3) {
       Alert.alert('Invalid Username', 'Username must be at least 3 characters.');
+      return;
+    }
+    if (!isUsernameClean(username.trim())) {
+      Alert.alert('Invalid Username', 'That username isn\'t allowed. Please choose another.');
+      return;
+    }
+    if (isUsernameReserved(username.trim())) {
+      Alert.alert('Invalid Username', 'That username is reserved. Please choose another.');
+      return;
+    }
+    if (!isDisplayNameClean(displayName.trim())) {
+      Alert.alert('Invalid Name', 'Your display name contains inappropriate language.');
       return;
     }
     setSaving(true);

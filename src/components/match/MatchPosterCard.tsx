@@ -123,7 +123,7 @@ export const MatchPosterCard = React.memo(function MatchPosterCard({ match, onPr
                 marginBottom: 4,
               }}
             >
-              <PulsingDot size={5} />
+              <PulsingDot size={5} color="#14181c" />
               <Text style={{ fontSize: 9, fontWeight: '800', color: '#14181c' }}>LIVE</Text>
             </View>
           )}

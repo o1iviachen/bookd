@@ -142,7 +142,7 @@ const MatchDayPage = React.memo(function MatchDayPage({
               >
                 <Ionicons name="star" size={18} color={colors.primary} style={{ marginRight: spacing.sm }} />
                 <Text style={{ ...typography.bodyBold, color: colors.foreground, flex: 1 }}>
-                  Favourites
+                  Following
                 </Text>
                 <Text style={{ ...typography.caption, color: colors.textSecondary, marginRight: spacing.xs }}>
                   {favouriteMatches.length} {favouriteMatches.length === 1 ? 'match' : 'matches'}

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Pressable } from 'react-native';
+import { View, Text, Pressable, Share } from 'react-native';
 import { useQueries } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
@@ -34,7 +34,7 @@ export function ListPreviewCard({ list, onPress, onMatchPress }: ListPreviewCard
   const isLiked = !!(user && likedBy?.includes(user.uid));
   const displayName = authorProfile?.displayName || authorProfile?.username || list.username;
   const displayUsername = authorProfile?.username || list.username;
-  const authorTeamCrests = (authorProfile?.followedTeamIds || []).slice(0, 3).map((id) => {
+  const authorTeamCrests = (authorProfile?.favoriteTeams || []).slice(0, 3).map((id) => {
     const team = POPULAR_TEAMS.find((t) => t.id === String(id));
     return team ? { id: team.id, crest: team.crest } : null;
   }).filter(Boolean) as { id: string; crest: string }[];
@@ -53,6 +53,11 @@ export function ListPreviewCard({ list, onPress, onMatchPress }: ListPreviewCard
   const previewMatches: Match[] = matchQueries
     .map((q) => q.data)
     .filter((m): m is Match => m !== undefined);
+
+  const handleShare = () => {
+    const count = list.matchIds.length;
+    Share.share({ message: `"${list.name}", a list of ${count} ${count === 1 ? 'match' : 'matches'} by @${displayUsername} on bookd:\nbookd://list/${list.id}` });
+  };
 
   return (
     <View style={{
@@ -123,6 +128,9 @@ export function ListPreviewCard({ list, onPress, onMatchPress }: ListPreviewCard
             <Text style={{ fontSize: 12, color: colors.textSecondary }}>{commentCount}</Text>
           )}
         </View>
+        <Pressable onPress={handleShare} hitSlop={8}>
+          <Ionicons name="share-social-outline" size={14} color={colors.textSecondary} />
+        </Pressable>
       </View>
     </View>
   );

@@ -28,16 +28,19 @@ export function RatingChart({ reviews, showStats = false, homeTeamId, awayTeamId
   const barAreaWidth = useRef(0);
   const barAreaX = useRef(0);
 
-  const hasTeamData = !!reviewerTeamMap && !!homeTeamId && !!awayTeamId;
+  const hasTeamData = !!reviewerTeamMap && !!(homeTeamName || awayTeamName);
 
   const filteredReviews = useMemo(() => {
     if (!hasTeamData || filter === 'everyone') return reviews;
-    const homeId = String(homeTeamId);
-    const awayId = String(awayTeamId);
+    // reviewerTeamMap values are team NAMES (e.g. "Arsenal", "Manchester City")
+    // homeTeamName / awayTeamName are full names from football-data.org (e.g. "Arsenal FC")
+    // Use substring match so "Arsenal FC".includes("Arsenal") resolves correctly
+    const homeNameLower = (homeTeamName || '').toLowerCase();
+    const awayNameLower = (awayTeamName || '').toLowerCase();
     return reviews.filter((r) => {
       const teams = reviewerTeamMap!.get(r.userId) || [];
-      const supportsHome = teams.includes(homeId);
-      const supportsAway = teams.includes(awayId);
+      const supportsHome = teams.some((n) => homeNameLower.includes(n.toLowerCase()));
+      const supportsAway = teams.some((n) => awayNameLower.includes(n.toLowerCase()));
       switch (filter) {
         case 'neutral': return !supportsHome && !supportsAway;
         case 'home': return supportsHome;
@@ -45,7 +48,7 @@ export function RatingChart({ reviews, showStats = false, homeTeamId, awayTeamId
         default: return true;
       }
     });
-  }, [reviews, filter, reviewerTeamMap, homeTeamId, awayTeamId, hasTeamData]);
+  }, [reviews, filter, reviewerTeamMap, homeTeamName, awayTeamName, hasTeamData]);
 
   const counts = BUCKETS.map((b) => filteredReviews.filter((r) => r.rating === b).length);
   const maxCount = Math.max(...counts, 1);
@@ -104,8 +107,8 @@ export function RatingChart({ reviews, showStats = false, homeTeamId, awayTeamId
   const filterOptions: { key: RatingFilter; label: string }[] = [
     { key: 'everyone', label: 'Everyone' },
     { key: 'neutral', label: 'Neutral fans' },
-    { key: 'home', label: homeTeamName || 'Home fans' },
-    { key: 'away', label: awayTeamName || 'Away fans' },
+    { key: 'home', label: awayTeamName ? (homeTeamName || 'Home fans') : `${homeTeamName || 'Team'} fans` },
+    ...(awayTeamName ? [{ key: 'away' as RatingFilter, label: awayTeamName || 'Away fans' }] : []),
   ];
 
   const activeFilterLabel = filterOptions.find((f) => f.key === filter)?.label || 'Everyone';

@@ -212,9 +212,7 @@ export function SearchScreen() {
             })}
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.sm + 2, paddingHorizontal: spacing.md }}>
-              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.muted, alignItems: 'center', justifyContent: 'center' }}>
-                <Ionicons name={item.position === 'Coach' ? 'person' : 'football'} size={16} color={colors.textSecondary} />
-              </View>
+              <Avatar uri={item.photo} name={item.name} size={36} />
               <View style={{ flex: 1 }}>
                 <Text style={{ ...typography.body, color: colors.foreground, fontSize: 15 }}>{shortName(item.name)}</Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>

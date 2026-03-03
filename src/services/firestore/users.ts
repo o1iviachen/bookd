@@ -88,8 +88,10 @@ export async function getUserProfile(uid: string): Promise<User | null> {
   return docToUser(snapshot);
 }
 
-// Batch fetch favourite team IDs for a list of user IDs (used for fan detection in ratings)
+// Batch fetch favourite team names for a list of user IDs (used for fan detection in ratings)
+// Uses favoriteTeams (the club you support) and maps IDs → team names for reliable cross-API comparison
 export async function getFollowedTeamIdsForUsers(userIds: string[]): Promise<Map<string, string[]>> {
+  const { POPULAR_TEAMS } = await import('../../utils/constants');
   const result = new Map<string, string[]>();
   if (userIds.length === 0) return result;
   const unique = [...new Set(userIds)];
@@ -97,7 +99,13 @@ export async function getFollowedTeamIdsForUsers(userIds: string[]): Promise<Map
     const snap = await getDoc(doc(db, 'users', uid));
     if (snap.exists()) {
       const data = snap.data();
-      result.set(uid, (data.followedTeamIds || []).map(String));
+      // Prefer favoriteTeams (clubs they support); fall back to followedTeamIds
+      const teamIds: string[] = (data.favoriteTeams?.length ? data.favoriteTeams : data.followedTeamIds || []).map(String);
+      // Map IDs → team names so comparison works regardless of which API the match data uses
+      const teamNames = teamIds
+        .map((id) => POPULAR_TEAMS.find((t) => t.id === id)?.name)
+        .filter(Boolean) as string[];
+      result.set(uid, teamNames);
     }
   });
   await Promise.all(promises);

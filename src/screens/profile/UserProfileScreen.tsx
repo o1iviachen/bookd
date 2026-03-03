@@ -53,8 +53,16 @@ export function UserProfileScreen({ route, navigation }: any) {
     .filter((q) => q.data != null)
     .map((q) => q.data as Match);
 
-  // Recent activity
-  const recentReviews = (reviews || []).slice(0, 4);
+  // Recent activity — one card per match, deduped
+  const seenMatchIds = new Set<number>();
+  const recentReviews = (reviews || [])
+    .filter((r) => {
+      const id = Number(r.matchId);
+      if (seenMatchIds.has(id)) return false;
+      seenMatchIds.add(id);
+      return true;
+    })
+    .slice(0, 4);
   const recentMatchIds = [...new Set(recentReviews.map((r) => r.matchId))];
   const recentMatchQueries = useQueries({
     queries: recentMatchIds.map((id) => ({
@@ -66,7 +74,7 @@ export function UserProfileScreen({ route, navigation }: any) {
   });
   const recentMatchMap = new Map<number, Match>();
   recentMatchQueries.forEach((q) => {
-    if (q.data) recentMatchMap.set(q.data.id, q.data);
+    if (q.data) recentMatchMap.set(Number(q.data.id), q.data);
   });
 
   const GAP = spacing.sm;
@@ -76,7 +84,7 @@ export function UserProfileScreen({ route, navigation }: any) {
 
   const handleMatchPress = useCallback((matchId: number) => {
     const allUserReviews = reviews || [];
-    const userReviewsForMatch = allUserReviews.filter((r) => r.matchId === matchId);
+    const userReviewsForMatch = allUserReviews.filter((r) => Number(r.matchId) === Number(matchId));
     if (userReviewsForMatch.length === 1) {
       navigation.navigate('ReviewDetail', { reviewId: userReviewsForMatch[0].id });
     } else if (userReviewsForMatch.length > 1) {
@@ -131,7 +139,7 @@ export function UserProfileScreen({ route, navigation }: any) {
   }).filter(Boolean) as { id: string; name: string; crest: string }[];
 
   const navLinks: { label: string; count: number | string; icon: keyof typeof Ionicons.glyphMap; screen: string }[] = [
-    { label: 'Games', count: `${new Set((reviews || []).map((r) => r.matchId)).size} this year`, icon: 'football-outline', screen: 'Games' },
+    { label: 'Matches', count: `${new Set((reviews || []).map((r) => r.matchId)).size} this year`, icon: 'football-outline', screen: 'Games' },
     { label: 'Diary', count: reviews?.length || 0, icon: 'book-outline', screen: 'Diary' },
     { label: 'Reviews', count: (reviews || []).filter((r) => r.text?.trim().length > 0).length, icon: 'reorder-three-outline', screen: 'Reviews' },
     { label: 'Lists', count: lists?.length || 0, icon: 'list-outline', screen: 'MyLists' },
@@ -268,14 +276,21 @@ export function UserProfileScreen({ route, navigation }: any) {
             ) : (
               <View style={{ flexDirection: 'row', gap: GAP }}>
                 {recentReviews.map((review) => {
-                  const match = recentMatchMap.get(review.matchId);
+                  const match = recentMatchMap.get(Number(review.matchId));
                   const hasText = review.text.trim().length > 0;
                   const hasMedia = review.media && review.media.length > 0;
+                  const reviewCount = (reviews || []).filter((r) => Number(r.matchId) === Number(review.matchId)).length;
+                  const isLog = review.rating === 0 && !review.text?.trim() && !review.tags?.length && !review.media?.length;
+                  const handlePress = () => reviewCount > 1
+                    ? navigation.navigate('UserMatchReviews', { matchId: Number(review.matchId), userId, username: profile?.username || '' })
+                    : isLog
+                      ? navigation.navigate('MatchDetail', { matchId: Number(review.matchId) })
+                      : navigation.navigate('ReviewDetail', { reviewId: review.id });
                   return match ? (
                     <View key={review.id} style={{ width: CARD_WIDTH }}>
                       <MatchPosterCard
                         match={match}
-                        onPress={() => navigation.navigate('MatchDetail', { matchId: review.matchId })}
+                        onPress={handlePress}
                         width={CARD_WIDTH}
                       />
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 4 }}>

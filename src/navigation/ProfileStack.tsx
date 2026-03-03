@@ -22,6 +22,7 @@ import { ListDetailScreen } from '../screens/list/ListDetailScreen';
 import { CreateListScreen } from '../screens/list/CreateListScreen';
 import { EditListScreen } from '../screens/list/EditListScreen';
 import { MatchDetailScreen } from '../screens/matches/MatchDetailScreen';
+import { MatchListsScreen } from '../screens/matches/MatchListsScreen';
 import { WatchedByScreen } from '../screens/matches/WatchedByScreen';
 import { UserMatchReviewsScreen } from '../screens/matches/UserMatchReviewsScreen';
 import { CreateReviewScreen } from '../screens/review/CreateReviewScreen';
@@ -65,6 +66,7 @@ export function ProfileStack() {
       <Stack.Screen name="CreateList" component={CreateListScreen} />
       <Stack.Screen name="EditList" component={EditListScreen} />
       <Stack.Screen name="MatchDetail" component={MatchDetailScreen} />
+      <Stack.Screen name="MatchLists" component={MatchListsScreen} />
       <Stack.Screen name="WatchedBy" component={WatchedByScreen} />
       <Stack.Screen name="UserMatchReviews" component={UserMatchReviewsScreen} />
       <Stack.Screen name="CreateReview" component={CreateReviewScreen} />

@@ -89,6 +89,14 @@
         { "fieldPath": "searchPrefixes", "arrayConfig": "CONTAINS" },
         { "fieldPath": "leagueTier", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "matchDetails",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "playerIds", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "kickoff", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

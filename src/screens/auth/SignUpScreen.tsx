@@ -9,6 +9,8 @@ import { useAuth } from '../../context/AuthContext';
 import { TextInput } from '../../components/ui/TextInput';
 import { Button } from '../../components/ui/Button';
 import { AuthStackParamList } from '../../types/navigation';
+import { isUsernameClean } from '../../utils/moderation';
+import { isUsernameReserved } from '../../utils/reservedUsernames';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'SignUp'>;
 
@@ -54,6 +56,14 @@ export function SignUpScreen({ navigation }: Props) {
     }
     if (username.length < 3) {
       setError('Username must be at least 3 characters');
+      return;
+    }
+    if (!isUsernameClean(username)) {
+      setError('That username isn\'t allowed. Please choose another.');
+      return;
+    }
+    if (isUsernameReserved(username)) {
+      setError('That username is reserved. Please choose another.');
       return;
     }
 

@@ -25,10 +25,13 @@ export function FavouriteTeamsScreen() {
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
-    if (profile?.followedTeamIds) {
-      setSelected(profile.followedTeamIds);
+    if (profile?.favoriteTeams?.length) {
+      setSelected(profile.favoriteTeams);
+    } else if (profile?.followedTeamIds?.length) {
+      // Migrate: pre-populate from followedTeamIds if no favourites set yet
+      setSelected(profile.followedTeamIds.slice(0, MAX_TEAMS));
     }
-  }, [profile?.followedTeamIds]);
+  }, [profile?.favoriteTeams, profile?.followedTeamIds]);
 
   const atMax = selected.length >= MAX_TEAMS;
 
@@ -42,7 +45,10 @@ export function FavouriteTeamsScreen() {
 
   const save = async () => {
     if (!user) return;
-    await updateUserProfile(user.uid, { followedTeamIds: selected });
+    // Favourite teams are always also followed teams
+    const existingFollowed = profile?.followedTeamIds || [];
+    const merged = [...new Set([...existingFollowed, ...selected])];
+    await updateUserProfile(user.uid, { favoriteTeams: selected, followedTeamIds: merged });
     queryClient.invalidateQueries({ queryKey: ['user', user.uid] });
     navigation.goBack();
   };

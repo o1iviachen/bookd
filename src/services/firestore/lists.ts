@@ -233,18 +233,22 @@ export async function createListComment(
     createdAt: serverTimestamp(),
   });
 
-  const listSnap = await getDoc(doc(db, 'lists', listId));
-  const listUserId = listSnap.data()?.userId;
-  if (listUserId) {
-    await createNotification({
-      recipientId: listUserId,
-      senderId: userId,
-      senderUsername: username,
-      senderAvatar: userAvatar,
-      type: 'list_comment',
-      listId,
-      commentId: ref.id,
-    });
+  try {
+    const listSnap = await getDoc(doc(db, 'lists', listId));
+    const listUserId = listSnap.data()?.userId;
+    if (listUserId && listUserId !== userId) {
+      await createNotification({
+        recipientId: listUserId,
+        senderId: userId,
+        senderUsername: username,
+        senderAvatar: userAvatar,
+        type: 'list_comment',
+        listId,
+        commentId: ref.id,
+      });
+    }
+  } catch {
+    // Notification is best-effort; comment is already saved
   }
 
   return ref.id;

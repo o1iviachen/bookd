@@ -70,6 +70,71 @@ export const TEAM_COLORS: Record<number, TeamColorEntry> = {
 };
 
 /**
+ * Name-based color lookup for when team IDs don't match (e.g. football-data.org vs API-Football).
+ * Keywords are lowercase substrings of the team name.
+ */
+const TEAM_NAME_COLORS: Array<{ keywords: string[]; color: string }> = [
+  // Premier League
+  { keywords: ['arsenal'], color: '#EF0107' },
+  { keywords: ['aston villa'], color: '#670E36' },
+  { keywords: ['bournemouth'], color: '#DA291C' },
+  { keywords: ['brentford'], color: '#E30613' },
+  { keywords: ['brighton'], color: '#0057B8' },
+  { keywords: ['chelsea'], color: '#034694' },
+  { keywords: ['crystal palace'], color: '#1B458F' },
+  { keywords: ['everton'], color: '#003399' },
+  { keywords: ['fulham'], color: '#CC0000' },
+  { keywords: ['leeds'], color: '#1D428A' },
+  { keywords: ['liverpool'], color: '#C8102E' },
+  { keywords: ['manchester city', 'man city'], color: '#6CABDD' },
+  { keywords: ['manchester united', 'man utd'], color: '#DA291C' },
+  { keywords: ['newcastle'], color: '#241F20' },
+  { keywords: ['nottingham forest'], color: '#DD0000' },
+  { keywords: ['tottenham', 'spurs'], color: '#132257' },
+  { keywords: ['west ham'], color: '#7A263A' },
+  { keywords: ['wolves', 'wolverhampton'], color: '#CF9B1C' },
+  { keywords: ['ipswich'], color: '#1B458F' },
+  { keywords: ['burnley'], color: '#6C1D45' },
+  { keywords: ['leicester'], color: '#0E63AD' },
+  { keywords: ['sunderland'], color: '#EB172B' },
+  // La Liga
+  { keywords: ['athletic bilbao', 'athletic club'], color: '#EE2523' },
+  { keywords: ['atletico', 'atlético'], color: '#CB3524' },
+  { keywords: ['barcelona'], color: '#A50044' },
+  { keywords: ['celta'], color: '#8AC3EE' },
+  { keywords: ['real sociedad'], color: '#0067B1' },
+  { keywords: ['real madrid'], color: '#D4AF37' },
+  { keywords: ['sevilla'], color: '#D40F2A' },
+  { keywords: ['valencia'], color: '#EE3524' },
+  { keywords: ['villarreal'], color: '#005187' },
+  { keywords: ['betis'], color: '#00954C' },
+  // Bundesliga
+  { keywords: ['bayern'], color: '#DC052D' },
+  { keywords: ['leverkusen'], color: '#E32221' },
+  { keywords: ['dortmund'], color: '#FDE100' },
+  { keywords: ['rb leipzig', 'rasenballsport'], color: '#DD0741' },
+  { keywords: ['eintracht frankfurt'], color: '#E1000F' },
+  { keywords: ['stuttgart'], color: '#E32219' },
+  { keywords: ['freiburg'], color: '#1A1A1A' },
+  { keywords: ['wolfsburg'], color: '#65B32E' },
+  // Serie A
+  { keywords: ['inter milan', 'internazionale'], color: '#0068A8' },
+  { keywords: ['ac milan'], color: '#FB090B' },
+  { keywords: ['juventus'], color: '#1A1A1A' },
+  { keywords: ['napoli'], color: '#004C99' },
+  { keywords: ['roma', 'as roma'], color: '#8E1F2F' },
+  { keywords: ['lazio'], color: '#87D8F7' },
+  { keywords: ['atalanta'], color: '#1E71B8' },
+  { keywords: ['fiorentina'], color: '#482E92' },
+  // Ligue 1
+  { keywords: ['paris', 'psg'], color: '#004170' },
+  { keywords: ['marseille'], color: '#2FAEE0' },
+  { keywords: ['monaco'], color: '#E7192F' },
+  { keywords: ['lille'], color: '#C8102E' },
+  { keywords: ['lyon', 'olympique lyonnais'], color: '#241F4D' },
+];
+
+/**
  * Generate a deterministic fallback color from a team name.
  * Produces dark, saturated hues that look good as gradient backgrounds.
  */
@@ -84,8 +149,15 @@ export function generateFallbackColor(teamName: string): string {
 }
 
 /**
- * Get the primary kit color for a team, with fallback for unmapped teams.
+ * Get the primary kit color for a team.
+ * First tries the ID-based map (API-Football IDs), then name-based lookup,
+ * then a deterministic hash fallback.
  */
 export function getTeamColor(teamId: number, teamName: string): string {
-  return TEAM_COLORS[teamId]?.primary ?? generateFallbackColor(teamName);
+  if (TEAM_COLORS[teamId]) return TEAM_COLORS[teamId].primary;
+  const nameLower = teamName.toLowerCase();
+  for (const entry of TEAM_NAME_COLORS) {
+    if (entry.keywords.some((kw) => nameLower.includes(kw))) return entry.color;
+  }
+  return generateFallbackColor(teamName);
 }

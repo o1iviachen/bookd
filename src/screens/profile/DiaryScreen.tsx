@@ -115,9 +115,13 @@ export function DiaryScreen({ route, navigation }: any) {
                 review={review}
                 match={match || null}
                 isLiked={isLiked}
-                onPress={() =>
-                  navigation.navigate('ReviewDetail', { reviewId: review.id })
-                }
+                onPress={() => {
+                  if (!review.text?.trim()) {
+                    navigation.navigate('MatchDetail', { matchId: review.matchId });
+                  } else {
+                    navigation.navigate('ReviewDetail', { reviewId: review.id });
+                  }
+                }}
               />
             );
           }}

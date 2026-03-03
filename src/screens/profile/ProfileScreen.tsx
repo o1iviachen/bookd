@@ -48,9 +48,14 @@ export function ProfileScreen() {
     .filter((q) => q.data != null)
     .map((q) => q.data as Match);
 
-  // Recent activity: fetch match data for the user's most recent reviews
-  const recentReviews = (reviews || []).slice(0, 3);
-  const recentMatchIds = [...new Set(recentReviews.map((r) => r.matchId))];
+  // Recent activity: one card per unique match (most recent review per match), up to 3
+  const seenMatchIds = new Set<number>();
+  const recentReviews = (reviews || []).filter((r) => {
+    if (seenMatchIds.has(r.matchId)) return false;
+    seenMatchIds.add(r.matchId);
+    return true;
+  }).slice(0, 3);
+  const recentMatchIds = recentReviews.map((r) => r.matchId);
   const recentMatchQueries = useQueries({
     queries: recentMatchIds.map((id) => ({
       queryKey: ['match', id],
@@ -72,7 +77,7 @@ export function ProfileScreen() {
   // Navigate based on how many reviews the user has for a match
   const handleMatchPress = useCallback((matchId: number) => {
     const allUserReviews = reviews || [];
-    const userReviewsForMatch = allUserReviews.filter((r) => r.matchId === matchId);
+    const userReviewsForMatch = allUserReviews.filter((r) => Number(r.matchId) === Number(matchId));
     if (userReviewsForMatch.length === 1) {
       navigation.navigate('ReviewDetail', { reviewId: userReviewsForMatch[0].id });
     } else if (userReviewsForMatch.length > 1) {
@@ -84,14 +89,14 @@ export function ProfileScreen() {
 
   if (isLoading) return <LoadingSpinner />;
 
-  // Get crests for followed teams
-  const followedTeamCrests = (profile?.followedTeamIds || []).map((id) => {
+  // Get crests for favourite teams (clubs the user supports, not just following)
+  const followedTeamCrests = (profile?.favoriteTeams || []).map((id) => {
     const team = POPULAR_TEAMS.find((t) => t.id === id);
     return team ? { id: team.id, name: team.name, crest: team.crest } : null;
   }).filter(Boolean) as { id: string; name: string; crest: string }[];
 
   const navLinks: { label: string; count: number | string; icon: keyof typeof Ionicons.glyphMap }[] = [
-    { label: 'Games', count: `${new Set((reviews || []).map((r) => r.matchId)).size} this year`, icon: 'football-outline' },
+    { label: 'Matches', count: `${new Set((reviews || []).map((r) => r.matchId)).size} this year`, icon: 'football-outline' },
     { label: 'Diary', count: reviews?.length || 0, icon: 'book-outline' },
     { label: 'Reviews', count: (reviews || []).filter((r) => r.text?.trim().length > 0).length, icon: 'reorder-three-outline' },
     { label: 'Lists', count: lists?.length || 0, icon: 'list-outline' },
@@ -188,9 +193,11 @@ export function ProfileScreen() {
 
         {/* Favourite Matches */}
         <View style={{ marginTop: spacing.md, paddingHorizontal: HORIZONTAL_PADDING, paddingVertical: spacing.md, backgroundColor: `${colors.accent}30`, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.border }}>
-          <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: spacing.sm }}>
-            Favourite Matches
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm }}>
+            <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1 }}>
+              Favourite Matches
+            </Text>
+          </View>
           {favoriteMatchIds.length > 0 && favoriteMatchQueries.some((q) => q.isLoading) ? (
             <View style={{ paddingVertical: spacing.lg, alignItems: 'center' }}>
               <LoadingSpinner fullScreen={false} />
@@ -252,11 +259,18 @@ export function ProfileScreen() {
                 const isLiked = profile?.likedMatchIds?.some((id) => String(id) === String(review.matchId)) || false;
                 const hasText = review.text.trim().length > 0;
                 const hasMedia = review.media && review.media.length > 0;
+                const reviewCount = (reviews || []).filter((r) => Number(r.matchId) === Number(review.matchId)).length;
+                const isLog = review.rating === 0 && !review.text?.trim() && !review.tags?.length && !review.media?.length;
+                const handlePress = () => reviewCount > 1
+                  ? navigation.navigate('UserMatchReviews', { matchId: Number(review.matchId), userId: user?.uid || '', username: profile?.username || '' })
+                  : isLog
+                    ? navigation.navigate('MatchDetail', { matchId: Number(review.matchId) })
+                    : navigation.navigate('ReviewDetail', { reviewId: review.id });
                 return match ? (
                   <View key={review.id} style={{ width: CARD_WIDTH }}>
                     <MatchPosterCard
                       match={match}
-                      onPress={() => navigation.navigate('MatchDetail', { matchId: review.matchId })}
+                      onPress={handlePress}
                       width={CARD_WIDTH}
                     />
                     {/* Rating, heart, review indicator — left aligned */}
@@ -276,7 +290,7 @@ export function ProfileScreen() {
                 ) : (
                   <Pressable
                     key={review.id}
-                    onPress={() => navigation.navigate('MatchDetail', { matchId: review.matchId })}
+                    onPress={handlePress}
                     style={{
                       width: CARD_WIDTH,
                       height: CARD_WIDTH * 1.5,
@@ -321,7 +335,7 @@ export function ProfileScreen() {
               <Pressable
                 key={link.label}
                 onPress={() => {
-                  if (link.label === 'Games') navigation.navigate('Games', {});
+                  if (link.label === 'Matches') navigation.navigate('Games', {});
                   else if (link.label === 'Diary') navigation.navigate('Diary', {});
                   else if (link.label === 'Reviews') navigation.navigate('Reviews', {});
                   else if (link.label === 'Lists') navigation.navigate('MyLists', {});

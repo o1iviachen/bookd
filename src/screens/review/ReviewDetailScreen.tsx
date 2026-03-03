@@ -15,6 +15,7 @@ import { StarRating } from '../../components/ui/StarRating';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { ScreenHeader } from '../../components/ui/ScreenHeader';
 import { ActionMenu } from '../../components/ui/ActionMenu';
+import { ReportModal } from '../../components/ui/ReportModal';
 import { LikedByModal } from '../../components/ui/LikedByModal';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { MentionText } from '../../components/ui/MentionText';
@@ -45,6 +46,7 @@ export function ReviewDetailScreen({ route, navigation }: any) {
   const [replyingTo, setReplyingTo] = useState<{ id: string; username: string } | null>(null);
   const [showMenu, setShowMenu] = useState(false);
   const [showLikes, setShowLikes] = useState(false);
+  const [showReport, setShowReport] = useState(false);
   const [spoilerRevealed, setSpoilerRevealed] = useState(false);
   const [mediaViewerIndex, setMediaViewerIndex] = useState(-1);
   const scrollRef = useRef<ScrollView>(null);
@@ -224,21 +226,32 @@ export function ReviewDetailScreen({ route, navigation }: any) {
           title="Review"
           onBack={() => navigation.goBack()}
           rightElement={
-            isOwnReview ? (
-              <Pressable onPress={() => setShowMenu(true)} hitSlop={8}>
-                <Ionicons name="ellipsis-horizontal" size={22} color={colors.foreground} />
-              </Pressable>
-            ) : undefined
+            <Pressable onPress={() => setShowMenu(true)} hitSlop={8}>
+              <Ionicons name="ellipsis-horizontal" size={22} color={colors.foreground} />
+            </Pressable>
           }
         />
 
         <ActionMenu
           visible={showMenu}
           onClose={() => setShowMenu(false)}
-          items={[
-            { label: 'Edit review', icon: 'create-outline', onPress: handleEdit },
-            { label: 'Delete review', icon: 'trash-outline', onPress: handleDelete, destructive: true },
-          ]}
+          items={
+            isOwnReview
+              ? [
+                  { label: 'Edit review', icon: 'create-outline', onPress: handleEdit },
+                  { label: 'Delete review', icon: 'trash-outline', onPress: handleDelete, destructive: true },
+                ]
+              : [
+                  { label: 'Report', icon: 'flag-outline', onPress: () => { setShowMenu(false); setShowReport(true); } },
+                ]
+          }
+        />
+
+        <ReportModal
+          visible={showReport}
+          onClose={() => setShowReport(false)}
+          contentType="review"
+          contentId={review.id}
         />
 
         <LikedByModal
@@ -396,12 +409,12 @@ export function ReviewDetailScreen({ route, navigation }: any) {
                 )}
               </View>
 
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Pressable onPress={() => inputRef.current?.focus()} hitSlop={6} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                 <Ionicons name="chatbubble-outline" size={18} color={colors.textSecondary} />
                 {totalCount > 0 && (
                   <Text style={{ ...typography.caption, color: colors.textSecondary }}>{totalCount}</Text>
                 )}
-              </View>
+              </Pressable>
 
               <Pressable onPress={handleShare} hitSlop={6}>
                 <Ionicons name="share-social-outline" size={18} color={colors.textSecondary} />
@@ -559,6 +572,7 @@ function CommentRow({
   navigation: any;
   authorMap: Map<string, { username: string; displayName: string; avatar: string | null; followedTeamIds: string[] }>;
 }) {
+  const [showCommentReport, setShowCommentReport] = React.useState(false);
   const isLiked = userId ? comment.likedBy.includes(userId) : false;
   const isOwn = userId === comment.userId;
   const avatarSize = isReply ? 24 : 32;
@@ -628,7 +642,7 @@ function CommentRow({
             <Text style={{ fontSize: 11, color: colors.textSecondary }}>Reply</Text>
           </Pressable>
 
-          {isOwn && (
+          {isOwn ? (
             <Pressable
               onPress={() => onDelete(comment.id)}
               style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}
@@ -636,9 +650,23 @@ function CommentRow({
               <Ionicons name="trash-outline" size={13} color={colors.textSecondary} />
               <Text style={{ fontSize: 11, color: colors.textSecondary }}>Delete</Text>
             </Pressable>
+          ) : (
+            <Pressable
+              onPress={() => setShowCommentReport(true)}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}
+            >
+              <Ionicons name="flag-outline" size={13} color={colors.textSecondary} />
+              <Text style={{ fontSize: 11, color: colors.textSecondary }}>Report</Text>
+            </Pressable>
           )}
         </View>
       </View>
+      <ReportModal
+        visible={showCommentReport}
+        onClose={() => setShowCommentReport(false)}
+        contentType="comment"
+        contentId={comment.id}
+      />
     </View>
   );
 }

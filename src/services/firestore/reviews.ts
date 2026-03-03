@@ -41,6 +41,7 @@ function docToReview(docSnap: any, userVote: 'up' | 'down' | null = null): Revie
     editedAt: data.editedAt?.toDate() || null,
     userVote,
     flagged: data.flagged || false,
+    motmPlayerId: data.motmPlayerId ?? undefined,
   };
 }
 
@@ -59,7 +60,8 @@ export async function createReview(
   text: string,
   tags: string[],
   media: ReviewMedia[] = [],
-  isSpoiler: boolean = false
+  isSpoiler: boolean = false,
+  motmPlayerId?: number,
 ): Promise<string> {
   const reviewRef = await addDoc(collection(db, 'reviews'), {
     matchId,
@@ -74,6 +76,7 @@ export async function createReview(
     upvotes: 0,
     downvotes: 0,
     createdAt: serverTimestamp(),
+    ...(motmPlayerId !== undefined && { motmPlayerId }),
   });
   return reviewRef.id;
 }
@@ -320,6 +323,7 @@ export async function updateReview(
     tags?: string[];
     media?: ReviewMedia[];
     isSpoiler?: boolean;
+    motmPlayerId?: number | null;
   }
 ): Promise<void> {
   const reviewRef = doc(db, 'reviews', reviewId);
@@ -388,4 +392,31 @@ export async function getAvgRatingsForMatches(matchIds: number[]): Promise<Map<n
   }
 
   return result;
+}
+
+export async function getReviewsForMatches(matchIds: number[]): Promise<Review[]> {
+  if (matchIds.length === 0) return [];
+
+  const batches: number[][] = [];
+  for (let i = 0; i < matchIds.length; i += 30) {
+    batches.push(matchIds.slice(i, i + 30));
+  }
+
+  const results = await Promise.all(
+    batches.map((batch) =>
+      getDocs(query(collection(db, 'reviews'), where('matchId', 'in', batch)))
+    )
+  );
+
+  const reviews: Review[] = [];
+  const seen = new Set<string>();
+  for (const snapshot of results) {
+    for (const d of snapshot.docs) {
+      if (!seen.has(d.id)) {
+        seen.add(d.id);
+        reviews.push(docToReview(d));
+      }
+    }
+  }
+  return reviews.filter((r) => !r.flagged);
 }

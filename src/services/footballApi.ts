@@ -363,12 +363,19 @@ export async function getMatchDetail(id: number): Promise<MatchDetail> {
 
   const data = detailSnap.data();
 
+  const [homeLineup, homeBench, awayLineup, awayBench] = await Promise.all([
+    enrichPlayerNames(data.homeLineup || []),
+    enrichPlayerNames(data.homeBench || []),
+    enrichPlayerNames(data.awayLineup || []),
+    enrichPlayerNames(data.awayBench || []),
+  ]);
+
   return {
     match,
-    homeLineup: data.homeLineup || [],
-    homeBench: data.homeBench || [],
-    awayLineup: data.awayLineup || [],
-    awayBench: data.awayBench || [],
+    homeLineup,
+    homeBench,
+    awayLineup,
+    awayBench,
     homeCoach: data.homeCoach || null,
     awayCoach: data.awayCoach || null,
     homeFormation: data.homeFormation || null,
@@ -381,6 +388,33 @@ export async function getMatchDetail(id: number): Promise<MatchDetail> {
     halfTimeScore: data.halfTimeScore || null,
     attendance: data.attendance || null,
   };
+}
+
+// ─── Name enrichment helper ───
+// Replaces abbreviated names (e.g. "E. Haaland") with full names from the players collection.
+// Only fetches docs for players whose names look abbreviated to minimise reads.
+async function enrichPlayerNames<T extends { id: number; name: string }>(players: T[]): Promise<T[]> {
+  if (players.length === 0) return players;
+  const toEnrich = players.filter((p) => /^[A-Z]\.\s/.test(p.name));
+  if (toEnrich.length === 0) return players;
+
+  const nameMap = new Map<number, string>();
+  await Promise.all(
+    toEnrich.map(async (p) => {
+      try {
+        const snap = await getDoc(doc(db, PLAYERS, String(p.id)));
+        if (snap.exists()) {
+          const data = snap.data() as { name?: string };
+          if (data.name) nameMap.set(p.id, data.name);
+        }
+      } catch { /* ignore — use original name */ }
+    })
+  );
+
+  return players.map((p) => {
+    const enriched = nameMap.get(p.id);
+    return enriched ? { ...p, name: enriched } : p;
+  });
 }
 
 // ─── Team & Person Detail ───
@@ -418,6 +452,7 @@ export async function getTeamDetail(teamId: number): Promise<TeamDetail> {
   }
 
   const data = docSnap.data();
+  const squad = await enrichPlayerNames(data.squad || []);
 
   return {
     id: data.id ?? teamId,
@@ -428,7 +463,7 @@ export async function getTeamDetail(teamId: number): Promise<TeamDetail> {
     founded: data.founded || null,
     clubColors: null,
     coach: null,
-    squad: data.squad || [],
+    squad,
     activeCompetitions: data.activeCompetitions || [],
   };
 }
@@ -527,11 +562,14 @@ export interface PersonMatchAppearance {
 // Uses the playerIds array-contains index on matchDetails
 export async function getMatchesForPerson(personId: number): Promise<PersonMatchAppearance[]> {
   try {
-    // Query matchDetails where playerIds contains this person
+    // Query matchDetails where playerIds contains this person.
+    // Sort by kickoff desc so we get the most recent 200 matches, not oldest 100.
+    // Requires composite index: matchDetails playerIds(CONTAINS) + kickoff(DESC)
     const detailsSnap = await getDocs(query(
       collection(db, MATCH_DETAILS),
       where('playerIds', 'array-contains', personId),
-      limit(100)
+      orderBy('kickoff', 'desc'),
+      limit(200)
     ));
 
     if (detailsSnap.empty) return [];
@@ -636,6 +674,7 @@ export interface SearchableTeam {
 export interface SearchablePlayer {
   id: number;
   name: string;
+  photo: string | null;
   position: string | null;
   currentTeam: { id: number; name: string; crest: string } | null;
   leagueTier: number;
@@ -718,6 +757,7 @@ export async function searchPlayersQuery(
       results.push({
         id: p.id,
         name: p.name,
+        photo: p.photo ?? null,
         position: p.position || null,
         currentTeam: p.currentTeam || null,
         leagueTier: p.leagueTier ?? 6,
@@ -901,6 +941,10 @@ export function groupMatchesByCompetition(matches: Match[]): Map<string, Match[]
     const existing = groups.get(key) || [];
     existing.push(match);
     groups.set(key, existing);
+  }
+  // Sort each group so most recent matches appear first (left in horizontal carousels)
+  for (const [key, group] of groups) {
+    groups.set(key, group.sort((a, b) => new Date(b.utcDate).getTime() - new Date(a.utcDate).getTime()));
   }
   return groups;
 }

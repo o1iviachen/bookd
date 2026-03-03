@@ -37,6 +37,7 @@ interface MatchEntry {
   latestReviewDate: Date;
   reviewId: string;
   totalReviews: number;
+  isJustLog: boolean;
 }
 
 export function GamesScreen({ route, navigation }: any) {
@@ -113,6 +114,7 @@ export function GamesScreen({ route, navigation }: any) {
         latestReviewDate: latest.createdAt,
         reviewId: rs.length === 1 ? rs[0].id : '',
         totalReviews: rs.length,
+        isJustLog: rs.length === 1 && rs[0].rating === 0 && !rs[0].text?.trim() && !rs[0].tags?.length && !rs[0].media?.length,
       };
     });
   }, [reviews, matchMap, avgRatingsMap]);
@@ -154,14 +156,20 @@ export function GamesScreen({ route, navigation }: any) {
   }, [entries, allMatches, filters, sort]);
 
   const handleMatchPress = useCallback((entry: MatchEntry) => {
-    navigation.navigate('MatchDetail', { matchId: entry.matchId });
-  }, [navigation]);
+    if (entry.totalReviews > 1) {
+      navigation.navigate('UserMatchReviews', { matchId: entry.matchId, userId: targetUserId, username: targetProfile?.username || '' });
+    } else if (entry.totalReviews === 1 && entry.reviewId && !entry.isJustLog) {
+      navigation.navigate('ReviewDetail', { reviewId: entry.reviewId });
+    } else {
+      navigation.navigate('MatchDetail', { matchId: entry.matchId });
+    }
+  }, [navigation, targetUserId, targetProfile]);
 
   if (isLoading) return <LoadingSpinner />;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
-      <ScreenHeader title="Games" onBack={() => navigation.goBack()} />
+      <ScreenHeader title="Matches" onBack={() => navigation.goBack()} />
 
       {/* Filters — same component as browse screens */}
       <MatchFilters

@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.backfillPlayerIds = exports.migratePlayerNames = exports.enrichPlayers = exports.enrichTeams = exports.buildPlayers = exports.migrateLeagueTier = exports.migrateSearchPrefixes = exports.fixPlayerNames = exports.migrateHasDetails = exports.syncDetailsForLeague = exports.manualSync = exports.buildTeams = exports.backfill = exports.detailBackfill = exports.liveSync = exports.dailySync = exports.moderateReviewMedia = exports.sendPushNotification = void 0;
+exports.backfillPlayerIds = exports.migratePlayerNames = exports.enrichPlayers = exports.enrichTeams = exports.buildPlayers = exports.migrateLeagueTier = exports.migrateSearchPrefixes = exports.fixPlayerNames = exports.migrateHasDetails = exports.syncDetailsForLeague = exports.manualSync = exports.buildTeams = exports.backfill = exports.detailBackfill = exports.liveSync = exports.dailySync = exports.backfillMatchDetailKickoffs = exports.submitReport = exports.deleteAccount = exports.moderateReviewMedia = exports.sendPushNotification = void 0;
 const functions = __importStar(require("firebase-functions"));
 const admin = __importStar(require("firebase-admin"));
 admin.initializeApp();
@@ -48,6 +48,63 @@ Object.defineProperty(exports, "sendPushNotification", { enumerable: true, get: 
 // ─── Content Moderation ───
 var moderateMedia_1 = require("./moderateMedia");
 Object.defineProperty(exports, "moderateReviewMedia", { enumerable: true, get: function () { return moderateMedia_1.moderateReviewMedia; } });
+// ─── User Account ───
+var user_1 = require("./user");
+Object.defineProperty(exports, "deleteAccount", { enumerable: true, get: function () { return user_1.deleteAccount; } });
+// ─── Reports ───
+var report_1 = require("./report");
+Object.defineProperty(exports, "submitReport", { enumerable: true, get: function () { return report_1.submitReport; } });
+/**
+ * One-time migration: backfill kickoff + season into matchDetails docs.
+ * Required so getMatchesForPerson can sort by kickoff DESC (most recent first).
+ * Safe to re-run — skips docs that already have a kickoff field.
+ *   GET /backfillMatchDetailKickoffs
+ */
+exports.backfillMatchDetailKickoffs = functions
+    .runWith({ timeoutSeconds: 540, memory: '512MB' })
+    .https.onRequest(async (_req, res) => {
+    var _a;
+    try {
+        const db = admin.firestore();
+        const BATCH_SIZE = 500;
+        let lastDoc = null;
+        let updated = 0;
+        let skipped = 0;
+        while (true) {
+            let q = db.collection('matchDetails').limit(BATCH_SIZE);
+            if (lastDoc)
+                q = q.startAfter(lastDoc);
+            const snap = await q.get();
+            if (snap.empty)
+                break;
+            const needsKickoff = snap.docs.filter((d) => !d.data().kickoff);
+            skipped += snap.docs.length - needsKickoff.length;
+            if (needsKickoff.length > 0) {
+                const matchRefs = needsKickoff.map((d) => db.collection('matches').doc(String(d.data().matchId)));
+                const matchSnaps = await db.getAll(...matchRefs);
+                const batch = db.batch();
+                for (let i = 0; i < needsKickoff.length; i++) {
+                    const matchData = matchSnaps[i].data();
+                    if (matchData === null || matchData === void 0 ? void 0 : matchData.kickoff) {
+                        batch.update(needsKickoff[i].ref, {
+                            kickoff: matchData.kickoff,
+                            season: (_a = matchData.season) !== null && _a !== void 0 ? _a : null,
+                        });
+                        updated++;
+                    }
+                }
+                await batch.commit();
+            }
+            lastDoc = snap.docs[snap.docs.length - 1];
+            console.log(`[backfillMatchDetailKickoffs] ${updated + skipped} processed (${updated} updated, ${skipped} skipped)`);
+        }
+        res.json({ success: true, updated, skipped, total: updated + skipped });
+    }
+    catch (err) {
+        console.error('[backfillMatchDetailKickoffs] Error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
 // ─── Scheduled Functions ───
 /**
  * Daily sync: runs at 06:00 UTC every day.
@@ -89,22 +146,22 @@ exports.liveSync = functions
     }
 });
 /**
- * Detail backfill: runs every 5 minutes.
+ * Detail backfill: runs every 2 minutes.
  * Queries matches with hasDetails == false to find exactly the ones needing work.
- * Processes ~7 matches per run (4 API calls each = ~28 calls/run).
- * 288 runs/day × ~7 matches = ~2,000 matches/day, within the 7,500 API calls/day quota.
+ * Processes ~28 matches per run (4 API calls each = ~112 calls/run).
+ * 720 runs/day × ~28 matches = ~20,160 matches/day, exactly 10x the original rate.
  * ~50 Firestore reads per run instead of ~55,000 with the old full-scan approach.
  */
 exports.detailBackfill = functions
     .runWith({ timeoutSeconds: 540, memory: '512MB' })
-    .pubsub.schedule('every 5 minutes')
+    .pubsub.schedule('every 2 minutes')
     .onRun(async () => {
     const db = admin.firestore();
     // Query only matches that are missing details
     const snapshot = await db.collection('matches')
         .where('status', '==', 'FINISHED')
         .where('hasDetails', '==', false)
-        .limit(7)
+        .limit(28)
         .get();
     if (snapshot.empty)
         return;

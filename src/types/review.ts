@@ -22,4 +22,5 @@ export interface Review {
   userVote: 'up' | 'down' | null;
   matchLabel?: string;
   flagged?: boolean;
+  motmPlayerId?: number;
 }

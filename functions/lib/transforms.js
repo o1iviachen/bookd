@@ -218,6 +218,8 @@ function transformFixtureDetails(fixtureId, lineups, events, stats, fixture) {
         playerIds.push(awayLineupData.coach.id);
     return {
         matchId: fixtureId,
+        kickoff: fixture.fixture.date,
+        season: fixture.league.season,
         playerIds,
         homeLineup: homeLineupData ? mapPlayers(homeLineupData.startXI) : [],
         homeBench: homeLineupData ? mapPlayers(homeLineupData.substitutes) : [],

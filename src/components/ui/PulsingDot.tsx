@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated } from 'react-native';
 
-export function PulsingDot({ size = 6 }: { size?: number }) {
+export function PulsingDot({ size = 6, color = '#00e054' }: { size?: number; color?: string }) {
   const opacity = useRef(new Animated.Value(1)).current;
   useEffect(() => {
     const anim = Animated.loop(
@@ -13,5 +13,5 @@ export function PulsingDot({ size = 6 }: { size?: number }) {
     anim.start();
     return () => anim.stop();
   }, [opacity]);
-  return <Animated.View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: '#00e054', opacity }} />;
+  return <Animated.View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: color, opacity }} />;
 }

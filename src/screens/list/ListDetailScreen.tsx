@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { View, Text, ScrollView, Pressable, Alert, Share, useWindowDimensions, TextInput as RNTextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -58,6 +58,7 @@ export function ListDetailScreen({ route, navigation }: any) {
   const [showLikes, setShowLikes] = useState(false);
   const [filters, setFilters] = useState<MatchFilterState>({ league: 'all', team: 'all', season: 'all' });
   const [commentText, setCommentText] = useState('');
+  const commentInputRef = useRef<RNTextInput | null>(null);
 
   const { data: listAuthorProfile } = useUserProfile(list?.userId || '');
   const listAuthorName = listAuthorProfile?.displayName || listAuthorProfile?.username || list?.username || '';
@@ -274,12 +275,12 @@ export function ListDetailScreen({ route, navigation }: any) {
                 <Text style={{ ...typography.caption, color: isLiked ? '#ef4444' : colors.textSecondary }}>{likeCount}</Text>
               </Pressable>
             )}
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <Pressable onPress={() => commentInputRef.current?.focus()} hitSlop={6} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
               <Ionicons name="chatbubble-outline" size={18} color={colors.textSecondary} />
               {(comments?.length || 0) > 0 && (
                 <Text style={{ ...typography.caption, color: colors.textSecondary }}>{comments?.length}</Text>
               )}
-            </View>
+            </Pressable>
             <Text style={{ ...typography.caption, color: colors.textSecondary }}>
               {list.matchIds.length} {list.matchIds.length === 1 ? 'match' : 'matches'}
             </Text>
@@ -451,6 +452,7 @@ export function ListDetailScreen({ route, navigation }: any) {
               onChangeText={setCommentText}
               placeholder="Add a comment..."
               maxLength={500}
+              inputRef={commentInputRef}
               containerStyle={{ flex: 1 }}
               inputStyle={{
                 backgroundColor: colors.muted,

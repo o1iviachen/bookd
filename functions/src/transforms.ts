@@ -228,6 +228,8 @@ export function transformFixtureDetails(
 
   return {
     matchId: fixtureId,
+    kickoff: fixture.fixture.date,
+    season: fixture.league.season,
     playerIds,
     homeLineup: homeLineupData ? mapPlayers(homeLineupData.startXI) : [],
     homeBench: homeLineupData ? mapPlayers(homeLineupData.substitutes) : [],

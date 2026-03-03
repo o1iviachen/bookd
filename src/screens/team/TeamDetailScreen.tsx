@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import PagerView from 'react-native-pager-view';
+import { useQuery } from '@tanstack/react-query';
 import { useTheme } from '../../context/ThemeContext';
 import { useTeamDetail, useTeamMatches } from '../../hooks/useTeams';
 import { MatchPosterCard } from '../../components/match/MatchPosterCard';
@@ -12,6 +13,10 @@ import { Select } from '../../components/ui/Select';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { shortName } from '../../utils/formatName';
+import { nationalityFlag } from '../../utils/flagEmoji';
+import { RatingChart } from '../../components/profile/RatingChart';
+import { useReviewsForMatches } from '../../hooks/useReviews';
+import { getFollowedTeamIdsForUsers } from '../../services/firestore/users';
 
 type SortKey = 'recent_played' | 'oldest';
 
@@ -39,12 +44,50 @@ export function TeamDetailScreen({ route, navigation }: any) {
 
   const [sort, setSort] = useState<SortKey>('recent_played');
   const [filters, setFilters] = useState<MatchFilterState>({ league: 'all', team: 'all', season: 'all' });
+  const [chartSeason, setChartSeason] = useState('2025/26');
 
   const GAP = spacing.sm;
   const COLUMNS = 3;
   const POSTER_WIDTH = (screenWidth - spacing.md * 2 - GAP * (COLUMNS - 1)) / COLUMNS;
 
   const allMatches = useMemo(() => matches || [], [matches]);
+
+  const matchIds = useMemo(() => allMatches.map((m) => m.id), [allMatches]);
+  const { data: teamReviews } = useReviewsForMatches(matchIds);
+
+  // Map matchId → season string for chart filtering
+  const matchSeasonMap = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const m of allMatches) {
+      const kickoff = new Date(m.kickoff);
+      const year = kickoff.getFullYear();
+      const month = kickoff.getMonth();
+      const seasonStart = month >= 7 ? year : year - 1;
+      map.set(m.id, `${seasonStart}/${(seasonStart + 1).toString().slice(2)}`);
+    }
+    return map;
+  }, [allMatches]);
+
+  const availableSeasons = useMemo(() => {
+    const set = new Set<string>();
+    for (const season of matchSeasonMap.values()) set.add(season);
+    return Array.from(set).sort().reverse();
+  }, [matchSeasonMap]);
+
+  const chartReviews = useMemo(() => {
+    if (!teamReviews) return [];
+    if (chartSeason === 'all') return teamReviews;
+    return teamReviews.filter((r) => matchSeasonMap.get(r.matchId) === chartSeason);
+  }, [teamReviews, chartSeason, matchSeasonMap]);
+
+  // Fetch reviewer team allegiances for fan filter
+  const reviewerUserIds = useMemo(() => [...new Set((teamReviews || []).map((r) => r.userId))], [teamReviews]);
+  const { data: reviewerTeamMap } = useQuery({
+    queryKey: ['reviewerTeams', ...reviewerUserIds],
+    queryFn: () => getFollowedTeamIdsForUsers(reviewerUserIds),
+    enabled: reviewerUserIds.length > 0,
+    staleTime: 5 * 60 * 1000,
+  });
 
   // Apply filters and sort
   const filteredMatches = useMemo(() => {
@@ -103,7 +146,7 @@ export function TeamDetailScreen({ route, navigation }: any) {
           contentFit="contain"
         />
         <Text style={{ ...typography.h3, color: colors.foreground }}>
-          {teamDetail?.name || teamName}
+          {teamName}
         </Text>
       </View>
 
@@ -161,7 +204,6 @@ export function TeamDetailScreen({ route, navigation }: any) {
                   onFiltersChange={setFilters}
                   matches={allMatches}
                   showMinLogs={false}
-                  showTeamFilter={false}
                 />
 
                 {/* Sort + count row */}
@@ -230,7 +272,9 @@ export function TeamDetailScreen({ route, navigation }: any) {
                       >
                         <Text style={{ ...typography.body, color: colors.foreground, flex: 1 }}>{shortName(player.name)}</Text>
                         {player.nationality ? (
-                          <Text style={{ ...typography.caption, color: colors.textSecondary }}>{player.nationality}</Text>
+                          <Text style={{ ...typography.caption, color: colors.textSecondary }}>
+                            {nationalityFlag(player.nationality) ? `${nationalityFlag(player.nationality)} ` : ''}{player.nationality}
+                          </Text>
                         ) : null}
                         <Ionicons name="chevron-forward" size={14} color={colors.textSecondary} style={{ marginLeft: spacing.sm }} />
                       </Pressable>
@@ -250,6 +294,34 @@ export function TeamDetailScreen({ route, navigation }: any) {
                 <View style={{ paddingVertical: spacing.xxl }}><LoadingSpinner fullScreen={false} /></View>
               ) : teamDetail ? (
                 <View style={{ gap: spacing.md }}>
+                  {/* Rating chart with season filter */}
+                  <View style={{ marginHorizontal: -spacing.md }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingBottom: spacing.xs }}>
+                      <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1 }}>
+                        Match Ratings
+                      </Text>
+                      {availableSeasons.length > 0 && (
+                        <View style={{ width: 130 }}>
+                          <Select
+                            value={chartSeason}
+                            onValueChange={setChartSeason}
+                            title="Season"
+                            options={[
+                              { value: 'all', label: 'All Seasons' },
+                              ...availableSeasons.map((s) => ({ value: s, label: s })),
+                            ]}
+                          />
+                        </View>
+                      )}
+                    </View>
+                    <RatingChart
+                      reviews={chartReviews}
+                      showStats
+                      homeTeamName={teamName}
+                      reviewerTeamMap={reviewerTeamMap}
+                    />
+                  </View>
+
                   {/* Coach */}
                   {teamDetail.coach && (
                     <Pressable

@@ -3,8 +3,8 @@
 export const API_FOOTBALL_KEY = process.env.API_FOOTBALL_KEY || '';
 export const API_FOOTBALL_BASE = 'https://v3.football.api-sports.io';
 
-// Rate limit: 300 req/min on the $19/mo plan
-export const RATE_LIMIT_DELAY_MS = 250; // ~240 req/min to stay safe
+// Rate limit: 450 req/min on the Ultra Plan
+export const RATE_LIMIT_DELAY_MS = 135; // ~444 req/min to stay safe
 
 // Leagues to sync — API-Football league IDs
 // Format: { code: string (our internal code), apiId: number, name: string, country: string }

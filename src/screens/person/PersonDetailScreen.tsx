@@ -2,14 +2,16 @@ import React, { useState, useMemo } from 'react';
 import { View, Text, ScrollView, Pressable, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
 import { useTheme } from '../../context/ThemeContext';
 import { usePersonDetail } from '../../hooks/usePeople';
 import { usePersonMatches } from '../../hooks/useTeams';
 import { MatchPosterCard } from '../../components/match/MatchPosterCard';
+import { TeamLogo } from '../../components/match/TeamLogo';
 import { MatchFilters, MatchFilterState, applyMatchFilters } from '../../components/match/MatchFilters';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
+import { Avatar } from '../../components/ui/Avatar';
 import { shortName } from '../../utils/formatName';
+import { nationalityFlag } from '../../utils/flagEmoji';
 
 export function PersonDetailScreen({ route, navigation }: any) {
   const { theme, isDark } = useTheme();
@@ -68,7 +70,7 @@ export function PersonDetailScreen({ route, navigation }: any) {
           <Ionicons name="arrow-back" size={22} color={colors.foreground} />
         </Pressable>
         <Text style={{ ...typography.bodyBold, color: colors.foreground, flex: 1, textAlign: 'center', fontSize: 17 }} numberOfLines={1}>
-          {personName}
+          {person?.name ? shortName(person.name) : personName}
         </Text>
         <View style={{ width: 22 }} />
       </View>
@@ -81,17 +83,7 @@ export function PersonDetailScreen({ route, navigation }: any) {
           ) : person ? (
             <View style={{ flexDirection: 'row', gap: spacing.md }}>
               {/* Photo */}
-              {person.photo ? (
-                <Image
-                  source={{ uri: person.photo }}
-                  style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: colors.muted }}
-                  contentFit="cover"
-                />
-              ) : (
-                <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: colors.muted, alignItems: 'center', justifyContent: 'center' }}>
-                  <Ionicons name="person" size={28} color={colors.textSecondary} />
-                </View>
-              )}
+              <Avatar uri={person.photo} name={person.name} size={64} />
 
               {/* Info column */}
               <View style={{ flex: 1 }}>
@@ -113,7 +105,9 @@ export function PersonDetailScreen({ route, navigation }: any) {
                   )}
                   {person.nationality && (
                     <View style={{ backgroundColor: colors.muted, paddingHorizontal: 10, paddingVertical: 3, borderRadius: borderRadius.full }}>
-                      <Text style={{ fontSize: 11, fontWeight: '500', color: colors.foreground }}>{person.nationality}</Text>
+                      <Text style={{ fontSize: 11, fontWeight: '500', color: colors.foreground }}>
+                        {nationalityFlag(person.nationality) ? `${nationalityFlag(person.nationality)} ` : ''}{person.nationality}
+                      </Text>
                     </View>
                   )}
                   {!isManager && person.shirtNumber != null && (
@@ -139,7 +133,7 @@ export function PersonDetailScreen({ route, navigation }: any) {
                         opacity: pressed ? 0.7 : 1,
                       })}
                     >
-                      <Image source={{ uri: person.currentTeam.crest }} style={{ width: 20, height: 20 }} contentFit="contain" />
+                      <TeamLogo uri={person.currentTeam.crest} size={20} />
                       <Text style={{ ...typography.caption, color: colors.foreground, flex: 1 }}>{person.currentTeam.name}</Text>
                       <Ionicons name="chevron-forward" size={12} color={colors.textSecondary} />
                     </Pressable>

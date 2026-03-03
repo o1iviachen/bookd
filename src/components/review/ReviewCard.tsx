@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, Pressable, ScrollView } from 'react-native';
+import { View, Text, Pressable, ScrollView, Share } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
@@ -49,6 +49,17 @@ export function ReviewCard({ review, onPress, commentCount, isLast }: ReviewCard
       userId: user.uid,
       voteType: 'up',
     });
+  };
+
+  const handleShare = () => {
+    const matchLabel = review.matchLabel || `Match #${review.matchId}`;
+    const stars = review.rating > 0
+      ? '★'.repeat(Math.floor(review.rating)) + (review.rating % 1 >= 0.5 ? '½' : '')
+      : null;
+    const line1 = stars
+      ? `A ${stars} review of ${matchLabel} by @${displayUsername} on bookd:`
+      : `@${displayUsername}'s review of ${matchLabel} on bookd:`;
+    Share.share({ message: `${line1}\nbookd://review/${review.id}` });
   };
 
   return (
@@ -186,6 +197,9 @@ export function ReviewCard({ review, onPress, commentCount, isLast }: ReviewCard
               <Text style={{ ...typography.caption, color: colors.textSecondary }}>{commentCount}</Text>
             )}
           </View>
+          <Pressable onPress={handleShare} hitSlop={8}>
+            <Ionicons name="share-social-outline" size={16} color={colors.textSecondary} />
+          </Pressable>
         </View>
       </Pressable>
       {!isLast && (
