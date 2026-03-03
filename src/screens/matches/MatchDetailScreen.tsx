@@ -1,15 +1,12 @@
-import React, { useState, useMemo, useRef, useCallback } from 'react';
-import { View, Text, Pressable, Share, ScrollView, useWindowDimensions } from 'react-native';
-import ViewShot, { captureRef } from 'react-native-view-shot';
-import * as Sharing from 'expo-sharing';
-import PagerView from 'react-native-pager-view';
+import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
+import { View, Text, Pressable, ScrollView, Animated, useWindowDimensions, Share } from 'react-native';
 import { Select } from '../../components/ui/Select';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
-import { useQueries } from '@tanstack/react-query';
+import { useQueries, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useMatch, useMatchDetail } from '../../hooks/useMatches';
@@ -40,6 +37,11 @@ type Props = NativeStackScreenProps<MatchesStackParamList, 'MatchDetail'>;
 
 const FALLBACK_STADIUM = 'https://upload.wikimedia.org/wikipedia/commons/thumb/d/d2/London_Wembley.jpg/1280px-London_Wembley.jpg';
 
+const HERO_HEIGHT = 320;
+const COMP_ROW_HEIGHT = 28;
+const TAB_BAR_HEIGHT = 44;
+const STICKY_NAV_HEIGHT = 44;
+
 export function MatchDetailScreen({ route, navigation }: Props) {
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
@@ -48,9 +50,10 @@ export function MatchDetailScreen({ route, navigation }: Props) {
   const [showListModal, setShowListModal] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [activeTabIndex, setActiveTabIndex] = useState(0);
-  const pagerRef = useRef<PagerView>(null);
-  const posterRef = useRef<ViewShot>(null);
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const horizontalRef = useRef<ScrollView>(null);
   const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
 
   const MATCH_TABS: { key: MatchTab; label: string }[] = [
     { key: 'reviews', label: 'Reviews' },
@@ -60,12 +63,49 @@ export function MatchDetailScreen({ route, navigation }: Props) {
 
   const handleTabPress = useCallback((index: number) => {
     setActiveTabIndex(index);
-    pagerRef.current?.setPage(index);
-  }, []);
+    horizontalRef.current?.scrollTo({ x: index * screenWidth, animated: true });
+  }, [screenWidth]);
 
-  const handlePageSelected = useCallback((e: any) => {
-    setActiveTabIndex(e.nativeEvent.position);
-  }, []);
+  const handleHorizontalScroll = useCallback((e: any) => {
+    const page = Math.round(e.nativeEvent.contentOffset.x / screenWidth);
+    setActiveTabIndex(page);
+  }, [screenWidth]);
+
+  const handleScroll = useMemo(
+    () => Animated.event(
+      [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+      { useNativeDriver: true },
+    ),
+    [scrollY],
+  );
+
+  const queryClient = useQueryClient();
+
+  // How far the user must scroll before the sticky mini-header appears
+  // (entire header scrolls away: hero + comp row + tab bar)
+  const collapseDistance = useMemo(
+    () => HERO_HEIGHT + COMP_ROW_HEIGHT + TAB_BAR_HEIGHT - insets.top - STICKY_NAV_HEIGHT,
+    [insets.top],
+  );
+
+  // Sticky mini-header fades in once the original header is mostly gone
+  const stickyHeaderOpacity = useMemo(
+    () => scrollY.interpolate({
+      inputRange: [collapseDistance - 60, collapseDistance],
+      outputRange: [0, 1],
+      extrapolate: 'clamp',
+    }),
+    [collapseDistance],
+  );
+
+  // Track whether header is collapsed for pointer events on sticky nav
+  const [headerCollapsed, setHeaderCollapsed] = useState(false);
+  useEffect(() => {
+    const id = scrollY.addListener(({ value }) => {
+      setHeaderCollapsed(value >= collapseDistance - 10);
+    });
+    return () => scrollY.removeListener(id);
+  }, [collapseDistance]);
 
   const { data: match, isLoading } = useMatch(matchId);
   const { data: reviews } = useReviewsForMatch(matchId);
@@ -76,6 +116,17 @@ export function MatchDetailScreen({ route, navigation }: Props) {
   // Fetch reviewer team affiliations for ratings filter
   const reviewerUserIds = useMemo(() => (reviews || []).map((r) => r.userId), [reviews]);
   const { data: reviewerTeamMap } = useReviewerTeamIds(reviewerUserIds);
+
+  const handleRefresh = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['match', matchId] });
+    queryClient.invalidateQueries({ queryKey: ['reviews', 'match', matchId] });
+    queryClient.invalidateQueries({ queryKey: ['matchDetail', matchId] });
+    queryClient.invalidateQueries({ queryKey: ['lists', 'match', matchId] });
+  }, [queryClient, matchId]);
+
+  const handleScrollEndDrag = useCallback((e: any) => {
+    if (e.nativeEvent.contentOffset.y < -80) handleRefresh();
+  }, [handleRefresh]);
 
   if (isLoading || !match) {
     return <LoadingSpinner />;
@@ -89,80 +140,59 @@ export function MatchDetailScreen({ route, navigation }: Props) {
 
   const stadiumUrl = getStadiumImageUrl(match.homeTeam.id);
 
-  const handleShare = async () => {
-    try {
-      // Try to capture poster as image first
-      if (posterRef.current) {
-        const uri = await captureRef(posterRef, { format: 'png', quality: 1 });
-        if (uri && await Sharing.isAvailableAsync()) {
-          await Sharing.shareAsync(uri, { mimeType: 'image/png', dialogTitle: 'Share match' });
-          return;
-        }
-      }
-    } catch {}
-    // Fallback to text share
-    let message: string;
-    if (isFinished || isLive) {
-      message = `Check out ${match.homeTeam.shortName} ${match.homeScore} - ${match.awayScore} ${match.awayTeam.shortName} on bookd!`;
-    } else {
-      message = `Check out ${match.homeTeam.shortName} vs ${match.awayTeam.shortName} on bookd!`;
-    }
-    message += `\n${match.competition.name} · ${formatFullDate(match.kickoff)}`;
-    try {
-      await Share.share({ message });
-    } catch {}
+  const handleShare = () => {
+    const label = (isFinished || isLive)
+      ? `${match.homeTeam.shortName} ${match.homeScore} - ${match.awayScore} ${match.awayTeam.shortName} · ${match.competition.name} on bookd`
+      : `${match.homeTeam.shortName} vs ${match.awayTeam.shortName} · ${match.competition.name} on bookd`;
+    Share.share({ message: `${label}: bookd://match/${matchId}` });
   };
 
-  return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
-      {/* Fixed gradient overlay behind status bar — stays pinned on scroll */}
-      <LinearGradient
-        colors={['rgba(0,0,0,0.6)', 'rgba(0,0,0,0.3)', 'transparent']}
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          height: insets.top + 40,
-          zIndex: 20,
-        }}
-        pointerEvents="none"
-      />
+  const stickyScoreText = (isFinished || isLive)
+    ? `${match.homeTeam.shortName}  ${match.homeScore} - ${match.awayScore}  ${match.awayTeam.shortName}`
+    : `${match.homeTeam.shortName}  vs  ${match.awayTeam.shortName}`;
 
-      {/* Hero area with stadium background */}
-      <View style={{ height: 320, backgroundColor: colors.background, overflow: 'visible' }}>
-        <View
+  // Header rendered inside each ScrollView — scrolls naturally with content
+  const renderMatchHeader = () => (
+    <>
+      {/* Hero area with stadium background — stretchy parallax on pull-down */}
+      <View style={{ height: HERO_HEIGHT, backgroundColor: colors.background, overflow: 'visible' }}>
+        <Animated.View
+          pointerEvents="none"
           style={{
             position: 'absolute',
             top: 0,
             left: 0,
             right: 0,
-            height: 320,
+            height: HERO_HEIGHT,
+            transform: [
+              {
+                translateY: scrollY.interpolate({
+                  inputRange: [-HERO_HEIGHT, 0],
+                  outputRange: [-HERO_HEIGHT / 2, 0],
+                  extrapolateRight: 'clamp',
+                }),
+              },
+              {
+                scale: scrollY.interpolate({
+                  inputRange: [-HERO_HEIGHT, 0],
+                  outputRange: [2, 1],
+                  extrapolateRight: 'clamp',
+                }),
+              },
+            ],
           }}
         >
           <Image
             source={{ uri: stadiumUrl || FALLBACK_STADIUM }}
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-            }}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
             contentFit="cover"
             transition={300}
           />
           <LinearGradient
             colors={['rgba(0,0,0,0.3)', 'rgba(0,0,0,0.5)']}
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-            }}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
           />
-        </View>
+        </Animated.View>
 
         {/* Back button overlay */}
         <Pressable
@@ -221,32 +251,21 @@ export function MatchDetailScreen({ route, navigation }: Props) {
           colors={['transparent', `${colors.background}40`, `${colors.background}99`, `${colors.background}cc`, colors.background]}
           locations={[0, 0.3, 0.55, 0.75, 1]}
           style={{
-            position: 'absolute',
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: 200,
-            justifyContent: 'flex-end',
-            alignItems: 'center',
-            paddingBottom: spacing.xs,
+            position: 'absolute', bottom: 0, left: 0, right: 0, height: 200,
+            justifyContent: 'flex-end', alignItems: 'center', paddingBottom: spacing.xs,
           }}
         >
-          {/* Score */}
           {(isFinished || isLive) ? (
             <>
               <View style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'stretch', paddingHorizontal: spacing.md }}>
                 <Pressable onPress={() => (navigation as any).navigate('TeamDetail', { teamId: match.homeTeam.id, teamName: match.homeTeam.name, teamCrest: match.homeTeam.crest })} style={{ flex: 1 }}>
-                  <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 16, textAlign: 'right' }} numberOfLines={1}>
-                    {match.homeTeam.shortName}
-                  </Text>
+                  <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 16, textAlign: 'right' }} numberOfLines={1}>{match.homeTeam.shortName}</Text>
                 </Pressable>
                 <Text style={{ fontSize: 40, fontWeight: '700', color: colors.primary, paddingHorizontal: spacing.md }}>
                   {match.homeScore} - {match.awayScore}
                 </Text>
                 <Pressable onPress={() => (navigation as any).navigate('TeamDetail', { teamId: match.awayTeam.id, teamName: match.awayTeam.name, teamCrest: match.awayTeam.crest })} style={{ flex: 1 }}>
-                  <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 16, textAlign: 'left' }} numberOfLines={1}>
-                    {match.awayTeam.shortName}
-                  </Text>
+                  <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 16, textAlign: 'left' }} numberOfLines={1}>{match.awayTeam.shortName}</Text>
                 </Pressable>
               </View>
               {isLive && (
@@ -262,15 +281,11 @@ export function MatchDetailScreen({ route, navigation }: Props) {
             <>
               <View style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'stretch', paddingHorizontal: spacing.md }}>
                 <Pressable onPress={() => (navigation as any).navigate('TeamDetail', { teamId: match.homeTeam.id, teamName: match.homeTeam.name, teamCrest: match.homeTeam.crest })} style={{ flex: 1 }}>
-                  <Text style={{ ...typography.bodyBold, color: colors.foreground, textAlign: 'right' }} numberOfLines={1}>
-                    {match.homeTeam.shortName}
-                  </Text>
+                  <Text style={{ ...typography.bodyBold, color: colors.foreground, textAlign: 'right' }} numberOfLines={1}>{match.homeTeam.shortName}</Text>
                 </Pressable>
                 <Text style={{ ...typography.h2, color: colors.textSecondary, paddingHorizontal: spacing.md }}>vs</Text>
                 <Pressable onPress={() => (navigation as any).navigate('TeamDetail', { teamId: match.awayTeam.id, teamName: match.awayTeam.name, teamCrest: match.awayTeam.crest })} style={{ flex: 1 }}>
-                  <Text style={{ ...typography.bodyBold, color: colors.foreground, textAlign: 'left' }} numberOfLines={1}>
-                    {match.awayTeam.shortName}
-                  </Text>
+                  <Text style={{ ...typography.bodyBold, color: colors.foreground, textAlign: 'left' }} numberOfLines={1}>{match.awayTeam.shortName}</Text>
                 </Pressable>
               </View>
               <Text style={{ ...typography.caption, color: colors.textSecondary, marginTop: 4 }}>
@@ -284,7 +299,7 @@ export function MatchDetailScreen({ route, navigation }: Props) {
       {/* Competition + date */}
       <Pressable
         onPress={() => (navigation as any).navigate('LeagueDetail', { competitionCode: match.competition.code, competitionName: match.competition.name, competitionEmblem: match.competition.emblem })}
-        style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, paddingBottom: spacing.xs, opacity: pressed ? 0.7 : 1 })}
+        style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, paddingBottom: spacing.xs, backgroundColor: colors.background, opacity: pressed ? 0.7 : 1 })}
       >
         <View style={{ backgroundColor: '#fff', borderRadius: 4, padding: 2 }}>
           <TeamLogo uri={match.competition.emblem} size={16} />
@@ -295,7 +310,7 @@ export function MatchDetailScreen({ route, navigation }: Props) {
       </Pressable>
 
       {/* Tab bar */}
-      <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: colors.border }}>
+      <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.background }}>
         {MATCH_TABS.map((tab, i) => {
           const isActive = activeTabIndex === i;
           return (
@@ -322,17 +337,35 @@ export function MatchDetailScreen({ route, navigation }: Props) {
           );
         })}
       </View>
+    </>
+  );
 
-      {/* Swipeable tab content */}
-      <PagerView
-        ref={pagerRef}
-        style={{ flex: 1 }}
-        initialPage={0}
-        onPageSelected={handlePageSelected}
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      {/* ─── Single ScrollView with header + active tab content ─── */}
+      <Animated.ScrollView
+        style={{ backgroundColor: colors.background }}
+        indicatorStyle={isDark ? 'white' : 'default'}
+        contentContainerStyle={{ paddingBottom: 40 }}
+        onScroll={handleScroll}
+        onScrollEndDrag={handleScrollEndDrag}
+        scrollEventThrottle={16}
+        bounces
       >
-        {/* ─── Reviews Page ─── */}
-        <View key="reviews" style={{ flex: 1 }}>
-          <ScrollView indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: 40 }} nestedScrollEnabled>
+        {renderMatchHeader()}
+
+        {/* ─── Horizontal paging for tab content ─── */}
+        <ScrollView
+          ref={horizontalRef}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          nestedScrollEnabled
+          onScroll={handleHorizontalScroll}
+          scrollEventThrottle={16}
+        >
+          {/* ─── Reviews tab ─── */}
+          <View style={{ width: screenWidth }}>
             {/* Stats row */}
             {isFinished && reviews && reviews.length > 0 && (
               <View style={{ flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.md, marginTop: spacing.sm, marginBottom: spacing.md }}>
@@ -431,23 +464,75 @@ export function MatchDetailScreen({ route, navigation }: Props) {
             {isFinished && (
               <ReviewsSection reviews={reviews || []} userId={user?.uid} profile={profile} colors={colors} spacing={spacing} typography={typography} borderRadius={borderRadius} navigation={navigation} />
             )}
-          </ScrollView>
-        </View>
+          </View>
 
-        {/* ─── Lineup Page ─── */}
-        <View key="lineup" style={{ flex: 1 }}>
-          <ScrollView indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: 40 }} nestedScrollEnabled>
+          {/* ─── Lineup tab ─── */}
+          <View style={{ width: screenWidth }}>
             <LineupSection matchDetail={matchDetail || null} match={match} colors={colors} spacing={spacing} typography={typography} navigation={navigation} />
-          </ScrollView>
-        </View>
+          </View>
 
-        {/* ─── Info Page ─── */}
-        <View key="info" style={{ flex: 1 }}>
-          <ScrollView indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: 40 }} nestedScrollEnabled>
+          {/* ─── Info tab ─── */}
+          <View style={{ width: screenWidth }}>
             <InfoSection matchDetail={matchDetail || null} match={match} colors={colors} spacing={spacing} typography={typography} borderRadius={borderRadius} navigation={navigation} />
-          </ScrollView>
+          </View>
+        </ScrollView>
+      </Animated.ScrollView>
+
+      {/* ─── Sticky mini-header — fades in when hero scrolls away ─── */}
+      <Animated.View
+        pointerEvents={headerCollapsed ? 'auto' : 'none'}
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 25,
+          opacity: stickyHeaderOpacity,
+        }}
+      >
+        <View style={{
+          paddingTop: insets.top,
+          height: insets.top + STICKY_NAV_HEIGHT,
+          backgroundColor: colors.background,
+          flexDirection: 'row',
+          alignItems: 'center',
+          paddingHorizontal: spacing.md,
+          borderBottomWidth: 1,
+          borderBottomColor: colors.border,
+        }}>
+          <Pressable
+            onPress={() => navigation.goBack()}
+            style={{ padding: spacing.xs, marginRight: spacing.sm }}
+          >
+            <Ionicons name="arrow-back" size={22} color={colors.foreground} />
+          </Pressable>
+          <View style={{ flex: 1, alignItems: 'center' }}>
+            <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 15 }} numberOfLines={1}>
+              {stickyScoreText}
+            </Text>
+          </View>
+          <Pressable
+            onPress={() => setShowMenu(true)}
+            style={{ padding: spacing.xs, marginLeft: spacing.sm }}
+          >
+            <Ionicons name="ellipsis-horizontal" size={22} color={colors.foreground} />
+          </Pressable>
         </View>
-      </PagerView>
+      </Animated.View>
+
+      {/* Fixed gradient overlay behind status bar */}
+      <LinearGradient
+        colors={['rgba(0,0,0,0.6)', 'rgba(0,0,0,0.3)', 'transparent']}
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: insets.top + 40,
+          zIndex: 20,
+        }}
+        pointerEvents="none"
+      />
 
       {/* Three-dot menu */}
       <ActionMenu
@@ -455,7 +540,7 @@ export function MatchDetailScreen({ route, navigation }: Props) {
         onClose={() => setShowMenu(false)}
         items={[
           { label: 'Add to list', icon: 'list-outline', onPress: () => { setShowMenu(false); setShowListModal(true); } },
-          { label: 'Share', icon: 'share-outline', onPress: () => { setShowMenu(false); handleShare(); } },
+          { label: 'Share', icon: 'share-social-outline', onPress: () => { setShowMenu(false); setTimeout(handleShare, 300); } },
         ]}
       />
 
@@ -466,15 +551,6 @@ export function MatchDetailScreen({ route, navigation }: Props) {
         matchId={matchId}
       />
 
-      {/* Off-screen poster for share capture */}
-      <ViewShot ref={posterRef} options={{ format: 'png', quality: 1 }} style={{ position: 'absolute', top: -9999, left: -9999 }}>
-        <View style={{ backgroundColor: colors.background, padding: 16, alignItems: 'center' }}>
-          <MatchPosterCard match={match} width={300} />
-          <Text style={{ fontSize: 10, fontWeight: '600', color: colors.textSecondary, marginTop: 8, letterSpacing: 1 }}>
-            bookd
-          </Text>
-        </View>
-      </ViewShot>
     </View>
   );
 }
@@ -641,7 +717,7 @@ function ReviewsSection({ reviews, userId, profile, colors, spacing, typography,
     <View style={{ marginTop: spacing.lg }}>
       {/* Header */}
       <Text style={{ ...typography.h4, color: colors.foreground, marginBottom: spacing.sm, paddingHorizontal: spacing.md }}>
-        Reviews {reviews.length > 0 ? `(${reviews.length})` : ''}
+        Reviews {filteredReviews.length > 0 ? `(${filteredReviews.length})` : ''}
       </Text>
 
       {/* Filter tabs + Sort dropdown row */}
@@ -731,15 +807,19 @@ function buildPlayerEvents(
   bookings: MatchBooking[],
   substitutions: MatchSubstitution[],
 ) {
-  const map = new Map<number, { goals: number; yellowCard: boolean; redCard: boolean; subbedOutMin: number | null }>();
+  const map = new Map<number, { goals: number; ownGoals: number; yellowCard: boolean; redCard: boolean; subbedOutMin: number | null }>();
 
   const getOrCreate = (id: number) => {
-    if (!map.has(id)) map.set(id, { goals: 0, yellowCard: false, redCard: false, subbedOutMin: null });
+    if (!map.has(id)) map.set(id, { goals: 0, ownGoals: 0, yellowCard: false, redCard: false, subbedOutMin: null });
     return map.get(id)!;
   };
 
   for (const g of goals) {
-    getOrCreate(g.scorer.id).goals++;
+    if (g.detail === 'Own Goal') {
+      getOrCreate(g.scorer.id).ownGoals++;
+    } else {
+      getOrCreate(g.scorer.id).goals++;
+    }
   }
   for (const b of bookings) {
     const entry = getOrCreate(b.player.id);
@@ -773,7 +853,7 @@ function PitchPlayerDot({
   player: MatchPlayer;
   x: number; y: number;
   teamColor: string;
-  events: { goals: number; yellowCard: boolean; redCard: boolean; subbedOutMin: number | null } | undefined;
+  events: { goals: number; ownGoals: number; yellowCard: boolean; redCard: boolean; subbedOutMin: number | null } | undefined;
   onPress: () => void;
 }) {
   const DOT_SIZE = 36;
@@ -781,7 +861,7 @@ function PitchPlayerDot({
   // Show last name only for pitch diagram
   const displayName = lastName(player.name);
 
-  const hasEvents = events && (events.goals > 0 || events.yellowCard || events.redCard || events.subbedOutMin !== null);
+  const hasEvents = events && (events.goals > 0 || events.ownGoals > 0 || events.yellowCard || events.redCard || events.subbedOutMin !== null);
 
   return (
     <Pressable
@@ -813,6 +893,12 @@ function PitchPlayerDot({
         {/* Goal — top left, overlapping circle */}
         {events && events.goals > 0 && (
           <View style={{ position: 'absolute', top: -1, left: -1 }}>
+            <Text style={{ fontSize: 11 }}>⚽</Text>
+          </View>
+        )}
+        {/* Own goal — top left with red circle behind ball */}
+        {events && events.ownGoals > 0 && (
+          <View style={{ position: 'absolute', top: -2, left: -2, width: 16, height: 16, borderRadius: 8, backgroundColor: 'rgba(239, 68, 68, 0.45)', alignItems: 'center', justifyContent: 'center' }}>
             <Text style={{ fontSize: 11 }}>⚽</Text>
           </View>
         )}

@@ -52,7 +52,14 @@ const MatchDayPage = React.memo(function MatchDayPage({
   const navigation = useNavigation<Nav>();
   const [favouritesExpanded, setFavouritesExpanded] = useState(true);
 
-  const { data: matches, isLoading, refetch, isRefetching } = useMatchesByDate(date, active);
+  const { data: matches, isLoading, refetch } = useMatchesByDate(date, active);
+  const [manualRefreshing, setManualRefreshing] = useState(false);
+
+  const handleRefresh = useCallback(async () => {
+    setManualRefreshing(true);
+    await refetch();
+    setManualRefreshing(false);
+  }, [refetch]);
 
   const filteredMatches = useMemo(() => {
     if (!matches) return [];
@@ -105,7 +112,7 @@ const MatchDayPage = React.memo(function MatchDayPage({
       nestedScrollEnabled
       contentContainerStyle={{ paddingBottom: 40, paddingTop: spacing.sm }}
       refreshControl={
-        <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#fff" colors={['#fff']} />
+        <RefreshControl refreshing={manualRefreshing} onRefresh={handleRefresh} tintColor="#fff" colors={['#fff']} />
       }
     >
       {isLoading ? (

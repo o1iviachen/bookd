@@ -27,6 +27,7 @@ import { MyListsScreen } from '../screens/profile/MyListsScreen';
 import { LikesScreen } from '../screens/profile/LikesScreen';
 import { TagsScreen } from '../screens/profile/TagsScreen';
 import { TagMatchesScreen } from '../screens/profile/TagMatchesScreen';
+import { EditListScreen } from '../screens/list/EditListScreen';
 import { useTheme } from '../context/ThemeContext';
 
 const Stack = createNativeStackNavigator<SearchStackParamList>();
@@ -67,6 +68,7 @@ export function SearchStack() {
       <Stack.Screen name="Likes" component={LikesScreen} />
       <Stack.Screen name="Tags" component={TagsScreen} />
       <Stack.Screen name="TagMatches" component={TagMatchesScreen} />
+      <Stack.Screen name="EditList" component={EditListScreen} />
     </Stack.Navigator>
   );
 }

@@ -118,9 +118,6 @@ export function DiaryScreen({ route, navigation }: any) {
                 onPress={() =>
                   navigation.navigate('ReviewDetail', { reviewId: review.id })
                 }
-                onMatchPress={() =>
-                  match && navigation.navigate('MatchDetail', { matchId: match.id })
-                }
               />
             );
           }}

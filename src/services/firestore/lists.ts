@@ -10,6 +10,7 @@ import {
   where,
   orderBy,
   limit,
+  startAfter,
   serverTimestamp,
   arrayUnion,
   arrayRemove,
@@ -75,6 +76,48 @@ export async function getRecentLists(): Promise<MatchList[]> {
   );
   const snapshot = await getDocs(q);
   return snapshot.docs.map(docToList);
+}
+
+const LISTS_PAGE_SIZE = 10;
+
+export interface ListsPage {
+  lists: MatchList[];
+  nextCursor: { likes: number; docId: string } | null;
+}
+
+export async function getPopularListsPaginated(
+  cursor?: { likes: number; docId: string },
+): Promise<ListsPage> {
+  let q;
+  if (cursor) {
+    q = query(
+      collection(db, 'lists'),
+      orderBy('likes', 'desc'),
+      orderBy('__name__', 'desc'),
+      startAfter(cursor.likes, cursor.docId),
+      limit(LISTS_PAGE_SIZE + 1),
+    );
+  } else {
+    q = query(
+      collection(db, 'lists'),
+      orderBy('likes', 'desc'),
+      orderBy('__name__', 'desc'),
+      limit(LISTS_PAGE_SIZE + 1),
+    );
+  }
+
+  const snapshot = await getDocs(q);
+  const allDocs = snapshot.docs;
+  const hasMore = allDocs.length > LISTS_PAGE_SIZE;
+  const pageDocs = hasMore ? allDocs.slice(0, LISTS_PAGE_SIZE) : allDocs;
+  const lists = pageDocs.map(docToList);
+
+  const lastDoc = pageDocs[pageDocs.length - 1];
+  const nextCursor = hasMore && lastDoc
+    ? { likes: (lastDoc.data() as any).likes ?? 0, docId: lastDoc.id }
+    : null;
+
+  return { lists, nextCursor };
 }
 
 export async function getListById(listId: string): Promise<MatchList | null> {

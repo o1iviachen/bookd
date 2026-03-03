@@ -41,17 +41,20 @@ export type FeedStackParamList = SharedDetailScreenParams & ProfileSubScreenPara
   Feed: undefined;
   CreateReview: { matchId: number; reviewId?: string };
   FollowList: { userIds: string[]; title: string };
+  EditList: { listId: string };
 };
 
 export type MatchesStackParamList = SharedDetailScreenParams & ProfileSubScreenParams & {
   Matches: undefined;
   CreateReview: { matchId: number; reviewId?: string };
+  EditList: { listId: string };
 };
 
 export type SearchStackParamList = SharedDetailScreenParams & ProfileSubScreenParams & {
   Search: undefined;
   CreateReview: { matchId: number; reviewId?: string };
   FollowList: { userIds: string[]; title: string };
+  EditList: { listId: string };
   BrowseByDate: undefined;
   BrowsePopular: undefined;
   BrowseHighestRated: undefined;
@@ -63,6 +66,7 @@ export type SearchStackParamList = SharedDetailScreenParams & ProfileSubScreenPa
 export type ActivityStackParamList = SharedDetailScreenParams & ProfileSubScreenParams & {
   Activity: undefined;
   FollowList: { userIds: string[]; title: string };
+  EditList: { listId: string };
 };
 
 export type ProfileStackParamList = SharedDetailScreenParams & {

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useMemo } from 'react';
-import { View, Text, ScrollView, Pressable, TextInput, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import { View, Text, ScrollView, Pressable, TextInput, KeyboardAvoidingView, Platform, Alert, Share } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -116,6 +116,17 @@ export function ReviewDetailScreen({ route, navigation }: any) {
       voteType: 'up',
       senderInfo: { username: profile?.username || 'Someone', avatar: profile?.avatar || null },
     });
+  };
+
+  const handleShare = () => {
+    const stars = review.rating > 0
+      ? '★'.repeat(Math.floor(review.rating)) + (review.rating % 1 >= 0.5 ? '½' : '')
+      : null;
+    const matchLabel = review.matchLabel || `Match #${review.matchId}`;
+    const line1 = stars
+      ? `A ${stars} review of ${matchLabel} by @${authorUsername} on bookd:`
+      : `@${authorUsername}'s review of ${matchLabel} on bookd:`;
+    Share.share({ message: `${line1}\nbookd://review/${review.id}` });
   };
 
   const handleReply = (_commentId: string, username: string) => {
@@ -391,6 +402,10 @@ export function ReviewDetailScreen({ route, navigation }: any) {
                   <Text style={{ ...typography.caption, color: colors.textSecondary }}>{totalCount}</Text>
                 )}
               </View>
+
+              <Pressable onPress={handleShare} hitSlop={6}>
+                <Ionicons name="share-social-outline" size={18} color={colors.textSecondary} />
+              </Pressable>
             </View>
           </View>
 
@@ -512,6 +527,7 @@ export function ReviewDetailScreen({ route, navigation }: any) {
           onClose={() => setMediaViewerIndex(-1)}
         />
       )}
+
     </SafeAreaView>
   );
 }

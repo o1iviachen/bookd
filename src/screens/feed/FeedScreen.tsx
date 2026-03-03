@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useCallback } from 'react';
-import { View, Text, ScrollView, Pressable, RefreshControl, FlatList } from 'react-native';
+import { View, Text, ScrollView, Pressable, RefreshControl, FlatList, ActivityIndicator } from 'react-native';
 import PagerView from 'react-native-pager-view';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -11,11 +11,12 @@ import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useUserProfile } from '../../hooks/useUser';
 import { useMatchesRange } from '../../hooks/useMatches';
-import { useRecentReviews, usePopularMatchIdsThisWeek } from '../../hooks/useReviews';
-import { useRecentLists } from '../../hooks/useLists';
+import { useRecentReviewsPaginated, usePopularMatchIdsThisWeek } from '../../hooks/useReviews';
+import { usePopularListsPaginated } from '../../hooks/useLists';
 import { ListPreviewCard } from '../../components/list/ListPreviewCard';
 import { groupMatchesByCompetition, getMatchById } from '../../services/matchService';
 import { MatchPosterCard } from '../../components/match/MatchPosterCard';
+import { TeamLogo } from '../../components/match/TeamLogo';
 import { LeagueCarousel } from '../../components/feed/LeagueCarousel';
 import { ReviewCard } from '../../components/review/ReviewCard';
 import { Avatar } from '../../components/ui/Avatar';
@@ -105,20 +106,41 @@ export function FeedScreen() {
   const today = useMemo(() => new Date(), []);
   const weekAgo = useMemo(() => subDays(today, 7), [today]);
   const { data: matches, isLoading: matchesLoading } = useMatchesRange(weekAgo, today);
-  const { data: reviews, isLoading: reviewsLoading } = useRecentReviews();
-  const { data: recentLists, isLoading: listsLoading } = useRecentLists();
+  const {
+    data: reviewPages,
+    isLoading: reviewsLoading,
+    fetchNextPage: fetchNextReviewPage,
+    hasNextPage: hasNextReviewPage,
+    isFetchingNextPage: isFetchingNextReviewPage,
+  } = useRecentReviewsPaginated();
+  const {
+    data: listPages,
+    isLoading: listsLoading,
+    fetchNextPage: fetchNextListPage,
+    hasNextPage: hasNextListPage,
+    isFetchingNextPage: isFetchingNextListPage,
+  } = usePopularListsPaginated();
   const { data: popularMatchIds } = usePopularMatchIdsThisWeek();
 
   const handleRefresh = async () => {
     setRefreshing(true);
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['matches', 'range'] }),
-      queryClient.invalidateQueries({ queryKey: ['reviews', 'recent'] }),
+      queryClient.invalidateQueries({ queryKey: ['reviews', 'recent', 'paginated'] }),
       queryClient.invalidateQueries({ queryKey: ['reviews', 'popularThisWeek'] }),
-      queryClient.invalidateQueries({ queryKey: ['lists', 'recent'] }),
+      queryClient.invalidateQueries({ queryKey: ['lists', 'popular', 'paginated'] }),
     ]);
     setRefreshing(false);
   };
+
+  const reviews = useMemo(() =>
+    reviewPages?.pages.flatMap((p) => p.reviews) || [],
+    [reviewPages]
+  );
+  const lists = useMemo(() =>
+    listPages?.pages.flatMap((p) => p.lists) || [],
+    [listPages]
+  );
 
   const followedLeagues = profile?.followedLeagues || [];
 
@@ -176,6 +198,24 @@ export function FeedScreen() {
   friendMatchQueries.forEach((q) => {
     if (q.data) friendMatchMap.set(q.data.id, q.data);
   });
+
+  // Fetch match data for review tab cards
+  const reviewMatchIds = useMemo(() => [...new Set(reviews.map((r) => r.matchId))], [reviews]);
+  const reviewMatchQueries = useQueries({
+    queries: reviewMatchIds.map((id) => ({
+      queryKey: ['match', id],
+      queryFn: () => getMatchById(id),
+      staleTime: 5 * 60 * 1000,
+      enabled: reviewMatchIds.length > 0,
+    })),
+  });
+  const reviewMatchMap = useMemo(() => {
+    const map = new Map<number, Match>();
+    reviewMatchQueries.forEach((q) => {
+      if (q.data) map.set(q.data.id, q.data);
+    });
+    return map;
+  }, [reviewMatchQueries]);
 
   // Per-league grouped (only followed leagues)
   const grouped = groupMatchesByCompetition(followedMatches);
@@ -347,77 +387,118 @@ export function FeedScreen() {
 
         {/* ─── Reviews Page ─── */}
         <View key="reviews" style={{ flex: 1 }}>
-          <ScrollView indicatorStyle={isDark ? 'white' : 'default'}
-            style={{ flex: 1 }}
-            nestedScrollEnabled
-            contentContainerStyle={{ paddingBottom: spacing.xl }}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#fff" colors={['#fff']} />}
-          >
-            {(() => {
-              const friendsOnly = (reviews || []).filter((r) => r.userId !== user?.uid);
-              return (
-                <View>
-                  <Text style={{ ...typography.h4, color: colors.foreground, marginTop: spacing.sm, marginBottom: spacing.sm, paddingHorizontal: spacing.md }}>
-                    New from friends
-                  </Text>
-                  {reviewsLoading ? (
-                    <View style={{ marginTop: spacing.xxl }}><LoadingSpinner fullScreen={false} /></View>
-                  ) : friendsOnly.length === 0 ? (
-                    <View style={{ alignItems: 'center', marginTop: spacing.xxl, paddingHorizontal: spacing.xl }}>
-                      <Ionicons name="chatbubbles-outline" size={48} color={colors.textSecondary} />
-                      <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.md }}>
-                        Follow friends to see their reviews here
-                      </Text>
-                    </View>
-                  ) : (
-                    friendsOnly.map((review, i) => (
-                      <ReviewCard
-                        key={review.id}
-                        review={review}
-                        onPress={() => navigation.navigate('ReviewDetail', { reviewId: review.id })}
-                        isLast={i === friendsOnly.length - 1}
-                      />
-                    ))
-                  )}
-                </View>
-              );
-            })()}
-          </ScrollView>
+          {reviewsLoading ? (
+            <View style={{ flex: 1, justifyContent: 'center' }}><LoadingSpinner fullScreen={false} /></View>
+          ) : reviews.filter((r) => r.userId !== user?.uid).length === 0 ? (
+            <ScrollView
+              contentContainerStyle={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: spacing.xl }}
+              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#fff" colors={['#fff']} />}
+            >
+              <Ionicons name="chatbubbles-outline" size={48} color={colors.textSecondary} />
+              <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.md }}>
+                Follow friends to see their reviews here
+              </Text>
+            </ScrollView>
+          ) : (
+            <FlatList
+              data={reviews.filter((r) => r.userId !== user?.uid)}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item, index }) => {
+                const match = reviewMatchMap.get(item.matchId);
+                return (
+                  <View>
+                    {match && (
+                      <Pressable
+                        onPress={() => navigation.navigate('MatchDetail', { matchId: item.matchId })}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'flex-start',
+                          gap: spacing.sm,
+                          paddingTop: spacing.md,
+                          paddingBottom: spacing.xs,
+                          paddingHorizontal: spacing.md,
+                        }}
+                      >
+                        <TeamLogo uri={match.homeTeam.crest} size={16} />
+                        <Text style={{ ...typography.caption, color: colors.foreground, fontWeight: '600' }}>
+                          {match.homeTeam.shortName}
+                        </Text>
+                        <Text style={{ ...typography.caption, color: colors.textSecondary, fontWeight: '500' }}>
+                          {match.homeScore != null ? `${match.homeScore} - ${match.awayScore}` : 'vs'}
+                        </Text>
+                        <Text style={{ ...typography.caption, color: colors.foreground, fontWeight: '600' }}>
+                          {match.awayTeam.shortName}
+                        </Text>
+                        <TeamLogo uri={match.awayTeam.crest} size={16} />
+                        <Text style={{ ...typography.small, color: colors.textSecondary }}>
+                          · {match.competition.name}
+                        </Text>
+                      </Pressable>
+                    )}
+                    <ReviewCard
+                      review={item}
+                      onPress={() => navigation.navigate('ReviewDetail', { reviewId: item.id })}
+                      isLast={index === reviews.filter((r) => r.userId !== user?.uid).length - 1}
+                    />
+                  </View>
+                );
+              }}
+              ListHeaderComponent={
+                <Text style={{ ...typography.h4, color: colors.foreground, marginTop: spacing.sm, marginBottom: spacing.sm, paddingHorizontal: spacing.md }}>
+                  Recent reviews
+                </Text>
+              }
+              contentContainerStyle={{ paddingBottom: spacing.xl }}
+              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#fff" colors={['#fff']} />}
+              onEndReached={() => { if (hasNextReviewPage) fetchNextReviewPage(); }}
+              onEndReachedThreshold={0.5}
+              ListFooterComponent={isFetchingNextReviewPage ? (
+                <ActivityIndicator style={{ paddingVertical: spacing.md }} color={colors.primary} />
+              ) : null}
+            />
+          )}
         </View>
 
         {/* ─── Lists Page ─── */}
         <View key="lists" style={{ flex: 1 }}>
-          <ScrollView indicatorStyle={isDark ? 'white' : 'default'}
-            style={{ flex: 1 }}
-            nestedScrollEnabled
-            contentContainerStyle={{ paddingBottom: spacing.xl }}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#fff" colors={['#fff']} />}
-          >
-            <View>
-              <Text style={{ ...typography.h4, color: colors.foreground, marginTop: spacing.sm, marginBottom: spacing.sm, paddingHorizontal: spacing.md }}>
-                Popular lists
+          {listsLoading ? (
+            <View style={{ flex: 1, justifyContent: 'center' }}><LoadingSpinner fullScreen={false} /></View>
+          ) : lists.length === 0 ? (
+            <ScrollView
+              contentContainerStyle={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: spacing.xl }}
+              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#fff" colors={['#fff']} />}
+            >
+              <Ionicons name="list-outline" size={48} color={colors.textSecondary} />
+              <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.md }}>
+                No lists yet. Create one from your profile!
               </Text>
-              {listsLoading ? (
-                <View style={{ marginTop: spacing.xxl }}><LoadingSpinner fullScreen={false} /></View>
-              ) : !recentLists || recentLists.length === 0 ? (
-                <View style={{ alignItems: 'center', marginTop: spacing.xxl, paddingHorizontal: spacing.xl }}>
-                  <Ionicons name="list-outline" size={48} color={colors.textSecondary} />
-                  <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.md }}>
-                    No lists yet. Create one from your profile!
-                  </Text>
-                </View>
-              ) : (
-                recentLists.map((list) => (
-                  <ListPreviewCard
-                    key={list.id}
-                    list={list}
-                    onPress={() => navigation.navigate('ListDetail', { listId: list.id })}
-                    onMatchPress={(matchId) => navigation.navigate('MatchDetail', { matchId })}
-                  />
-                ))
+            </ScrollView>
+          ) : (
+            <FlatList
+              data={lists}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <ListPreviewCard
+                  list={item}
+                  onPress={() => navigation.navigate('ListDetail', { listId: item.id })}
+                  onMatchPress={(matchId) => navigation.navigate('MatchDetail', { matchId })}
+                />
               )}
-            </View>
-          </ScrollView>
+              ListHeaderComponent={
+                <Text style={{ ...typography.h4, color: colors.foreground, marginTop: spacing.sm, marginBottom: spacing.sm, paddingHorizontal: spacing.md }}>
+                  Popular lists
+                </Text>
+              }
+              contentContainerStyle={{ paddingBottom: spacing.xl }}
+              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#fff" colors={['#fff']} />}
+              onEndReached={() => { if (hasNextListPage) fetchNextListPage(); }}
+              onEndReachedThreshold={0.5}
+              ListFooterComponent={isFetchingNextListPage ? (
+                <ActivityIndicator style={{ paddingVertical: spacing.md }} color={colors.primary} />
+              ) : null}
+            />
+          )}
         </View>
       </PagerView>
     </SafeAreaView>

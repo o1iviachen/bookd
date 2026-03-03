@@ -1,8 +1,9 @@
-import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import {
   getReviewsForMatch,
   getReviewsForUser,
   getRecentReviews,
+  getRecentReviewsPaginated,
   getPopularMatchIdsThisWeek,
   getHighestRatedMatchIds,
   getReviewById,
@@ -42,6 +43,18 @@ export function useRecentReviews() {
   return useQuery({
     queryKey: ['reviews', 'recent', user?.uid],
     queryFn: () => getRecentReviews(user?.uid),
+    staleTime: 5 * 60 * 1000,
+    retry: 2,
+  });
+}
+
+export function useRecentReviewsPaginated() {
+  const { user } = useAuth();
+  return useInfiniteQuery({
+    queryKey: ['reviews', 'recent', 'paginated', user?.uid],
+    queryFn: ({ pageParam }) => getRecentReviewsPaginated(user?.uid, pageParam),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     staleTime: 5 * 60 * 1000,
     retry: 2,
   });
@@ -134,27 +147,48 @@ export function useVoteOnReview() {
     mutationFn: (params: { reviewId: string; userId: string; voteType: 'up' | 'down'; senderInfo?: { username: string; avatar: string | null } }) =>
       voteOnReview(params.reviewId, params.userId, params.voteType, params.senderInfo),
     onMutate: async (params) => {
-      // Optimistically update the review vote state in all cached review lists
       await queryClient.cancelQueries({ queryKey: ['reviews'] });
-      const isToggle = params.voteType === 'up';
-      queryClient.setQueriesData<any[]>({ queryKey: ['reviews'] }, (old) => {
+      await queryClient.cancelQueries({ queryKey: ['review', params.reviewId] });
+
+      const updateReview = (r: any) => {
+        if (r.id !== params.reviewId) return r;
+        const wasVoted = r.userVote === params.voteType;
+        return {
+          ...r,
+          userVote: wasVoted ? null : params.voteType,
+          upvotes: params.voteType === 'up'
+            ? wasVoted ? Math.max(0, (r.upvotes || 0) - 1) : (r.upvotes || 0) + 1
+            : r.upvotes,
+        };
+      };
+
+      // Update flat review arrays (match reviews, user reviews, etc.)
+      queryClient.setQueriesData<any>({ queryKey: ['reviews'] }, (old: any) => {
         if (!old) return old;
-        return old.map((r: any) => {
-          if (r.id !== params.reviewId) return r;
-          const wasVoted = r.userVote === params.voteType;
+        // Paginated (infinite query) — has pages array
+        if (old.pages) {
           return {
-            ...r,
-            userVote: wasVoted ? null : params.voteType,
-            upvotes: isToggle
-              ? wasVoted ? Math.max(0, (r.upvotes || 0) - 1) : (r.upvotes || 0) + 1
-              : r.upvotes,
+            ...old,
+            pages: old.pages.map((page: any) => ({
+              ...page,
+              reviews: page.reviews?.map(updateReview) ?? page,
+            })),
           };
-        });
+        }
+        // Flat array
+        if (Array.isArray(old)) return old.map(updateReview);
+        return old;
+      });
+
+      // Update single review cache
+      queryClient.setQueriesData<any>({ queryKey: ['review', params.reviewId] }, (old: any) => {
+        if (!old) return old;
+        return updateReview(old);
       });
     },
-    onError: () => {
+    onSettled: (_, __, params) => {
       queryClient.invalidateQueries({ queryKey: ['reviews'] });
-      queryClient.invalidateQueries({ queryKey: ['review'] });
+      queryClient.invalidateQueries({ queryKey: ['review', params.reviewId] });
     },
   });
 }

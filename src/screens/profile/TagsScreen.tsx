@@ -50,7 +50,7 @@ export function TagsScreen({ route, navigation }: any) {
         <FlatList indicatorStyle={isDark ? 'white' : 'default'}
           data={tags}
           keyExtractor={(item) => item.tag}
-          contentContainerStyle={{ paddingHorizontal: spacing.md, paddingVertical: spacing.sm }}
+          contentContainerStyle={{ paddingVertical: spacing.sm }}
           renderItem={({ item }) => (
             <Pressable
               onPress={() => navigation.navigate('TagMatches', { tag: item.tag, userId: targetUserId })}
@@ -58,8 +58,8 @@ export function TagsScreen({ route, navigation }: any) {
                 flexDirection: 'row',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                paddingVertical: spacing.md,
-                paddingHorizontal: spacing.sm,
+                paddingVertical: spacing.sm,
+                paddingHorizontal: spacing.md,
                 backgroundColor: pressed ? colors.accent : 'transparent',
                 borderBottomWidth: 1,
                 borderBottomColor: colors.border,

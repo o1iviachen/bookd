@@ -5,6 +5,7 @@ import { useQueries } from '@tanstack/react-query';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useReviewsForUser, useAvgRatings } from '../../hooks/useReviews';
+import { useUserProfile } from '../../hooks/useUser';
 import { getMatchById } from '../../services/matchService';
 import { MatchPosterCard } from '../../components/match/MatchPosterCard';
 import { MatchFilters, MatchFilterState, applyMatchFilters } from '../../components/match/MatchFilters';
@@ -44,6 +45,7 @@ export function GamesScreen({ route, navigation }: any) {
   const { user } = useAuth();
   const targetUserId = route.params?.userId || user?.uid || '';
   const { width: screenWidth } = useWindowDimensions();
+  const { data: targetProfile } = useUserProfile(targetUserId);
   const { data: reviews, isLoading } = useReviewsForUser(targetUserId);
 
   // Unique match IDs from reviews (declared early for useAvgRatings)
@@ -152,11 +154,7 @@ export function GamesScreen({ route, navigation }: any) {
   }, [entries, allMatches, filters, sort]);
 
   const handleMatchPress = useCallback((entry: MatchEntry) => {
-    if (entry.totalReviews === 1 && entry.reviewId) {
-      navigation.navigate('ReviewDetail', { reviewId: entry.reviewId });
-    } else {
-      navigation.navigate('MatchDetail', { matchId: entry.matchId });
-    }
+    navigation.navigate('MatchDetail', { matchId: entry.matchId });
   }, [navigation]);
 
   if (isLoading) return <LoadingSpinner />;

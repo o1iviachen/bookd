@@ -13,10 +13,9 @@ interface DiaryEntryRowProps {
   match: Match | null;
   isLiked: boolean;
   onPress: () => void;
-  onMatchPress: () => void;
 }
 
-export function DiaryEntryRow({ review, match, isLiked, onPress, onMatchPress }: DiaryEntryRowProps) {
+export function DiaryEntryRow({ review, match, isLiked, onPress }: DiaryEntryRowProps) {
   const { theme } = useTheme();
   const { colors, spacing, typography } = theme;
 
@@ -51,7 +50,7 @@ export function DiaryEntryRow({ review, match, isLiked, onPress, onMatchPress }:
       {/* Match info */}
       <View style={{ flex: 1, marginLeft: spacing.sm }}>
         {match ? (
-          <Pressable onPress={onMatchPress}>
+          <View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <TeamLogo uri={match.homeTeam.crest} size={18} />
               <Text
@@ -77,7 +76,7 @@ export function DiaryEntryRow({ review, match, isLiked, onPress, onMatchPress }:
               {match.competition.name}
               {match.venue ? ` · ${match.venue}` : ''}
             </Text>
-          </Pressable>
+          </View>
         ) : (
           <Text
             style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 14 }}

@@ -285,6 +285,7 @@ export interface MatchGoal {
   team: { id: number };
   scorer: { id: number; name: string };
   assist: { id: number; name: string } | null;
+  detail?: string; // "Normal Goal", "Own Goal", "Penalty", etc.
 }
 
 export interface MatchStats {
@@ -691,6 +692,7 @@ export async function searchPlayersQuery(
       collection(db, PLAYERS),
       where('searchPrefixes', 'array-contains', queryWord),
       orderBy('leagueTier'),
+      orderBy('__name__'),
       ...(cursor ? [startAfter(cursor.leagueTier, cursor.docId)] : []),
       limit(fetchLimit),
     ] as Parameters<typeof query>;

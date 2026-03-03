@@ -1,17 +1,16 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { View, Text, ScrollView, Pressable, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, Switch, Modal, Dimensions, PanResponder, Animated as RNAnimated, LayoutAnimation, UIManager } from 'react-native';
+import { View, Text, ScrollView, Pressable, KeyboardAvoidingView, Platform, Alert, Switch, Modal, Dimensions, PanResponder, Animated as RNAnimated, LayoutAnimation, UIManager } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import * as ImagePicker from 'expo-image-picker';
-import * as VideoThumbnails from 'expo-video-thumbnails';
+import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useMatch } from '../../hooks/useMatches';
 import { useCreateReview, useUpdateReview, useReview } from '../../hooks/useReviews';
 import { useUserProfile, useAddCustomTag, useMarkWatched, useToggleWatched, useToggleLiked } from '../../hooks/useUser';
-import { uploadReviewMedia, uploadThumbnail } from '../../services/storage';
+import { uploadReviewMedia } from '../../services/storage';
 import { TeamLogo } from '../../components/match/TeamLogo';
 import { StarRating } from '../../components/ui/StarRating';
 import { Button } from '../../components/ui/Button';
@@ -23,14 +22,9 @@ import { MentionInput } from '../../components/ui/MentionInput';
 
 interface LocalMedia {
   uri: string;
-  type: 'image' | 'video';
-  thumbnail?: string;
-  durationMs?: number;
-  width?: number;
-  height?: number;
+  type: 'image';
 }
 
-const FILMSTRIP_COUNT = 10;
 const screenWidth = Dimensions.get('window').width;
 
 export function CreateReviewScreen({ route, navigation }: any) {
@@ -61,19 +55,7 @@ export function CreateReviewScreen({ route, navigation }: any) {
   const [isSpoiler, setIsSpoiler] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [initialized, setInitialized] = useState(!isEditMode);
-  const [thumbPickerVisible, setThumbPickerVisible] = useState(false);
-  const [filmstripFrames, setFilmstripFrames] = useState<string[]>([]);
-  const [pendingVideoUri, setPendingVideoUri] = useState<string | null>(null);
-  const [pendingVideoDuration, setPendingVideoDuration] = useState(10000);
-  const [pendingVideoAspect, setPendingVideoAspect] = useState(16 / 9);
-  const [scrubPosition, setScrubPosition] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [isScrubbing, setIsScrubbing] = useState(false);
   const [previewImageUri, setPreviewImageUri] = useState<string | null>(null);
-  const [videoLoading, setVideoLoading] = useState(true);
-  const editingVideoItem = useRef<LocalMedia | null>(null);
-  const editingExistingIndex = useRef<number | null>(null);
-  const videoRef = useRef<Video>(null);
 
   const isWatched = profile?.watchedMatchIds?.some((id) => String(id) === String(matchId)) || rating > 0 || text.trim().length > 0;
 
@@ -124,192 +106,18 @@ export function CreateReviewScreen({ route, navigation }: any) {
     setShowTagInput(false);
   };
 
-  const generateFilmstrip = async (videoUri: string, durationMs: number): Promise<string[]> => {
-    const frames: string[] = [];
-    for (let i = 0; i < FILMSTRIP_COUNT; i++) {
-      const time = Math.floor((durationMs / FILMSTRIP_COUNT) * i);
-      try {
-        const { uri } = await VideoThumbnails.getThumbnailAsync(videoUri, { time });
-        frames.push(uri);
-      } catch {
-        // skip failed frame
-      }
-    }
-    return frames;
-  };
-
-  const durationKnown = useRef(false);
-
-  const openThumbnailPicker = (videoUri: string, durationMs: number, width: number, height: number) => {
-    const hasDuration = durationMs > 0 && durationMs !== 10000;
-    durationKnown.current = hasDuration;
-    setPendingVideoUri(videoUri);
-    setPendingVideoDuration(durationMs);
-    setPendingVideoAspect(width && height ? width / height : 16 / 9);
-    setScrubPosition(0);
-    setIsPlaying(false);
-    setIsScrubbing(false);
-    setVideoLoading(true);
-    setThumbPickerVisible(true);
-    if (hasDuration) {
-      generateFilmstrip(videoUri, durationMs).then(setFilmstripFrames);
-    } else {
-      setFilmstripFrames([]);
-    }
-  };
-
-  const addVideoWithThumbnail = (videoUri: string, durationMs?: number, width?: number, height?: number) => {
-    const duration = durationMs && durationMs > 0 ? durationMs : 10000;
-    openThumbnailPicker(videoUri, duration, width || 0, height || 0);
-  };
-
-  const filmstripWidth = useRef(0);
-
-  const filmstripPanResponder = useMemo(() => PanResponder.create({
-    onStartShouldSetPanResponder: () => true,
-    onMoveShouldSetPanResponder: () => true,
-    onPanResponderGrant: (evt) => {
-      setIsScrubbing(true);
-      if (isPlaying) videoRef.current?.pauseAsync();
-      const x = evt.nativeEvent.locationX;
-      const w = filmstripWidth.current;
-      if (w > 0) {
-        const pos = Math.max(0, Math.min(1, x / w));
-        setScrubPosition(pos);
-        const posMs = Math.floor(pos * pendingVideoDuration);
-        videoRef.current?.setPositionAsync(posMs, { toleranceMillisBefore: 100, toleranceMillisAfter: 100 });
-      }
-    },
-    onPanResponderMove: (evt) => {
-      const x = evt.nativeEvent.locationX;
-      const w = filmstripWidth.current;
-      if (w > 0) {
-        const pos = Math.max(0, Math.min(1, x / w));
-        setScrubPosition(pos);
-        const posMs = Math.floor(pos * pendingVideoDuration);
-        videoRef.current?.setPositionAsync(posMs, { toleranceMillisBefore: 100, toleranceMillisAfter: 100 });
-      }
-    },
-    onPanResponderRelease: (evt) => {
-      setIsScrubbing(false);
-      const x = evt.nativeEvent.locationX;
-      const w = filmstripWidth.current;
-      if (w > 0) {
-        const pos = Math.max(0, Math.min(1, x / w));
-        setScrubPosition(pos);
-        const posMs = Math.floor(pos * pendingVideoDuration);
-        videoRef.current?.setPositionAsync(posMs, { toleranceMillisBefore: 0, toleranceMillisAfter: 0 });
-      }
-    },
-  }), [pendingVideoDuration, isPlaying]);
-
-  const handlePlaybackStatusUpdate = (status: AVPlaybackStatus) => {
-    if (!status.isLoaded) return;
-    if (videoLoading) setVideoLoading(false);
-    // Auto-detect duration for remote videos where we don't know it upfront
-    if (!durationKnown.current && status.durationMillis && status.durationMillis > 0) {
-      durationKnown.current = true;
-      setPendingVideoDuration(status.durationMillis);
-      if (pendingVideoUri) {
-        generateFilmstrip(pendingVideoUri, status.durationMillis).then(setFilmstripFrames);
-      }
-    }
-    // Don't move the scrub indicator during playback — only user dragging moves it
-    setIsPlaying(status.isPlaying);
-  };
-
-  const togglePlayPause = async () => {
-    if (!videoRef.current) return;
-    if (isPlaying) {
-      await videoRef.current.pauseAsync();
-    } else {
-      const status = await videoRef.current.getStatusAsync();
-      if (status.isLoaded && status.durationMillis && status.positionMillis >= status.durationMillis - 100) {
-        await videoRef.current.setPositionAsync(0);
-      }
-      await videoRef.current.playAsync();
-    }
-  };
-
-  const handleConfirmThumbnail = async () => {
-    if (!pendingVideoUri) return;
-    // Pause video and capture thumbnail at current position
-    await videoRef.current?.pauseAsync();
-    const timeMs = Math.floor(scrubPosition * pendingVideoDuration);
-    let thumbnailUri: string | undefined;
-    try {
-      const { uri } = await VideoThumbnails.getThumbnailAsync(pendingVideoUri, { time: timeMs });
-      thumbnailUri = uri;
-    } catch {
-      // fall back to no thumbnail
-    }
-
-    if (editingExistingIndex.current !== null) {
-      // Editing an existing uploaded video's thumbnail
-      const idx = editingExistingIndex.current;
-      if (thumbnailUri) {
-        setExistingMedia((prev) => prev.map((item, i) =>
-          i === idx ? { ...item, thumbnailUrl: thumbnailUri, _newThumbnailUri: thumbnailUri } as any : item
-        ));
-      }
-      editingExistingIndex.current = null;
-    } else {
-      // Adding a new video
-      const newItem: LocalMedia = {
-        uri: pendingVideoUri, type: 'video',
-        durationMs: pendingVideoDuration,
-        width: pendingVideoAspect > 1 ? Math.round(pendingVideoAspect * 1000) : 1000,
-        height: pendingVideoAspect > 1 ? 1000 : Math.round(1000 / pendingVideoAspect),
-        ...(thumbnailUri && { thumbnail: thumbnailUri }),
-      };
-      setMediaItems((prev) => [...prev, newItem].slice(0, 4 - existingMedia.length));
-      editingVideoItem.current = null;
-    }
-
-    setThumbPickerVisible(false);
-    setPendingVideoUri(null);
-    setFilmstripFrames([]);
-    setIsPlaying(false);
-  };
-
-  const handleCancelThumbnail = () => {
-    // Restore the video if we were editing an existing local item
-    if (editingVideoItem.current) {
-      setMediaItems((prev) => [...prev, editingVideoItem.current!]);
-      editingVideoItem.current = null;
-    }
-    editingExistingIndex.current = null;
-    setThumbPickerVisible(false);
-    setPendingVideoUri(null);
-    setFilmstripFrames([]);
-    setIsPlaying(false);
-  };
-
   const handleTapExistingMedia = (item: ReviewMedia, index: number) => {
-    if (item.type === 'video') {
-      // Open the thumbnail scrubber for existing uploaded videos
-      editingExistingIndex.current = index;
-      openThumbnailPicker(item.url, 10000, 0, 0);
-    } else {
-      setPreviewImageUri(item.url);
-    }
+    setPreviewImageUri(item.url);
   };
 
   const handleTapNewMedia = (item: LocalMedia, index: number) => {
-    if (item.type === 'video') {
-      // Save original and remove — will be re-added on confirm, or restored on cancel
-      editingVideoItem.current = item;
-      setMediaItems((prev) => prev.filter((_, i) => i !== index));
-      openThumbnailPicker(item.uri, item.durationMs || 10000, item.width || 0, item.height || 0);
-    } else {
-      setPreviewImageUri(item.uri);
-    }
+    setPreviewImageUri(item.uri);
   };
 
   const handlePickMedia = async () => {
     const totalMedia = mediaItems.length + existingMedia.length;
     if (totalMedia >= 4) {
-      Alert.alert('Limit Reached', 'You can attach up to 4 photos or videos.');
+      Alert.alert('Limit Reached', 'You can attach up to 4 photos.');
       return;
     }
 
@@ -321,31 +129,16 @@ export function CreateReviewScreen({ route, navigation }: any) {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images', 'videos'],
+        mediaTypes: ['images'],
         quality: 0.8,
-        videoMaxDuration: 60,
-        videoExportPreset: ImagePicker.VideoExportPreset.HighestQuality,
-        preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
       });
       if (!result.canceled && result.assets.length > 0) {
         const asset = result.assets[0];
-        const ext = asset.uri.split('.').pop()?.toLowerCase();
-        const isVideo = asset.type === 'video' || ext === 'mov' || ext === 'mp4';
-        if (isVideo) {
-          // expo-image-picker duration is already in ms — enforce 1 min max
-          if (asset.duration && asset.duration > 60000) {
-            Alert.alert('Video Too Long', 'Videos must be 1 minute or shorter.');
-            return;
-          }
-          // Delay to let the system picker dismiss animation finish before showing thumbnail picker
-          setTimeout(() => addVideoWithThumbnail(asset.uri, asset.duration || undefined, asset.width, asset.height), 500);
-        } else {
-          setMediaItems((prev) => [...prev, { uri: asset.uri, type: 'image' as const }].slice(0, 4 - existingMedia.length));
-        }
+        setMediaItems((prev) => [...prev, { uri: asset.uri, type: 'image' as const }].slice(0, 4 - existingMedia.length));
       }
     } catch (err: any) {
       console.error('Pick media error:', err);
-      Alert.alert('Error', 'Failed to pick media. Please try again.');
+      Alert.alert('Error', 'Failed to pick photo. Please try again.');
     }
   };
 
@@ -442,7 +235,8 @@ export function CreateReviewScreen({ route, navigation }: any) {
           dragIdxRef.current = idx;
           setDragIdx(idx);
           dragAnim.setValue({ x: 0, y: 0 });
-        }, 150);
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        }, 200);
       }
     },
     onPanResponderMove: (_, g) => {
@@ -465,6 +259,7 @@ export function CreateReviewScreen({ route, navigation }: any) {
         const r = itemRects.current[i];
         const targetCx = r.x + r.w / 2;
         if (Math.abs(cx - targetCx) < r.w * 0.4) {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           doSwapRef.current(idx, i);
           break;
         }
@@ -502,27 +297,10 @@ export function CreateReviewScreen({ route, navigation }: any) {
       for (let i = 0; i < mediaItems.length; i++) {
         const item = mediaItems[i];
         const url = await uploadReviewMedia(user.uid, tempReviewId, item.uri, item.type, i);
-        let thumbnailUrl: string | undefined;
-        if (item.type === 'video' && item.thumbnail) {
-          thumbnailUrl = await uploadThumbnail(user.uid, tempReviewId, item.thumbnail, i);
-        }
-        uploadedMedia.push({ url, type: item.type, ...(thumbnailUrl && { thumbnailUrl }) });
+        uploadedMedia.push({ url, type: item.type });
       }
 
-      // Upload any new thumbnails for existing videos
-      const updatedExisting = await Promise.all(
-        existingMedia.map(async (item) => {
-          const newThumbUri = (item as any)._newThumbnailUri;
-          if (newThumbUri) {
-            const thumbUrl = await uploadThumbnail(user.uid, tempReviewId, newThumbUri, 0);
-            const { _newThumbnailUri, ...rest } = item as any;
-            return { ...rest, thumbnailUrl: thumbUrl } as ReviewMedia;
-          }
-          return item;
-        })
-      );
-
-      const allMedia = [...updatedExisting, ...uploadedMedia];
+      const allMedia = [...existingMedia, ...uploadedMedia];
 
       if (isEditMode && reviewId) {
         await updateReviewMutation.mutateAsync({
@@ -638,7 +416,7 @@ export function CreateReviewScreen({ route, navigation }: any) {
 
           {/* Media attachments */}
           <Text style={{ ...typography.bodyBold, color: colors.foreground, marginBottom: spacing.sm }}>
-            Photos and Videos
+            Photos
           </Text>
           <View
             ref={mediaContainerRef}
@@ -654,10 +432,7 @@ export function CreateReviewScreen({ route, navigation }: any) {
               const isExisting = meta.source === 'existing';
               const existingItem = isExisting ? existingMedia[meta.index] : null;
               const newItem = !isExisting ? mediaItems[meta.index] : null;
-              const thumbnailUri = isExisting
-                ? (existingItem!.type === 'video' && existingItem!.thumbnailUrl ? existingItem!.thumbnailUrl : existingItem!.url)
-                : (newItem!.type === 'video' && newItem!.thumbnail ? newItem!.thumbnail : newItem!.uri);
-              const isVideo = isExisting ? existingItem!.type === 'video' : newItem!.type === 'video';
+              const thumbnailUri = isExisting ? existingItem!.url : newItem!.uri;
               const isDragging = dragIdx === globalIndex;
 
               const handleRemove = () => {
@@ -686,11 +461,6 @@ export function CreateReviewScreen({ route, navigation }: any) {
                       style={{ width: 80, height: 80 }}
                       contentFit="cover"
                     />
-                    {isVideo && (
-                      <View style={{ position: 'absolute', top: 4, left: 4, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1 }}>
-                        <Ionicons name="videocam" size={10} color="#fff" />
-                      </View>
-                    )}
                     <Pressable
                       onPress={handleRemove}
                       style={{
@@ -718,9 +488,7 @@ export function CreateReviewScreen({ route, navigation }: any) {
               const isExisting = meta.source === 'existing';
               const existingItem = isExisting ? existingMedia[meta.index] : null;
               const newItem = !isExisting ? mediaItems[meta.index] : null;
-              const thumbnailUri = isExisting
-                ? (existingItem!.type === 'video' && existingItem!.thumbnailUrl ? existingItem!.thumbnailUrl : existingItem!.url)
-                : (newItem!.type === 'video' && newItem!.thumbnail ? newItem!.thumbnail : newItem!.uri);
+              const thumbnailUri = isExisting ? existingItem!.url : newItem!.uri;
               return (
                 <RNAnimated.View
                   pointerEvents="none"
@@ -895,131 +663,6 @@ export function CreateReviewScreen({ route, navigation }: any) {
           />
         </ScrollView>
       </KeyboardAvoidingView>
-
-      {/* Thumbnail scrubber modal */}
-      <Modal visible={thumbPickerVisible} animationType="none" presentationStyle="fullScreen">
-        <View style={{ flex: 1, backgroundColor: '#000' }}>
-          <SafeAreaView style={{ flex: 1 }}>
-            {/* Header */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingVertical: spacing.sm }}>
-              <Pressable onPress={handleCancelThumbnail} hitSlop={8}>
-                <Text style={{ ...typography.body, color: colors.textSecondary }}>Cancel</Text>
-              </Pressable>
-              <Text style={{ ...typography.bodyBold, color: '#fff' }}>Cover Image</Text>
-              <Pressable onPress={handleConfirmThumbnail} hitSlop={8}>
-                <Text style={{ ...typography.bodyBold, color: colors.primary }}>Done</Text>
-              </Pressable>
-            </View>
-
-            {/* Video preview */}
-            <View style={{ flex: 1, marginHorizontal: spacing.sm, marginTop: spacing.sm }}>
-              {pendingVideoUri ? (
-                <Pressable onPress={togglePlayPause} style={{ flex: 1 }}>
-                  <Video
-                    ref={videoRef}
-                    source={{ uri: pendingVideoUri }}
-                    style={{ flex: 1, borderRadius: borderRadius.lg }}
-                    resizeMode={ResizeMode.CONTAIN}
-                    shouldPlay={false}
-                    isLooping={false}
-                    onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
-                  />
-                  {/* Loading overlay */}
-                  {videoLoading && (
-                    <View style={{
-                      position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                      backgroundColor: 'rgba(0,0,0,0.3)',
-                      borderRadius: borderRadius.lg,
-                    }}>
-                      <ActivityIndicator size="large" color="#fff" />
-                      <Text style={{ ...typography.caption, color: 'rgba(255,255,255,0.7)', marginTop: 8 }}>Loading video...</Text>
-                    </View>
-                  )}
-                  {/* Play/pause overlay */}
-                  {!isPlaying && !videoLoading && (
-                    <View style={{
-                      position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                    }}>
-                      <View style={{
-                        width: 56,
-                        height: 56,
-                        borderRadius: 28,
-                        backgroundColor: 'rgba(0,0,0,0.5)',
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                      }}>
-                        <Ionicons name="play" size={28} color="#fff" style={{ marginLeft: 3 }} />
-                      </View>
-                    </View>
-                  )}
-                </Pressable>
-              ) : (
-                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                  <ActivityIndicator color={colors.primary} />
-                </View>
-              )}
-            </View>
-
-            {/* Filmstrip + scrubber */}
-            <View style={{ paddingHorizontal: spacing.md, paddingBottom: spacing.xl, marginTop: spacing.md, backgroundColor: 'transparent' }}>
-              <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', textAlign: 'center', marginBottom: spacing.sm }}>
-                Scrub to choose a cover frame
-              </Text>
-              {/* Filmstrip with overlay indicator */}
-              <View
-                onLayout={(e) => { filmstripWidth.current = e.nativeEvent.layout.width; }}
-                {...filmstripPanResponder.panHandlers}
-                style={{ height: 56 }}
-              >
-                {/* Frames */}
-                <View style={{
-                  height: 56,
-                  borderRadius: borderRadius.sm,
-                  overflow: 'hidden',
-                  flexDirection: 'row',
-                }}>
-                  {filmstripFrames.length > 0 ? (
-                    filmstripFrames.map((frameUri, i) => (
-                      <Image
-                        key={i}
-                        source={{ uri: frameUri }}
-                        style={{ flex: 1, height: 56 }}
-                        contentFit="cover"
-                      />
-                    ))
-                  ) : (
-                    <View style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' }}>
-                      <ActivityIndicator size="small" color={colors.textSecondary} />
-                    </View>
-                  )}
-                </View>
-                {/* Overlay scrub indicator */}
-                {filmstripFrames.length > 0 && (
-                  <View
-                    style={{
-                      position: 'absolute',
-                      top: -2,
-                      bottom: -2,
-                      left: `${Math.max(0, Math.min(scrubPosition * 100, 100))}%`,
-                      width: 36,
-                      marginLeft: -18,
-                      borderWidth: 2.5,
-                      borderColor: '#fff',
-                      borderRadius: 5,
-                      backgroundColor: 'rgba(255,255,255,0.1)',
-                    }}
-                    pointerEvents="none"
-                  />
-                )}
-              </View>
-            </View>
-          </SafeAreaView>
-        </View>
-      </Modal>
 
       {/* Image preview modal */}
       <Modal visible={!!previewImageUri} transparent animationType="none">

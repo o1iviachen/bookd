@@ -1,7 +1,8 @@
-import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import {
   getListsForUser,
   getRecentLists,
+  getPopularListsPaginated,
   getListById,
   getListsContainingMatch,
   getListsLikedByUser,
@@ -33,6 +34,17 @@ export function useRecentLists() {
   return useQuery({
     queryKey: ['lists', 'recent'],
     queryFn: getRecentLists,
+    staleTime: 5 * 60 * 1000,
+    retry: 2,
+  });
+}
+
+export function usePopularListsPaginated() {
+  return useInfiniteQuery({
+    queryKey: ['lists', 'popular', 'paginated'],
+    queryFn: ({ pageParam }) => getPopularListsPaginated(pageParam),
+    initialPageParam: undefined as { likes: number; docId: string } | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     staleTime: 5 * 60 * 1000,
     retry: 2,
   });

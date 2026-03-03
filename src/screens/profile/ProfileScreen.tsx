@@ -8,8 +8,8 @@ import { useQueries } from '@tanstack/react-query';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useUserProfile } from '../../hooks/useUser';
-import { useReviewsForUser } from '../../hooks/useReviews';
-import { useListsForUser } from '../../hooks/useLists';
+import { useReviewsForUser, useLikedReviews } from '../../hooks/useReviews';
+import { useListsForUser, useLikedLists } from '../../hooks/useLists';
 import { getMatchById } from '../../services/matchService';
 import { Avatar } from '../../components/ui/Avatar';
 import { TeamLogo } from '../../components/match/TeamLogo';
@@ -32,6 +32,8 @@ export function ProfileScreen() {
   const { data: profile, isLoading } = useUserProfile(user?.uid || '');
   const { data: reviews } = useReviewsForUser(user?.uid || '');
   const { data: lists } = useListsForUser(user?.uid || '');
+  const { data: likedReviews } = useLikedReviews(user?.uid || '');
+  const { data: likedLists } = useLikedLists(user?.uid || '');
 
   const favoriteMatchIds = profile?.favoriteMatchIds || [];
   const favoriteMatchQueries = useQueries({
@@ -89,11 +91,11 @@ export function ProfileScreen() {
   }).filter(Boolean) as { id: string; name: string; crest: string }[];
 
   const navLinks: { label: string; count: number | string; icon: keyof typeof Ionicons.glyphMap }[] = [
-    { label: 'Games', count: `${reviews?.length || 0} this year`, icon: 'football-outline' },
+    { label: 'Games', count: `${new Set((reviews || []).map((r) => r.matchId)).size} this year`, icon: 'football-outline' },
     { label: 'Diary', count: reviews?.length || 0, icon: 'book-outline' },
-    { label: 'Reviews', count: reviews?.length || 0, icon: 'reorder-three-outline' },
+    { label: 'Reviews', count: (reviews || []).filter((r) => r.text?.trim().length > 0).length, icon: 'reorder-three-outline' },
     { label: 'Lists', count: lists?.length || 0, icon: 'list-outline' },
-    { label: 'Likes', count: profile?.likedMatchIds?.length || 0, icon: 'heart-outline' },
+    { label: 'Likes', count: (profile?.likedMatchIds?.length || 0) + (likedReviews?.length || 0) + (likedLists?.length || 0), icon: 'heart-outline' },
     { label: 'Tags', count: new Set((reviews || []).flatMap((r) => r.tags)).size, icon: 'pricetag-outline' },
   ];
 
@@ -254,7 +256,7 @@ export function ProfileScreen() {
                   <View key={review.id} style={{ width: CARD_WIDTH }}>
                     <MatchPosterCard
                       match={match}
-                      onPress={() => navigation.navigate('ReviewDetail', { reviewId: review.id })}
+                      onPress={() => navigation.navigate('MatchDetail', { matchId: review.matchId })}
                       width={CARD_WIDTH}
                     />
                     {/* Rating, heart, review indicator — left aligned */}
@@ -274,7 +276,7 @@ export function ProfileScreen() {
                 ) : (
                   <Pressable
                     key={review.id}
-                    onPress={() => navigation.navigate('ReviewDetail', { reviewId: review.id })}
+                    onPress={() => navigation.navigate('MatchDetail', { matchId: review.matchId })}
                     style={{
                       width: CARD_WIDTH,
                       height: CARD_WIDTH * 1.5,

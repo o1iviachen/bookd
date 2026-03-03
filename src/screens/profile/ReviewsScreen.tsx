@@ -83,12 +83,15 @@ export function ReviewsScreen({ route, navigation }: any) {
 
   const entries: ReviewEntry[] = useMemo(() => {
     if (!reviews) return [];
-    return reviews.map((r) => ({
-      review: r,
-      match: matchMap.get(r.matchId) || null,
-      avgPublicRating: avgRatingsMap?.get(r.matchId) || 0,
-      matchReviewCount: matchReviewCounts.get(r.matchId) || 0,
-    }));
+    // Only include reviews that have text (exclude empty "Log Match" diary entries)
+    return reviews
+      .filter((r) => r.text?.trim().length > 0)
+      .map((r) => ({
+        review: r,
+        match: matchMap.get(r.matchId) || null,
+        avgPublicRating: avgRatingsMap?.get(r.matchId) || 0,
+        matchReviewCount: matchReviewCounts.get(r.matchId) || 0,
+      }));
   }, [reviews, matchMap, avgRatingsMap, matchReviewCounts]);
 
   const filtered = useMemo(() => {

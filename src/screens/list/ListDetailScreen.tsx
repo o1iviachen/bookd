@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, ScrollView, Pressable, Alert, useWindowDimensions, TextInput as RNTextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, ScrollView, Pressable, Alert, Share, useWindowDimensions, TextInput as RNTextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQueries } from '@tanstack/react-query';
@@ -153,6 +153,11 @@ export function ListDetailScreen({ route, navigation }: any) {
 
   if (isLoading || !list) return <LoadingSpinner />;
 
+  const handleShare = () => {
+    const count = list.matchIds.length;
+    Share.share({ message: `"${list.name}", a list of ${count} ${count === 1 ? 'match' : 'matches'} by @${listAuthorUsername} on bookd:\nbookd://list/${list.id}` });
+  };
+
   const handleEdit = () => {
     setShowMenu(false);
     navigation.navigate('EditList', { listId: list.id });
@@ -278,6 +283,10 @@ export function ListDetailScreen({ route, navigation }: any) {
             <Text style={{ ...typography.caption, color: colors.textSecondary }}>
               {list.matchIds.length} {list.matchIds.length === 1 ? 'match' : 'matches'}
             </Text>
+
+            <Pressable onPress={handleShare} hitSlop={6}>
+              <Ionicons name="share-social-outline" size={18} color={colors.textSecondary} />
+            </Pressable>
           </View>
 
         </View>
@@ -475,6 +484,7 @@ export function ListDetailScreen({ route, navigation }: any) {
         </View>
       )}
       </KeyboardAvoidingView>
+
     </SafeAreaView>
   );
 }

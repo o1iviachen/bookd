@@ -6,8 +6,8 @@ import { useQueries, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useUserProfile, useFollowUser, useUnfollowUser } from '../../hooks/useUser';
-import { useReviewsForUser } from '../../hooks/useReviews';
-import { useListsForUser } from '../../hooks/useLists';
+import { useReviewsForUser, useLikedReviews } from '../../hooks/useReviews';
+import { useListsForUser, useLikedLists } from '../../hooks/useLists';
 import { getMatchById } from '../../services/matchService';
 import { Avatar } from '../../components/ui/Avatar';
 import { TeamLogo } from '../../components/match/TeamLogo';
@@ -30,6 +30,8 @@ export function UserProfileScreen({ route, navigation }: any) {
   const { data: currentProfile } = useUserProfile(currentUser?.uid || '');
   const { data: reviews } = useReviewsForUser(userId);
   const { data: lists } = useListsForUser(userId);
+  const { data: likedReviews } = useLikedReviews(userId);
+  const { data: likedLists } = useLikedLists(userId);
   const queryClient = useQueryClient();
   const followMutation = useFollowUser();
   const unfollowMutation = useUnfollowUser();
@@ -129,11 +131,11 @@ export function UserProfileScreen({ route, navigation }: any) {
   }).filter(Boolean) as { id: string; name: string; crest: string }[];
 
   const navLinks: { label: string; count: number | string; icon: keyof typeof Ionicons.glyphMap; screen: string }[] = [
-    { label: 'Games', count: `${reviews?.length || 0} this year`, icon: 'football-outline', screen: 'Games' },
+    { label: 'Games', count: `${new Set((reviews || []).map((r) => r.matchId)).size} this year`, icon: 'football-outline', screen: 'Games' },
     { label: 'Diary', count: reviews?.length || 0, icon: 'book-outline', screen: 'Diary' },
-    { label: 'Reviews', count: reviews?.length || 0, icon: 'reorder-three-outline', screen: 'Reviews' },
+    { label: 'Reviews', count: (reviews || []).filter((r) => r.text?.trim().length > 0).length, icon: 'reorder-three-outline', screen: 'Reviews' },
     { label: 'Lists', count: lists?.length || 0, icon: 'list-outline', screen: 'MyLists' },
-    { label: 'Likes', count: profile?.likedMatchIds?.length || 0, icon: 'heart-outline', screen: 'Likes' },
+    { label: 'Likes', count: (profile?.likedMatchIds?.length || 0) + (likedReviews?.length || 0) + (likedLists?.length || 0), icon: 'heart-outline', screen: 'Likes' },
     { label: 'Tags', count: new Set((reviews || []).flatMap((r) => r.tags)).size, icon: 'pricetag-outline', screen: 'Tags' },
   ];
 
@@ -273,7 +275,7 @@ export function UserProfileScreen({ route, navigation }: any) {
                     <View key={review.id} style={{ width: CARD_WIDTH }}>
                       <MatchPosterCard
                         match={match}
-                        onPress={() => navigation.navigate('ReviewDetail', { reviewId: review.id })}
+                        onPress={() => navigation.navigate('MatchDetail', { matchId: review.matchId })}
                         width={CARD_WIDTH}
                       />
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 4 }}>

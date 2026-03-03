@@ -54,7 +54,6 @@ export function UserMatchReviewsScreen({ route, navigation }: any) {
               match={match || null}
               isLiked={isLiked}
               onPress={() => navigation.navigate('ReviewDetail', { reviewId: review.id })}
-              onMatchPress={() => navigation.navigate('MatchDetail', { matchId })}
             />
           )}
         />
