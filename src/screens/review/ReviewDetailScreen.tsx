@@ -26,6 +26,7 @@ import { POPULAR_TEAMS } from '../../utils/constants';
 import { useAuth } from '../../context/AuthContext';
 import { formatRelativeTime, formatMatchDate } from '../../utils/formatDate';
 import { isTextClean } from '../../utils/moderation';
+import { MOTMBadge } from '../../components/review/MOTMBadge';
 import { Comment } from '../../services/firestore/comments';
 import { User } from '../../types/user';
 
@@ -389,6 +390,9 @@ export function ReviewDetailScreen({ route, navigation }: any) {
                 ))}
               </View>
             )}
+
+            {/* MOTM */}
+            {review.motmPlayerId && <MOTMBadge playerId={review.motmPlayerId} size="md" />}
 
             {/* Like + comment count row */}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.lg, paddingVertical: spacing.sm }}>

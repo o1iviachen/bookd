@@ -10,6 +10,7 @@ import { Avatar } from '../ui/Avatar';
 import { StarRating } from '../ui/StarRating';
 import { MentionText } from '../ui/MentionText';
 import { VoteButtons } from './VoteButtons';
+import { MOTMBadge } from './MOTMBadge';
 import { MediaViewer } from '../ui/MediaViewer';
 import { Review } from '../../types/review';
 import { formatRelativeTime } from '../../utils/formatDate';
@@ -183,6 +184,9 @@ export function ReviewCard({ review, onPress, commentCount, isLast }: ReviewCard
             ))}
           </View>
         )}
+
+        {/* MOTM */}
+        {review.motmPlayerId && <MOTMBadge playerId={review.motmPlayerId} size="sm" />}
 
         {/* Action buttons */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.lg }}>
