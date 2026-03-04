@@ -5,17 +5,21 @@
     "scheme": "bookd",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/bookd-logo.png",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/splash-logo.png",
       "resizeMode": "contain",
       "backgroundColor": "#14181c"
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.bookd.app"
+      "bundleIdentifier": "com.bookd-app",
+      "usesAppleSignIn": true,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.bookd.app",
@@ -24,7 +28,10 @@
         "backgroundColor": "#14181c"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -46,7 +53,13 @@
           "color": "#00e054"
         }
       ],
-      "expo-web-browser"
-    ]
+      "expo-web-browser",
+      "expo-apple-authentication"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "e5b69e83-26d5-4139-8708-2bcac062ea63"
+      }
+    }
   }
 }
