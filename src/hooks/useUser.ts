@@ -1,7 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getUserProfile, updateUserProfile } from '../services/firestore/users';
 import { followUser, unfollowUser, searchUsers } from '../services/firestore/users';
-import { toggleWatchedMatch, toggleLikedMatch, markMatchWatched, addCustomTag, removeCustomTag, getFollowedTeamIdsForUsers } from '../services/firestore/users';
+import { toggleWatchedMatch, toggleLikedMatch, markMatchWatched, addCustomTag, removeCustomTag, renameCustomTag, getFollowedTeamIdsForUsers } from '../services/firestore/users';
+import { renameTagOnReviews, removeTagFromReviews } from '../services/firestore/reviews';
 
 export function useUserProfile(userId: string) {
   return useQuery({
@@ -132,6 +133,34 @@ export function useRemoveCustomTag() {
       removeCustomTag(params.userId, params.tag),
     onSuccess: (_, params) => {
       queryClient.invalidateQueries({ queryKey: ['user', params.userId] });
+    },
+  });
+}
+
+export function useRenameTag() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: { userId: string; oldTag: string; newTag: string }) => {
+      await renameCustomTag(params.userId, params.oldTag, params.newTag);
+      await renameTagOnReviews(params.userId, params.oldTag, params.newTag);
+    },
+    onSuccess: (_, params) => {
+      queryClient.invalidateQueries({ queryKey: ['user', params.userId] });
+      queryClient.invalidateQueries({ queryKey: ['reviews', 'user', params.userId] });
+    },
+  });
+}
+
+export function useDeleteTag() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: { userId: string; tag: string }) => {
+      await removeCustomTag(params.userId, params.tag);
+      await removeTagFromReviews(params.userId, params.tag);
+    },
+    onSuccess: (_, params) => {
+      queryClient.invalidateQueries({ queryKey: ['user', params.userId] });
+      queryClient.invalidateQueries({ queryKey: ['reviews', 'user', params.userId] });
     },
   });
 }

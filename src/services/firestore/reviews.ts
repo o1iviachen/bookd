@@ -18,6 +18,7 @@ import {
   Timestamp,
   arrayUnion,
   arrayRemove,
+  writeBatch,
 } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { Review, ReviewMedia } from '../../types/review';
@@ -533,4 +534,51 @@ export async function getReviewsForMatches(matchIds: number[]): Promise<Review[]
     }
   }
   return reviews.filter((r) => !r.flagged);
+}
+
+export async function renameTagOnReviews(userId: string, oldTag: string, newTag: string): Promise<void> {
+  const q = query(collection(db, 'reviews'), where('userId', '==', userId));
+  const snapshot = await getDocs(q);
+  const docsWithTag = snapshot.docs.filter((d) => {
+    const tags: string[] = d.data().tags || [];
+    return tags.includes(oldTag);
+  });
+  if (docsWithTag.length === 0) return;
+
+  for (let i = 0; i < docsWithTag.length; i += 500) {
+    const batch = writeBatch(db);
+    for (const d of docsWithTag.slice(i, i + 500)) {
+      batch.update(d.ref, {
+        tags: arrayRemove(oldTag),
+      });
+    }
+    await batch.commit();
+    const batch2 = writeBatch(db);
+    for (const d of docsWithTag.slice(i, i + 500)) {
+      batch2.update(d.ref, {
+        tags: arrayUnion(newTag),
+      });
+    }
+    await batch2.commit();
+  }
+}
+
+export async function removeTagFromReviews(userId: string, tag: string): Promise<void> {
+  const q = query(collection(db, 'reviews'), where('userId', '==', userId));
+  const snapshot = await getDocs(q);
+  const docsWithTag = snapshot.docs.filter((d) => {
+    const tags: string[] = d.data().tags || [];
+    return tags.includes(tag);
+  });
+  if (docsWithTag.length === 0) return;
+
+  for (let i = 0; i < docsWithTag.length; i += 500) {
+    const batch = writeBatch(db);
+    for (const d of docsWithTag.slice(i, i + 500)) {
+      batch.update(d.ref, {
+        tags: arrayRemove(tag),
+      });
+    }
+    await batch.commit();
+  }
 }

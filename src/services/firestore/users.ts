@@ -174,6 +174,16 @@ export async function removeCustomTag(userId: string, tag: string): Promise<void
   });
 }
 
+export async function renameCustomTag(userId: string, oldTag: string, newTag: string): Promise<void> {
+  const userRef = doc(db, 'users', userId);
+  await updateDoc(userRef, {
+    customTags: arrayRemove(oldTag),
+  });
+  await updateDoc(userRef, {
+    customTags: arrayUnion(newTag),
+  });
+}
+
 export async function followUser(
   currentUserId: string,
   targetUserId: string,

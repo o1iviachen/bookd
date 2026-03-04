@@ -1,11 +1,14 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { View, Text, FlatList, useWindowDimensions, ActivityIndicator } from 'react-native';
+import { View, Text, FlatList, Pressable, useWindowDimensions, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQueries } from '@tanstack/react-query';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
+import { Ionicons } from '@expo/vector-icons';
 import { useReviewsForUser } from '../../hooks/useReviews';
+import { useRenameTag, useDeleteTag } from '../../hooks/useUser';
 import { getMatchById } from '../../services/matchService';
+import { ActionMenu } from '../../components/ui/ActionMenu';
 import { MatchPosterCard } from '../../components/match/MatchPosterCard';
 import { MatchFilters, MatchFilterState, applyMatchFilters } from '../../components/match/MatchFilters';
 import { Select } from '../../components/ui/Select';
@@ -46,6 +49,46 @@ export function TagMatchesScreen({ route, navigation }: any) {
   const targetUserId = userId || user?.uid || '';
   const { width: screenWidth } = useWindowDimensions();
   const { data: reviews, isLoading } = useReviewsForUser(targetUserId);
+  const renameTag = useRenameTag();
+  const deleteTag = useDeleteTag();
+  const [showMenu, setShowMenu] = useState(false);
+  const isOwnProfile = targetUserId === user?.uid;
+
+  const handleRename = () => {
+    setShowMenu(false);
+    Alert.prompt('Rename Tag', `Rename "${tag}" to:`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Rename',
+        onPress: (newName) => {
+          const trimmed = newName?.trim();
+          if (!trimmed || trimmed === tag || !user) return;
+          renameTag.mutate(
+            { userId: user.uid, oldTag: tag, newTag: trimmed },
+            { onSuccess: () => navigation.goBack() }
+          );
+        },
+      },
+    ], 'plain-text', tag);
+  };
+
+  const handleDelete = () => {
+    setShowMenu(false);
+    Alert.alert('Delete Tag', `Remove "${tag}" from all your reviews?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => {
+          if (!user) return;
+          deleteTag.mutate(
+            { userId: user.uid, tag },
+            { onSuccess: () => navigation.goBack() }
+          );
+        },
+      },
+    ]);
+  };
 
   // Get unique match IDs that have this tag
   const matchIds = useMemo(() => {
@@ -166,7 +209,15 @@ export function TagMatchesScreen({ route, navigation }: any) {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
-      <ScreenHeader title={tag} onBack={() => navigation.goBack()} />
+      <ScreenHeader
+        title={tag}
+        onBack={() => navigation.goBack()}
+        rightElement={isOwnProfile ? (
+          <Pressable onPress={() => setShowMenu(true)} hitSlop={8}>
+            <Ionicons name="ellipsis-horizontal" size={22} color={colors.foreground} />
+          </Pressable>
+        ) : undefined}
+      />
 
       {/* Filters */}
       <MatchFilters
@@ -219,6 +270,14 @@ export function TagMatchesScreen({ route, navigation }: any) {
           )}
         />
       )}
+      <ActionMenu
+        visible={showMenu}
+        onClose={() => setShowMenu(false)}
+        items={[
+          { label: 'Rename', icon: 'pencil-outline', onPress: handleRename },
+          { label: 'Delete', icon: 'trash-outline', onPress: handleDelete, destructive: true },
+        ]}
+      />
     </SafeAreaView>
   );
 }
