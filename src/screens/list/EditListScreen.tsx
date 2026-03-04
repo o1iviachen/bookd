@@ -82,15 +82,17 @@ export function EditListScreen({ route, navigation }: any) {
   const [ranked, setRanked] = useState(false);
   const [localMatchIds, setLocalMatchIds] = useState<number[]>([]);
   const [showPicker, setShowPicker] = useState(false);
+  const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
-    if (list) {
+    if (list && !initialized) {
       setName(list.name);
       setDescription(list.description);
       setRanked(list.ranked);
       setLocalMatchIds(list.matchIds);
+      setInitialized(true);
     }
-  }, [list]);
+  }, [list, initialized]);
 
   // Fetch match data for all matchIds
   const matchQueries = useQueries({

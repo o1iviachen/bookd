@@ -90,9 +90,9 @@ export function useUpdateList() {
   return useMutation({
     mutationFn: (params: { listId: string; data: { name?: string; description?: string; ranked?: boolean } }) =>
       updateList(params.listId, params.data),
-    onSuccess: () => {
+    onSuccess: (_, params) => {
       queryClient.invalidateQueries({ queryKey: ['lists'] });
-      queryClient.invalidateQueries({ queryKey: ['list'] });
+      queryClient.invalidateQueries({ queryKey: ['list', params.listId] });
     },
   });
 }
