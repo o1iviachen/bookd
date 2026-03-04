@@ -25,9 +25,14 @@ function AppContent() {
       const data = response.notification.request.content.data as Record<string, any>;
       if (!navigationRef.isReady()) return;
 
-      const { type, senderId, reviewId, listId } = data;
+      const { type, senderId, reviewId, listId, matchId } = data;
 
-      if (type === 'follow' && senderId) {
+      if ((type === 'match_pre' || type === 'match_post') && matchId) {
+        (navigationRef as any).navigate('MatchesTab', {
+          screen: 'MatchDetail',
+          params: { matchId: Number(matchId) },
+        });
+      } else if (type === 'follow' && senderId) {
         (navigationRef as any).navigate('ActivityTab', {
           screen: 'UserProfile',
           params: { userId: senderId },

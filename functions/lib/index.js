@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.diagnoseTeams = exports.auditTeamIds = exports.migrateLegacyMatches = exports.onReviewUpdated = exports.onReviewDeleted = exports.onReviewCreated = exports.backfillMatchRatings = exports.triggerAggregates = exports.computeAggregates = exports.backfillPlayerIds = exports.migratePlayerNames = exports.squadRefresh = exports.triggerSquadRefresh = exports.enrichPlayers = exports.enrichTeams = exports.buildPlayers = exports.migrateLeagueTier = exports.migrateSearchPrefixes = exports.fixPlayerNames = exports.migrateHasDetails = exports.syncDetailsForLeague = exports.manualSync = exports.buildTeams = exports.backfill = exports.detailBackfill = exports.liveSync = exports.dailySync = exports.backfillMatchDetailKickoffs = exports.submitReport = exports.deleteAccount = exports.moderateReviewMedia = exports.sendPushNotification = void 0;
+exports.diagnoseTeams = exports.auditTeamIds = exports.migrateLegacyMatches = exports.backfillMatchRatings = exports.triggerAggregates = exports.computeAggregates = exports.backfillPlayerIds = exports.migratePlayerNames = exports.squadRefresh = exports.triggerSquadRefresh = exports.enrichPlayers = exports.enrichTeams = exports.buildPlayers = exports.migrateLeagueTier = exports.migrateSearchPrefixes = exports.fixPlayerNames = exports.migrateHasDetails = exports.syncDetailsForLeague = exports.manualSync = exports.buildTeams = exports.backfill = exports.detailBackfill = exports.liveSync = exports.dailySync = exports.backfillMatchDetailKickoffs = exports.submitReport = exports.deleteAccount = exports.moderateReviewMedia = exports.onMatchStatusChange = exports.preMatchNotify = exports.sendPushNotification = void 0;
 const functions = __importStar(require("firebase-functions"));
 const admin = __importStar(require("firebase-admin"));
 admin.initializeApp();
@@ -45,6 +45,22 @@ const backfill_1 = require("./sync/backfill");
 // ─── Push Notifications ───
 var notifications_1 = require("./notifications");
 Object.defineProperty(exports, "sendPushNotification", { enumerable: true, get: function () { return notifications_1.sendPushNotification; } });
+const matchEventNotifications_1 = require("./matchEventNotifications");
+// ─── Match Event Notifications ───
+exports.preMatchNotify = functions
+    .runWith({ timeoutSeconds: 120, memory: '256MB' })
+    .pubsub.schedule('every 5 minutes')
+    .onRun(async () => {
+    const count = await (0, matchEventNotifications_1.sendPreMatchNotifications)();
+    if (count > 0)
+        console.log(`[preMatchNotify] Sent for ${count} matches`);
+});
+exports.onMatchStatusChange = functions
+    .runWith({ timeoutSeconds: 60, memory: '256MB' })
+    .firestore.document('matches/{matchId}')
+    .onUpdate(async (change) => {
+    await (0, matchEventNotifications_1.handleMatchStatusChange)(change);
+});
 // ─── Content Moderation ───
 var moderateMedia_1 = require("./moderateMedia");
 Object.defineProperty(exports, "moderateReviewMedia", { enumerable: true, get: function () { return moderateMedia_1.moderateReviewMedia; } });
@@ -921,104 +937,6 @@ exports.backfillMatchRatings = functions
     res.json({ success: true, reviewsProcessed: totalReviews, matchesUpdated });
 });
 // ─── Helpers ───
-// ─── Review Triggers — update match aggregate stats ───────────────────────────
-//
-// Client-side code cannot write to the 'matches' collection (rules: write: false).
-// These Cloud Function triggers run with admin SDK and keep ratingSum / ratingCount /
-// reviewCount / ratingBuckets in sync whenever a review is created, updated, or deleted.
-//
-// ratingBuckets keys are rating × 10 as integer strings (e.g. 3.5 → "35") to avoid
-// Firestore dot-notation ambiguity with decimal keys.
-function ratingKey(rating) {
-    return String(Math.round(rating * 10));
-}
-exports.onReviewCreated = functions.firestore
-    .document('reviews/{reviewId}')
-    .onCreate(async (snap) => {
-    var _a;
-    const data = snap.data();
-    const matchId = data === null || data === void 0 ? void 0 : data.matchId;
-    const rating = ((_a = data === null || data === void 0 ? void 0 : data.rating) !== null && _a !== void 0 ? _a : 0);
-    if (!matchId)
-        return;
-    const db = admin.firestore();
-    const matchRef = db.collection('matches').doc(String(matchId));
-    const update = {
-        reviewCount: admin.firestore.FieldValue.increment(1),
-    };
-    if (rating > 0) {
-        update.ratingSum = admin.firestore.FieldValue.increment(rating);
-        update.ratingCount = admin.firestore.FieldValue.increment(1);
-        update[`ratingBuckets.${ratingKey(rating)}`] = admin.firestore.FieldValue.increment(1);
-    }
-    await matchRef.update(update).catch((err) => {
-        // Match doc may not exist yet (e.g. review for an unsynced match) — non-fatal
-        console.warn(`[onReviewCreated] Could not update match ${matchId}:`, err.message);
-    });
-});
-exports.onReviewDeleted = functions.firestore
-    .document('reviews/{reviewId}')
-    .onDelete(async (snap) => {
-    var _a;
-    const data = snap.data();
-    const matchId = data === null || data === void 0 ? void 0 : data.matchId;
-    const rating = ((_a = data === null || data === void 0 ? void 0 : data.rating) !== null && _a !== void 0 ? _a : 0);
-    if (!matchId)
-        return;
-    const db = admin.firestore();
-    const matchRef = db.collection('matches').doc(String(matchId));
-    const update = {
-        reviewCount: admin.firestore.FieldValue.increment(-1),
-    };
-    if (rating > 0) {
-        update.ratingSum = admin.firestore.FieldValue.increment(-rating);
-        update.ratingCount = admin.firestore.FieldValue.increment(-1);
-        update[`ratingBuckets.${ratingKey(rating)}`] = admin.firestore.FieldValue.increment(-1);
-    }
-    await matchRef.update(update).catch((err) => {
-        console.warn(`[onReviewDeleted] Could not update match ${matchId}:`, err.message);
-    });
-});
-exports.onReviewUpdated = functions.firestore
-    .document('reviews/{reviewId}')
-    .onUpdate(async (change) => {
-    var _a, _b;
-    const before = change.before.data();
-    const after = change.after.data();
-    const matchId = after === null || after === void 0 ? void 0 : after.matchId;
-    if (!matchId)
-        return;
-    const oldRating = ((_a = before === null || before === void 0 ? void 0 : before.rating) !== null && _a !== void 0 ? _a : 0);
-    const newRating = ((_b = after === null || after === void 0 ? void 0 : after.rating) !== null && _b !== void 0 ? _b : 0);
-    if (oldRating === newRating)
-        return; // rating unchanged — nothing to do
-    const db = admin.firestore();
-    const matchRef = db.collection('matches').doc(String(matchId));
-    const update = {};
-    if (newRating > 0 && oldRating > 0) {
-        // Both rated — adjust sum by delta and swap bucket counts
-        update.ratingSum = admin.firestore.FieldValue.increment(newRating - oldRating);
-        update[`ratingBuckets.${ratingKey(oldRating)}`] = admin.firestore.FieldValue.increment(-1);
-        update[`ratingBuckets.${ratingKey(newRating)}`] = admin.firestore.FieldValue.increment(1);
-    }
-    else if (newRating > 0 && oldRating === 0) {
-        // Unrated → rated
-        update.ratingSum = admin.firestore.FieldValue.increment(newRating);
-        update.ratingCount = admin.firestore.FieldValue.increment(1);
-        update[`ratingBuckets.${ratingKey(newRating)}`] = admin.firestore.FieldValue.increment(1);
-    }
-    else if (newRating === 0 && oldRating > 0) {
-        // Rated → unrated
-        update.ratingSum = admin.firestore.FieldValue.increment(-oldRating);
-        update.ratingCount = admin.firestore.FieldValue.increment(-1);
-        update[`ratingBuckets.${ratingKey(oldRating)}`] = admin.firestore.FieldValue.increment(-1);
-    }
-    if (Object.keys(update).length > 0) {
-        await matchRef.update(update).catch((err) => {
-            console.warn(`[onReviewUpdated] Could not update match ${matchId}:`, err.message);
-        });
-    }
-});
 /**
  * One-time migration: clean up old football-data.org match documents.
  *

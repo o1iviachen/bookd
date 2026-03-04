@@ -20,6 +20,7 @@ const DEFAULT_PREFS: NotificationPreferences = {
   listLikes: true,
   listComments: true,
   follows: true,
+  matchEvents: true,
 };
 
 export function NotificationSettingsScreen() {
@@ -57,6 +58,7 @@ export function NotificationSettingsScreen() {
       listLikes: enabled,
       listComments: enabled,
       follows: enabled,
+      matchEvents: enabled,
     });
   };
 
@@ -67,6 +69,7 @@ export function NotificationSettingsScreen() {
     { label: 'List Likes', description: 'When someone likes your list', key: 'listLikes' },
     { label: 'List Comments', description: 'When someone comments on your list', key: 'listComments' },
     { label: 'New Followers', description: 'When someone starts following you', key: 'follows' },
+    { label: 'Match Events', description: 'Pre-kickoff and post-match alerts for your teams', key: 'matchEvents' },
   ];
 
   return (

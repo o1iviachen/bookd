@@ -12,6 +12,25 @@ import { runBackfill, buildTeamsFromMatches, buildPlayersAndEnrichTeams, fetchTe
 // ─── Push Notifications ───
 export { sendPushNotification } from './notifications';
 
+import { sendPreMatchNotifications, handleMatchStatusChange } from './matchEventNotifications';
+
+// ─── Match Event Notifications ───
+
+export const preMatchNotify = functions
+  .runWith({ timeoutSeconds: 120, memory: '256MB' })
+  .pubsub.schedule('every 5 minutes')
+  .onRun(async () => {
+    const count = await sendPreMatchNotifications();
+    if (count > 0) console.log(`[preMatchNotify] Sent for ${count} matches`);
+  });
+
+export const onMatchStatusChange = functions
+  .runWith({ timeoutSeconds: 60, memory: '256MB' })
+  .firestore.document('matches/{matchId}')
+  .onUpdate(async (change) => {
+    await handleMatchStatusChange(change);
+  });
+
 // ─── Content Moderation ───
 export { moderateReviewMedia } from './moderateMedia';
 

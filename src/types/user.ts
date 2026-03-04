@@ -7,6 +7,7 @@ export interface NotificationPreferences {
   listLikes: boolean;
   listComments: boolean;
   follows: boolean;
+  matchEvents: boolean;
 }
 
 export interface User {
