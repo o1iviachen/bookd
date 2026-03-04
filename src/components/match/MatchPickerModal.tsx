@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { View, Text, Modal, FlatList, Pressable, TextInput as RNTextInput, useWindowDimensions, ActivityIndicator } from 'react-native';
+import { View, Text, Modal, FlatList, Pressable, TextInput as RNTextInput, useWindowDimensions, ActivityIndicator, Keyboard } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
@@ -22,9 +22,11 @@ interface MatchPickerModalProps {
   onClose: () => void;
   onAddMatches: (matchIds: number[]) => void;
   excludeMatchIds: number[];
+  singleSelect?: boolean;
+  finishedOnly?: boolean;
 }
 
-export function MatchPickerModal({ visible, onClose, onAddMatches, excludeMatchIds }: MatchPickerModalProps) {
+export function MatchPickerModal({ visible, onClose, onAddMatches, excludeMatchIds, singleSelect, finishedOnly }: MatchPickerModalProps) {
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
   const { width: screenWidth } = useWindowDimensions();
@@ -53,6 +55,13 @@ export function MatchPickerModal({ visible, onClose, onAddMatches, excludeMatchI
   }, [visible]);
 
   const toggleMatch = (matchId: number) => {
+    if (singleSelect) {
+      onAddMatches([matchId]);
+      setSearch('');
+      setSelected([]);
+      onClose();
+      return;
+    }
     setSelected((prev) =>
       prev.includes(matchId) ? prev.filter((id) => id !== matchId) : [...prev, matchId]
     );
@@ -77,6 +86,10 @@ export function MatchPickerModal({ visible, onClose, onAddMatches, excludeMatchI
     const source = isSearching ? searchMatches : browseMatches;
     let result = source.filter((m) => !excludeMatchIds.includes(m.id));
 
+    if (finishedOnly) {
+      result = result.filter((m) => m.status === 'FINISHED');
+    }
+
     result = applyMatchFilters(result, filters);
 
     // Only apply local text filter for browse matches (search results are already filtered)
@@ -93,9 +106,9 @@ export function MatchPickerModal({ visible, onClose, onAddMatches, excludeMatchI
     }
 
     // Sort
-    if (!isSearching) {
+    {
       if (sortBy === 'popular') {
-        result.sort((a, b) => (b.ratingCount || 0) - (a.ratingCount || 0));
+        result.sort((a, b) => (b.reviewCount || 0) - (a.reviewCount || 0));
       } else {
         result.sort((a, b) => new Date(b.kickoff).getTime() - new Date(a.kickoff).getTime());
       }
@@ -114,11 +127,13 @@ export function MatchPickerModal({ visible, onClose, onAddMatches, excludeMatchI
             <Text style={{ color: colors.primary, fontSize: 16 }}>Cancel</Text>
           </Pressable>
           <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 17 }}>
-            Add Matches{selected.length > 0 ? ` (${selected.length})` : ''}
+            {singleSelect ? 'Select a Match' : `Add Matches${selected.length > 0 ? ` (${selected.length})` : ''}`}
           </Text>
-          <Pressable onPress={handleDone}>
-            <Text style={{ color: colors.primary, fontSize: 16, fontWeight: '600' }}>Done</Text>
-          </Pressable>
+          {!singleSelect ? (
+            <Pressable onPress={handleDone}>
+              <Text style={{ color: colors.primary, fontSize: 16, fontWeight: '600' }}>Done</Text>
+            </Pressable>
+          ) : <View style={{ width: 40 }} />}
         </View>
 
         {/* Search bar */}
@@ -152,30 +167,26 @@ export function MatchPickerModal({ visible, onClose, onAddMatches, excludeMatchI
           showMinLogs={false}
         />
 
-        {/* Count + Sort */}
-        {!isSearching && (
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingBottom: spacing.sm }}>
-            <Text style={{ ...typography.caption, color: colors.textSecondary }}>
-              {filtered.length} matches
-            </Text>
-            <View style={{ width: 160 }}>
-              <Select
-                value={sortBy}
-                onValueChange={(v) => setSortBy(v as SortBy)}
-                title="Sort By"
-                options={SORT_OPTIONS}
-              />
-            </View>
+        {/* Sort */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: spacing.sm }}>
+          <View style={{ width: 160 }}>
+            <Select
+              value={sortBy}
+              onValueChange={(v) => setSortBy(v as SortBy)}
+              title="Sort By"
+              options={SORT_OPTIONS}
+            />
           </View>
-        )}
+        </View>
 
         {/* Match grid */}
         {isLoading ? (
-          <View style={{ flex: 1, justifyContent: 'center' }}><LoadingSpinner fullScreen={false} /></View>
+          <Pressable style={{ flex: 1, justifyContent: 'center' }} onPress={Keyboard.dismiss}><LoadingSpinner fullScreen={false} /></Pressable>
         ) : filtered.length === 0 ? (
-          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={{ ...typography.body, color: colors.textSecondary }}>No matches found</Text>
-          </View>
+          <Pressable style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingBottom: '20%' }} onPress={Keyboard.dismiss}>
+            <Ionicons name="football-outline" size={48} color={colors.textSecondary} />
+            <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.md }}>No matches found</Text>
+          </Pressable>
         ) : (
           <FlatList
             indicatorStyle={isDark ? 'white' : 'default'}
@@ -184,6 +195,7 @@ export function MatchPickerModal({ visible, onClose, onAddMatches, excludeMatchI
             numColumns={NUM_COLUMNS}
             keyExtractor={(item) => item.id.toString()}
             keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
             contentContainerStyle={{ paddingHorizontal: HORIZONTAL_PADDING, paddingTop: spacing.sm, paddingBottom: 40 }}
             columnWrapperStyle={{ gap: GAP, marginBottom: GAP }}
             onEndReached={() => {
@@ -196,7 +208,7 @@ export function MatchPickerModal({ visible, onClose, onAddMatches, excludeMatchI
                 match={item}
                 onPress={() => toggleMatch(item.id)}
                 width={CARD_WIDTH}
-                selected={selected.includes(item.id)}
+                selected={!singleSelect && selected.includes(item.id)}
               />
             )}
             ListFooterComponent={
