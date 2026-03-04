@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { View, Text, FlatList, Pressable } from 'react-native';
+import React, { useMemo, useCallback, useState } from 'react';
+import { View, Text, FlatList, Pressable, RefreshControl, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQueries } from '@tanstack/react-query';
@@ -51,7 +51,13 @@ export function NotificationsScreen({ navigation }: any) {
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography } = theme;
   const { user } = useAuth();
-  const { data: notifications } = useNotifications(user?.uid || '');
+  const { data: notifications, refetch } = useNotifications(user?.uid || '');
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await refetch();
+    setRefreshing(false);
+  }, [refetch]);
   const markRead = useMarkNotificationRead();
   const markAllRead = useMarkAllRead();
 
@@ -114,7 +120,10 @@ export function NotificationsScreen({ navigation }: any) {
       </View>
 
       {!notifications || notifications.length === 0 ? (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl }}>
+        <ScrollView
+          contentContainerStyle={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+        >
           <Ionicons name="notifications-outline" size={48} color={colors.textSecondary} />
           <Text style={{ ...typography.h4, color: colors.foreground, marginTop: spacing.md }}>
             No activity yet
@@ -122,9 +131,10 @@ export function NotificationsScreen({ navigation }: any) {
           <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.xs }}>
             When people interact with you, you'll see it here
           </Text>
-        </View>
+        </ScrollView>
       ) : (
         <FlatList indicatorStyle={isDark ? 'white' : 'default'}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
           data={notifications}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => {

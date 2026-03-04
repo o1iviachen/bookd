@@ -21,6 +21,11 @@ function AppContent() {
   const { isDark } = useTheme();
 
   useEffect(() => {
+    // Invalidate notifications cache when a push arrives (even if not tapped)
+    const receivedSub = Notifications.addNotificationReceivedListener(() => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    });
+
     const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
       const data = response.notification.request.content.data as Record<string, any>;
       if (!navigationRef.isReady()) return;
@@ -52,7 +57,10 @@ function AppContent() {
       }
     });
 
-    return () => subscription.remove();
+    return () => {
+      receivedSub.remove();
+      subscription.remove();
+    };
   }, []);
 
   return (
