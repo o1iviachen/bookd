@@ -6,6 +6,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useVoteOnReview } from '../../hooks/useReviews';
 import { useUserProfile } from '../../hooks/useUser';
+import { useCommentsForReview } from '../../hooks/useComments';
 import { Avatar } from '../ui/Avatar';
 import { StarRating } from '../ui/StarRating';
 import { MentionText } from '../ui/MentionText';
@@ -24,12 +25,14 @@ interface ReviewCardProps {
   isLast?: boolean;
 }
 
-export function ReviewCard({ review, onPress, commentCount, isLast }: ReviewCardProps) {
+export function ReviewCard({ review, onPress, commentCount: commentCountProp, isLast }: ReviewCardProps) {
   const { theme } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
   const { user } = useAuth();
   const voteMutation = useVoteOnReview();
   const { data: authorProfile } = useUserProfile(review.userId);
+  const { data: comments } = useCommentsForReview(review.id);
+  const commentCount = commentCountProp ?? (comments?.length || 0);
   const displayName = authorProfile?.displayName || authorProfile?.username || review.username;
   const displayUsername = authorProfile?.username || review.username;
   const displayAvatar = authorProfile?.avatar ?? review.userAvatar;

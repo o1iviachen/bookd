@@ -11,7 +11,6 @@ import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useMatch, useMatchDetail } from '../../hooks/useMatches';
 import { useReviewsForMatch } from '../../hooks/useReviews';
-import { useCommentsForReview } from '../../hooks/useComments';
 import { useUserProfile, useReviewerTeamIds } from '../../hooks/useUser';
 import { getUserProfile } from '../../services/firestore/users';
 import { useListsForMatch } from '../../hooks/useLists';
@@ -735,11 +734,6 @@ function WatchedByFriends({ reviews, matchId, following, colors, spacing, typogr
 type ReviewFilter = 'everyone' | 'friends' | 'you';
 type ReviewSort = 'recent' | 'popular' | 'highest' | 'lowest';
 
-function ReviewCardWithComments({ review, onPress, isLast }: { review: any; onPress: () => void; isLast?: boolean }) {
-  const { data: comments } = useCommentsForReview(review.id);
-  const commentCount = comments?.length || 0;
-  return <ReviewCard review={review} onPress={onPress} commentCount={commentCount} isLast={isLast} />;
-}
 
 function ReviewsSection({ reviews, userId, profile, colors, spacing, typography, borderRadius, navigation }: any) {
   const [filter, setFilter] = useState<ReviewFilter>('everyone');
@@ -828,7 +822,7 @@ function ReviewsSection({ reviews, userId, profile, colors, spacing, typography,
         </View>
       ) : (
         filteredReviews.map((review: any, i: number) => (
-          <ReviewCardWithComments
+          <ReviewCard
             key={review.id}
             review={review}
             onPress={() => navigation.navigate('ReviewDetail', { reviewId: review.id })}
