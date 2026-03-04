@@ -3,7 +3,7 @@ import { syncLeagueSeason } from './syncMatches';
 import { syncLeagueStandings } from './syncStandings';
 import { syncMatchDetails } from './syncDetails';
 import * as admin from 'firebase-admin';
-import { getFixtures, getTeamSquad } from '../apiFootball';
+import { getFixtures, getTeamSquad, getTeamInfo, getTeamCoach } from '../apiFootball';
 import { API_FOOTBALL_BASE, API_FOOTBALL_KEY, RATE_LIMIT_DELAY_MS } from '../config';
 import axios from 'axios';
 
@@ -680,8 +680,82 @@ export async function enrichPlayersFromSquads(batchLimit = 50, offset = 0): Prom
         }
       }
 
+      // ─── Phase 4: Fetch team info (venue, founded, colors) ───
+      apiCalls++;
+      const teamInfoResponse = await getTeamInfo(teamId);
+      const teamUpdate: Record<string, any> = {};
+
+      if (teamInfoResponse) {
+        if (teamInfoResponse.venue?.name) teamUpdate.venue = teamInfoResponse.venue.name;
+        if (teamInfoResponse.team?.founded) teamUpdate.founded = teamInfoResponse.team.founded;
+        if (teamInfoResponse.team?.colors?.player?.primary) {
+          const primary = teamInfoResponse.team.colors.player.primary;
+          const secondary = teamInfoResponse.team.colors.player.number;
+          teamUpdate.clubColors = `#${primary}`;
+          if (secondary && secondary !== primary) {
+            teamUpdate.clubColors = `#${primary} / #${secondary}`;
+          }
+        }
+      }
+
+      // ─── Phase 5: Fetch coach with full name ───
+      apiCalls++;
+      const coachResponse = await getTeamCoach(teamId);
+      if (coachResponse) {
+        const firstWord = (coachResponse.firstname || '').split(/\s+/)[0];
+        const coachName = decodeEntities(
+          coachResponse.name
+            || (firstWord && coachResponse.lastname ? `${firstWord} ${coachResponse.lastname}` : coachResponse.firstname || coachResponse.lastname || '')
+        );
+        teamUpdate.coach = { id: coachResponse.id, name: coachName };
+
+        // Also update the coach's player doc with full name + photo
+        const coachRef = db.collection(COLLECTIONS.PLAYERS).doc(String(coachResponse.id));
+        await coachRef.set({
+          id: coachResponse.id,
+          name: coachName,
+          nameLower: coachName.toLowerCase(),
+          searchName: extractSearchName(coachName),
+          searchPrefixes: generateSearchPrefixes(coachName),
+          photo: coachResponse.photo || null,
+          nationality: coachResponse.nationality || null,
+          position: 'Coach',
+          currentTeam: { id: teamId, name: teamName, crest: teamCrest },
+          leagueTier: teamTier,
+          syncedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+      }
+
+      // ─── Phase 6: Build activeCompetitions from competitionCodes ───
+      const compCodes: string[] = teamData.competitionCodes || [];
+      if (compCodes.length > 0) {
+        const activeCompetitions = compCodes
+          .map((code: string) => {
+            const league = SYNC_LEAGUES.find((l) => l.code === code);
+            if (!league) return null;
+            return {
+              id: league.apiId,
+              name: league.name,
+              code: league.code,
+              emblem: `https://media.api-sports.io/football/leagues/${league.apiId}.png`,
+            };
+          })
+          .filter(Boolean);
+        if (activeCompetitions.length > 0) {
+          teamUpdate.activeCompetitions = activeCompetitions;
+        }
+      }
+
+      // Write all team updates in one call
+      if (Object.keys(teamUpdate).length > 0) {
+        await db.collection(COLLECTIONS.TEAMS).doc(String(teamId)).set(
+          { ...teamUpdate, syncedAt: admin.firestore.FieldValue.serverTimestamp() },
+          { merge: true }
+        );
+      }
+
       teamsProcessed++;
-      console.log(`[enrichPlayers] Team ${teamId} (${teamName}): squad=${currentSquad.length}, enriched=${allPlayers.length}, apiCalls=${page}`);
+      console.log(`[enrichPlayers] Team ${teamId} (${teamName}): squad=${currentSquad.length}, enriched=${allPlayers.length}, coach=${coachResponse?.name || 'n/a'}`);
     } catch (err: any) {
       console.error(`[enrichPlayers] Error for team ${teamId}:`, err.message);
       teamsProcessed++;

@@ -221,3 +221,50 @@ export async function getTeamSquad(teamId: number): Promise<ApiSquadResponse | n
   const squads = response.data.response || [];
   return squads[0] || null;
 }
+
+// ─── Team Info ───
+
+export interface ApiTeamInfo {
+  team: {
+    id: number;
+    name: string;
+    logo: string;
+    founded: number | null;
+    colors?: {
+      player?: { primary?: string; number?: string };
+      goalkeeper?: { primary?: string; number?: string };
+    };
+  };
+  venue: {
+    id: number | null;
+    name: string | null;
+    city: string | null;
+    capacity: number | null;
+  };
+}
+
+export async function getTeamInfo(teamId: number): Promise<ApiTeamInfo | null> {
+  await rateLimit();
+  const response = await client.get('/teams', { params: { id: teamId } });
+  const teams = response.data.response || [];
+  return teams[0] || null;
+}
+
+// ─── Coach ───
+
+export interface ApiCoach {
+  id: number;
+  name: string;
+  firstname: string;
+  lastname: string;
+  nationality: string | null;
+  photo: string;
+}
+
+export async function getTeamCoach(teamId: number): Promise<ApiCoach | null> {
+  await rateLimit();
+  const response = await client.get('/coachs', { params: { team: teamId } });
+  const coaches = response.data.response || [];
+  // Return the most recent (last) coach entry — API returns career history
+  return coaches.length > 0 ? coaches[coaches.length - 1] : null;
+}

@@ -12,6 +12,8 @@ exports.getStandings = getStandings;
 exports.getPlayerById = getPlayerById;
 exports.getLiveFixtures = getLiveFixtures;
 exports.getTeamSquad = getTeamSquad;
+exports.getTeamInfo = getTeamInfo;
+exports.getTeamCoach = getTeamCoach;
 const axios_1 = __importDefault(require("axios"));
 const config_1 = require("./config");
 // API-Football HTTP client with built-in rate limiting
@@ -87,5 +89,18 @@ async function getTeamSquad(teamId) {
     const response = await client.get('/players/squads', { params: { team: teamId } });
     const squads = response.data.response || [];
     return squads[0] || null;
+}
+async function getTeamInfo(teamId) {
+    await rateLimit();
+    const response = await client.get('/teams', { params: { id: teamId } });
+    const teams = response.data.response || [];
+    return teams[0] || null;
+}
+async function getTeamCoach(teamId) {
+    await rateLimit();
+    const response = await client.get('/coachs', { params: { team: teamId } });
+    const coaches = response.data.response || [];
+    // Return the most recent (last) coach entry — API returns career history
+    return coaches.length > 0 ? coaches[coaches.length - 1] : null;
 }
 //# sourceMappingURL=apiFootball.js.map
