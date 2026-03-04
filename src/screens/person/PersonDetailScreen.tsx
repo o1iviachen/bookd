@@ -43,15 +43,27 @@ export function PersonDetailScreen({ route, navigation }: any) {
   const COLUMNS = 3;
   const POSTER_WIDTH = (screenWidth - spacing.md * 2 - POSTER_GAP * (COLUMNS - 1)) / COLUMNS;
 
-  const allMatches = useMemo(() => (personMatches || []).map((a) => a.match), [personMatches]);
-
   // Dual-role detection: split matches into coaching vs playing appearances
+  // Only trust coach appearances when the Firestore record supports it
+  // (prevents API data errors like a player ID appearing as coach on wrong matches)
   const { coachAppearances, playerAppearances, isDualRole } = useMemo(() => {
     if (!personMatches) return { coachAppearances: [], playerAppearances: [], isDualRole: false };
     const coach = personMatches.filter((a) => a.role === 'coach');
     const player = personMatches.filter((a) => a.role !== 'coach');
+    const personIsCoach = person?.position === 'Coach' || !!person?.formerPosition;
+    const trustCoachRole = role === 'manager' || personIsCoach;
+    if (!trustCoachRole && coach.length > 0) {
+      // Discard spurious coach appearances for known players
+      return { coachAppearances: [], playerAppearances: player, isDualRole: false };
+    }
     return { coachAppearances: coach, playerAppearances: player, isDualRole: coach.length > 0 && player.length > 0 };
-  }, [personMatches]);
+  }, [personMatches, person, role]);
+
+  // allMatches excludes spurious coach appearances when not trusted
+  const allMatches = useMemo(() => {
+    const validAppearances = [...playerAppearances, ...coachAppearances];
+    return validAppearances.map((a) => a.match);
+  }, [playerAppearances, coachAppearances]);
 
   const coachMatches = useMemo(() => coachAppearances.map((a) => a.match), [coachAppearances]);
   const playerOnlyMatches = useMemo(() => playerAppearances.map((a) => a.match), [playerAppearances]);
