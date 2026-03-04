@@ -35,23 +35,25 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.syncMatchesForDateRange = syncMatchesForDateRange;
 exports.syncLeagueSeason = syncLeagueSeason;
-exports.getCurrentSeason = getCurrentSeason;
 const admin = __importStar(require("firebase-admin"));
 const apiFootball_1 = require("../apiFootball");
 const transforms_1 = require("../transforms");
 const config_1 = require("../config");
+const leagueHelper_1 = require("../leagueHelper");
 const db = admin.firestore();
 /**
- * Syncs matches for a given date range across all configured leagues.
+ * Syncs matches for a given date range across all enabled leagues.
  * Called daily to fetch yesterday's results + today/tomorrow's schedule.
  */
 async function syncMatchesForDateRange(from, to) {
+    const leagues = await (0, leagueHelper_1.getEnabledLeagues)();
+    const leagueMap = await (0, leagueHelper_1.getLeagueByApiIdMap)();
     let totalSynced = 0;
-    for (const league of config_1.SYNC_LEAGUES) {
+    for (const league of leagues) {
         try {
             const fixtures = await (0, apiFootball_1.getFixtures)({
                 league: league.apiId,
-                season: getCurrentSeason(league.apiId),
+                season: (0, leagueHelper_1.getSeasonForLeague)(league),
                 from,
                 to,
             });
@@ -59,7 +61,7 @@ async function syncMatchesForDateRange(from, to) {
                 continue;
             const docs = [];
             for (const fixture of fixtures) {
-                const matchDoc = (0, transforms_1.transformFixtureToMatch)(fixture);
+                const matchDoc = (0, transforms_1.transformFixtureToMatch)(fixture, leagueMap);
                 if (!matchDoc)
                     continue;
                 docs.push({ id: String(fixture.fixture.id), data: matchDoc });
@@ -80,12 +82,13 @@ async function syncMatchesForDateRange(from, to) {
  */
 async function syncLeagueSeason(leagueApiId, season) {
     try {
+        const leagueMap = await (0, leagueHelper_1.getLeagueByApiIdMap)();
         const fixtures = await (0, apiFootball_1.getFixtures)({ league: leagueApiId, season });
         if (fixtures.length === 0)
             return 0;
         const docs = [];
         for (const fixture of fixtures) {
-            const matchDoc = (0, transforms_1.transformFixtureToMatch)(fixture);
+            const matchDoc = (0, transforms_1.transformFixtureToMatch)(fixture, leagueMap);
             if (!matchDoc)
                 continue;
             docs.push({ id: String(fixture.fixture.id), data: matchDoc });
@@ -109,22 +112,5 @@ async function batchWrite(docs) {
         }
         await batch.commit();
     }
-}
-/**
- * Determines the current season year for a league.
- * European leagues: season starts in Aug/Sep, so Aug-Dec = current year, Jan-Jul = previous year.
- * Southern hemisphere / calendar year leagues (MLS, BSA, JPL): use calendar year.
- */
-function getCurrentSeason(leagueApiId) {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth() + 1; // 1-12
-    // Calendar-year leagues
-    const calendarYearLeagues = [253, 71, 128, 98, 188]; // MLS, BSA, ARG, JPL, AUS
-    if (calendarYearLeagues.includes(leagueApiId)) {
-        return year;
-    }
-    // European leagues: season = start year
-    return month >= 7 ? year : year - 1;
 }
 //# sourceMappingURL=syncMatches.js.map

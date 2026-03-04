@@ -36,8 +36,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.LEAGUE_TIER = void 0;
-exports.getLeagueTier = getLeagueTier;
 exports.runBackfill = runBackfill;
 exports.buildTeamsFromMatches = buildTeamsFromMatches;
 exports.buildPlayersAndEnrichTeams = buildPlayersAndEnrichTeams;
@@ -47,6 +45,7 @@ exports.enrichPlayersFromSquads = enrichPlayersFromSquads;
 exports.generateSearchPrefixes = generateSearchPrefixes;
 exports.backfillPlayerNameLower = backfillPlayerNameLower;
 const config_1 = require("../config");
+const leagueHelper_1 = require("../leagueHelper");
 const syncMatches_1 = require("./syncMatches");
 const syncStandings_1 = require("./syncStandings");
 const syncDetails_1 = require("./syncDetails");
@@ -70,33 +69,7 @@ function decodeEntities(text) {
         .replace(/&gt;/g, '>')
         .replace(/&nbsp;/g, ' ');
 }
-// League tier for player popularity ranking (lower = more popular)
-// Players on top-tier teams sort first in search results
-exports.LEAGUE_TIER = {
-    // Tier 1 — Top 5 European leagues + Champions League
-    PL: 1, CL: 1, PD: 1, BL1: 1, SA: 1, FL1: 1,
-    // Tier 2 — Other European cups + strong leagues
-    EL: 2, ECL: 2, ELC: 2, DED: 2, PPL: 2,
-    // Tier 3 — National cups + mid-tier leagues
-    FAC: 3, EFL: 3, SPL: 3, SL: 3, BEL: 3, BSA: 3, ARG: 3,
-    // Tier 4 — Other leagues
-    MLS: 4, LMX: 4, SAU: 4, JPL: 4, AUS: 4,
-    // Tier 5 — International (players appear here but primarily belong to a club)
-    WC: 5, EURO: 5, NL: 5, CA: 5,
-};
-const DEFAULT_LEAGUE_TIER = 6;
-/** Get the best (lowest) league tier for a set of competition codes */
-function getLeagueTier(competitionCodes) {
-    if (!competitionCodes || competitionCodes.length === 0)
-        return DEFAULT_LEAGUE_TIER;
-    let best = DEFAULT_LEAGUE_TIER;
-    for (const code of competitionCodes) {
-        const tier = exports.LEAGUE_TIER[code];
-        if (tier !== undefined && tier < best)
-            best = tier;
-    }
-    return best;
-}
+// getLeagueTier is now in leagueHelper.ts (reads from Firestore leagues collection)
 /**
  * Backfills historical match data for all leagues and seasons.
  * This is an HTTP-triggered function meant to be called once (or per-league).
@@ -109,9 +82,10 @@ function getLeagueTier(competitionCodes) {
  */
 async function runBackfill(options) {
     const { leagueCode, season, includeDetails } = options;
+    const allLeagues = await (0, leagueHelper_1.getEnabledLeagues)();
     const leagues = leagueCode
-        ? config_1.SYNC_LEAGUES.filter((l) => l.code === leagueCode)
-        : config_1.SYNC_LEAGUES;
+        ? allLeagues.filter((l) => l.code === leagueCode)
+        : allLeagues;
     const seasons = season ? [season] : config_1.BACKFILL_SEASONS;
     let totalMatches = 0;
     let totalDetails = 0;
@@ -322,14 +296,14 @@ async function buildPlayersAndEnrichTeams() {
                     dateOfBirth: null,
                     photo: null,
                     currentTeam: teamId ? { id: teamId, name: teamName, crest: teamCrest } : null,
-                    leagueTier: getLeagueTier(compCode ? [compCode] : []),
+                    leagueTier: (0, leagueHelper_1.getLeagueTier)(compCode ? [compCode] : []),
                 });
                 playerLatestKickoff.set(p.id, kickoff);
             }
             else if (isNewer && teamId) {
                 const existing = playersMap.get(p.id);
                 existing.currentTeam = { id: teamId, name: teamName, crest: teamCrest };
-                const newTier = getLeagueTier(compCode ? [compCode] : []);
+                const newTier = (0, leagueHelper_1.getLeagueTier)(compCode ? [compCode] : []);
                 if (newTier < ((_a = existing.leagueTier) !== null && _a !== void 0 ? _a : 6))
                     existing.leagueTier = newTier;
                 playerLatestKickoff.set(p.id, kickoff);
@@ -660,7 +634,7 @@ async function refreshSquadsOnly(batchLimit = 200, lastTeamId = 0) {
         const teamId = teamData.id;
         const teamName = teamData.name;
         const teamCrest = teamData.crest;
-        const teamTier = getLeagueTier(teamData.competitionCodes);
+        const teamTier = await (0, leagueHelper_1.getLeagueTier)(teamData.competitionCodes);
         try {
             const result = await processTeamSquad(teamId, teamName, teamCrest, teamTier, currentSeason);
             playersEnriched += result.playersEnriched;
@@ -708,7 +682,7 @@ async function enrichPlayersFromSquads(batchLimit = 50, offset = 0) {
         const teamId = teamData.id;
         const teamName = teamData.name;
         const teamCrest = teamData.crest;
-        const teamTier = getLeagueTier(teamData.competitionCodes);
+        const teamTier = await (0, leagueHelper_1.getLeagueTier)(teamData.competitionCodes);
         try {
             // ─── Phases 1-3: Squad fetch, player enrichment, nationality backfill ───
             const squadResult = await processTeamSquad(teamId, teamName, teamCrest, teamTier, currentSeason);
@@ -781,10 +755,11 @@ async function enrichPlayersFromSquads(batchLimit = 50, offset = 0) {
             }
             // ─── Phase 6: Build activeCompetitions from competitionCodes ───
             const compCodes = teamData.competitionCodes || [];
+            const leagueCodeMap = await (0, leagueHelper_1.getLeagueByCodeMap)();
             if (compCodes.length > 0) {
                 const activeCompetitions = compCodes
                     .map((code) => {
-                    const league = config_1.SYNC_LEAGUES.find((l) => l.code === code);
+                    const league = leagueCodeMap.get(code);
                     if (!league)
                         return null;
                     return {

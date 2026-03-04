@@ -39,17 +39,18 @@ const admin = __importStar(require("firebase-admin"));
 const apiFootball_1 = require("../apiFootball");
 const transforms_1 = require("../transforms");
 const config_1 = require("../config");
-const syncMatches_1 = require("./syncMatches");
+const leagueHelper_1 = require("../leagueHelper");
 const db = admin.firestore();
 /**
  * Syncs league standings for all configured leagues.
  * Writes to the `standings` collection with doc ID: `{code}_{season}`
  */
 async function syncAllStandings() {
+    const leagues = await (0, leagueHelper_1.getEnabledLeagues)();
     let totalSynced = 0;
-    for (const league of config_1.SYNC_LEAGUES) {
+    for (const league of leagues) {
         try {
-            const season = (0, syncMatches_1.getCurrentSeason)(league.apiId);
+            const season = (0, leagueHelper_1.getSeasonForLeague)(league);
             const standingsGroups = await (0, apiFootball_1.getStandings)(league.apiId, season);
             if (standingsGroups.length === 0)
                 continue;

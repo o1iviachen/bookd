@@ -3,7 +3,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.transformFixtureToMatch = transformFixtureToMatch;
 exports.transformFixtureDetails = transformFixtureDetails;
 exports.transformStandings = transformStandings;
-const config_1 = require("./config");
 /** Decode common HTML entities that API-Football may embed in names. */
 function decodeEntities(text) {
     if (!text || !text.includes('&'))
@@ -43,9 +42,9 @@ const STATUS_MAP = {
     LIVE: 'IN_PLAY',
 };
 // Find our internal competition code from API-Football league ID
-function getCompetitionCode(apiLeagueId) {
-    const league = config_1.SYNC_LEAGUES.find((l) => l.apiId === apiLeagueId);
-    return (league === null || league === void 0 ? void 0 : league.code) || null;
+function getCompetitionCode(apiLeagueId, leagueMap) {
+    var _a;
+    return ((_a = leagueMap.get(apiLeagueId)) === null || _a === void 0 ? void 0 : _a.code) || null;
 }
 // Generate a shortName from a full team name
 // Strips common prefixes/suffixes (FC, CF, etc.) and keeps the recognizable name
@@ -59,11 +58,11 @@ function makeShortName(name) {
     return stripped || name;
 }
 // ─── Fixture → Match Document ───
-function transformFixtureToMatch(fixture) {
-    const code = getCompetitionCode(fixture.league.id);
+function transformFixtureToMatch(fixture, leagueMap) {
+    const code = getCompetitionCode(fixture.league.id, leagueMap);
     if (!code)
         return null;
-    const league = config_1.SYNC_LEAGUES.find((l) => l.apiId === fixture.league.id);
+    const league = leagueMap.get(fixture.league.id);
     return {
         id: fixture.fixture.id,
         legacyId: null,

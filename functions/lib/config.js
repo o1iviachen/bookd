@@ -7,8 +7,8 @@ exports.API_FOOTBALL_KEY = process.env.API_FOOTBALL_KEY || '';
 exports.API_FOOTBALL_BASE = 'https://v3.football.api-sports.io';
 // Rate limit: 450 req/min on the Ultra Plan
 exports.RATE_LIMIT_DELAY_MS = 135; // ~444 req/min to stay safe
-// Leagues to sync — API-Football league IDs
-// Format: { code: string (our internal code), apiId: number, name: string, country: string }
+// Used only by seedLeagues bootstrap function.
+// Runtime sync reads from Firestore leagues collection via leagueHelper.ts.
 exports.SYNC_LEAGUES = [
     // Top 5 European leagues
     { code: 'PL', apiId: 39, name: 'Premier League', country: 'England' },
@@ -55,6 +55,7 @@ exports.COLLECTIONS = {
     COMPETITIONS: 'competitions',
     TEAMS: 'teams',
     PLAYERS: 'players',
+    LEAGUES: 'leagues',
 };
 // Batch size for Firestore writes (max 500 per batch)
 exports.FIRESTORE_BATCH_SIZE = 450;
