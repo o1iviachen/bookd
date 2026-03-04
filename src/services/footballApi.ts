@@ -520,6 +520,7 @@ export interface PersonDetail {
   dateOfBirth: string | null;
   nationality: string | null;
   position: string | null;
+  formerPosition: string | null;
   shirtNumber: number | null;
   currentTeam: { id: number; name: string; crest: string } | null;
 }
@@ -536,6 +537,7 @@ export async function getPersonDetail(personId: number): Promise<PersonDetail> {
       dateOfBirth: null,
       nationality: null,
       position: null,
+      formerPosition: null,
       shirtNumber: null,
       currentTeam: null,
     };
@@ -550,6 +552,7 @@ export async function getPersonDetail(personId: number): Promise<PersonDetail> {
     dateOfBirth: data.dateOfBirth || null,
     nationality: data.nationality || null,
     position: data.position || null,
+    formerPosition: data.formerPosition || null,
     shirtNumber: null,
     currentTeam: data.currentTeam || null,
   };
@@ -952,7 +955,7 @@ export function groupMatchesByCompetition(matches: Match[]): Map<string, Match[]
   }
   // Sort each group so most recent matches appear first (left in horizontal carousels)
   for (const [key, group] of groups) {
-    groups.set(key, group.sort((a, b) => new Date(b.utcDate).getTime() - new Date(a.utcDate).getTime()));
+    groups.set(key, group.sort((a, b) => new Date(b.kickoff).getTime() - new Date(a.kickoff).getTime()));
   }
   return groups;
 }
