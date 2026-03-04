@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, Pressable, useWindowDimensions, NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
+import { View, Text, ScrollView, Pressable, useWindowDimensions, NativeScrollEvent, NativeSyntheticEvent, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
@@ -45,6 +45,17 @@ export function PersonDetailScreen({ route, navigation }: any) {
 
   const allMatches = useMemo(() => (personMatches || []).map((a) => a.match), [personMatches]);
 
+  // Dual-role detection: split matches into coaching vs playing appearances
+  const { coachAppearances, playerAppearances, isDualRole } = useMemo(() => {
+    if (!personMatches) return { coachAppearances: [], playerAppearances: [], isDualRole: false };
+    const coach = personMatches.filter((a) => a.role === 'coach');
+    const player = personMatches.filter((a) => a.role !== 'coach');
+    return { coachAppearances: coach, playerAppearances: player, isDualRole: coach.length > 0 && player.length > 0 };
+  }, [personMatches]);
+
+  const coachMatches = useMemo(() => coachAppearances.map((a) => a.match), [coachAppearances]);
+  const playerOnlyMatches = useMemo(() => playerAppearances.map((a) => a.match), [playerAppearances]);
+
   // Derive current team from most recent CLUB match (skip internationals)
   const INTL_COMP_IDS = new Set([1, 4, 5]); // World Cup, Euro, Nations League
   const derivedCurrentTeam = useMemo(() => {
@@ -81,6 +92,25 @@ export function PersonDetailScreen({ route, navigation }: any) {
     return result;
   }, [allMatches, filters, sort]);
 
+  // Filtered + sorted lists for dual-role sections
+  const filteredCoachMatches = useMemo(() => {
+    if (!isDualRole) return [];
+    const result = applyMatchFilters(coachMatches, filters);
+    result.sort(sort === 'recent_played'
+      ? (a, b) => new Date(b.kickoff).getTime() - new Date(a.kickoff).getTime()
+      : (a, b) => new Date(a.kickoff).getTime() - new Date(b.kickoff).getTime());
+    return result;
+  }, [isDualRole, coachMatches, filters, sort]);
+
+  const filteredPlayerMatches = useMemo(() => {
+    if (!isDualRole) return [];
+    const result = applyMatchFilters(playerOnlyMatches, filters);
+    result.sort(sort === 'recent_played'
+      ? (a, b) => new Date(b.kickoff).getTime() - new Date(a.kickoff).getTime()
+      : (a, b) => new Date(a.kickoff).getTime() - new Date(b.kickoff).getTime());
+    return result;
+  }, [isDualRole, playerOnlyMatches, filters, sort]);
+
   useEffect(() => { setDisplayedCount(PAGE_SIZE); }, [sort, filters]);
 
   const visibleMatches = useMemo(() => filteredMatches.slice(0, displayedCount), [filteredMatches, displayedCount]);
@@ -96,9 +126,9 @@ export function PersonDetailScreen({ route, navigation }: any) {
     if (!pos) return null;
     switch (pos) {
       case 'Goalkeeper': return 'GK';
-      case 'Defence': return 'DEF';
-      case 'Midfield': return 'MID';
-      case 'Offence': return 'FWD';
+      case 'Defence': case 'Defender': return 'DEF';
+      case 'Midfield': case 'Midfielder': return 'MID';
+      case 'Offence': case 'Attacker': return 'FWD';
       default: return pos;
     }
   };
@@ -136,14 +166,15 @@ export function PersonDetailScreen({ route, navigation }: any) {
 
                 {/* Badges row */}
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginBottom: spacing.sm }}>
-                  {!isManager && person.position && (
-                    <View style={{ backgroundColor: colors.primary, paddingHorizontal: 10, paddingVertical: 3, borderRadius: borderRadius.full }}>
-                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#14181c' }}>{positionLabel(person.position)}</Text>
-                    </View>
-                  )}
-                  {isManager && (
+                  {(isManager || isDualRole || person.position === 'Coach') && (
                     <View style={{ backgroundColor: colors.primary, paddingHorizontal: 10, paddingVertical: 3, borderRadius: borderRadius.full }}>
                       <Text style={{ fontSize: 11, fontWeight: '700', color: '#14181c' }}>Manager</Text>
+                    </View>
+                  )}
+                  {/* Show playing position badge: formerPosition for dual-role managers, or position for players */}
+                  {(person.formerPosition || (!isManager && person.position && person.position !== 'Coach')) && (
+                    <View style={{ backgroundColor: colors.primary, paddingHorizontal: 10, paddingVertical: 3, borderRadius: borderRadius.full }}>
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#14181c' }}>{positionLabel(person.formerPosition || person.position)}</Text>
                     </View>
                   )}
                   {person.nationality && (
@@ -219,7 +250,9 @@ export function PersonDetailScreen({ route, navigation }: any) {
           {!matchesLoading && allMatches.length > 0 && (
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm }}>
               <Text style={{ ...typography.caption, color: colors.textSecondary }}>
-                {filteredMatches.length} {filteredMatches.length === 1 ? 'match' : 'matches'}
+                {isDualRole
+                  ? `${filteredCoachMatches.length + filteredPlayerMatches.length} matches`
+                  : `${filteredMatches.length} ${filteredMatches.length === 1 ? 'match' : 'matches'}`}
               </Text>
               <View style={{ width: 140 }}>
                 <Select
@@ -241,6 +274,55 @@ export function PersonDetailScreen({ route, navigation }: any) {
                 No matches found
               </Text>
             </View>
+          ) : isDualRole ? (
+            /* ─── Dual-role: split into Manager / Player sections ─── */
+            <>
+              {filteredCoachMatches.length > 0 && (
+                <View style={{ marginBottom: spacing.lg }}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textSecondary, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: spacing.sm }}>
+                    Manager of {coachAppearances.length} {coachAppearances.length === 1 ? 'match' : 'matches'}
+                  </Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: POSTER_GAP }}>
+                    {filteredCoachMatches.slice(0, displayedCount).map((match) => (
+                      <MatchPosterCard
+                        key={`c-${match.id}`}
+                        match={match}
+                        width={POSTER_WIDTH}
+                        onPress={() => navigation.navigate('MatchDetail', { matchId: match.id })}
+                      />
+                    ))}
+                  </View>
+                </View>
+              )}
+              {filteredPlayerMatches.length > 0 && (
+                <View>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textSecondary, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: spacing.sm }}>
+                    Player in {playerAppearances.length} {playerAppearances.length === 1 ? 'match' : 'matches'}
+                  </Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: POSTER_GAP }}>
+                    {filteredPlayerMatches.slice(0, displayedCount).map((match) => (
+                      <MatchPosterCard
+                        key={`p-${match.id}`}
+                        match={match}
+                        width={POSTER_WIDTH}
+                        onPress={() => navigation.navigate('MatchDetail', { matchId: match.id })}
+                      />
+                    ))}
+                  </View>
+                </View>
+              )}
+              {(filteredCoachMatches.length > displayedCount || filteredPlayerMatches.length > displayedCount) && (
+                <ActivityIndicator style={{ paddingVertical: spacing.md }} color={colors.primary} />
+              )}
+              {filteredCoachMatches.length === 0 && filteredPlayerMatches.length === 0 && (
+                <View style={{ alignItems: 'center', paddingVertical: spacing.xxl }}>
+                  <Ionicons name="filter-outline" size={48} color={colors.textSecondary} />
+                  <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.md }}>
+                    No matches match the filters
+                  </Text>
+                </View>
+              )}
+            </>
           ) : filteredMatches.length === 0 ? (
             <View style={{ alignItems: 'center', paddingVertical: spacing.xxl }}>
               <Ionicons name="filter-outline" size={48} color={colors.textSecondary} />
@@ -260,6 +342,9 @@ export function PersonDetailScreen({ route, navigation }: any) {
                   />
                 ))}
               </View>
+              {visibleMatches.length < filteredMatches.length && (
+                <ActivityIndicator style={{ paddingVertical: spacing.md }} color={colors.primary} />
+              )}
             </>
           )}
         </View>
