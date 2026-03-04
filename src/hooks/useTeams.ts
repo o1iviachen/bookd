@@ -23,6 +23,24 @@ export function useTeamMatches(teamId: number) {
 }
 
 // Fetch all teams ONCE when search is active, cache for 10 minutes
+// League tier for team search ranking (lower = more popular)
+const LEAGUE_TIER: Record<string, number> = {
+  PL: 1, CL: 1, PD: 1, BL1: 1, SA: 1, FL1: 1,
+  EL: 2, ECL: 2, ELC: 2, DED: 2, PPL: 2,
+  FAC: 3, EFL: 3, SPL: 3, SL: 3, BEL: 3, BSA: 3, ARG: 3,
+  MLS: 4, LMX: 4, SAU: 4, JPL: 4, AUS: 4,
+  WC: 5, EURO: 5, NL: 5, CA: 5,
+};
+
+function getTeamTier(competitionCodes: string[]): number {
+  let best = 6;
+  for (const code of competitionCodes) {
+    const tier = LEAGUE_TIER[code];
+    if (tier !== undefined && tier < best) best = tier;
+  }
+  return best;
+}
+
 export function useSearchTeams(query: string, active = true) {
   const enabled = query.length >= 2 && active;
   const { data: allTeams, isLoading } = useQuery({
@@ -40,6 +58,7 @@ export function useSearchTeams(query: string, active = true) {
         t.name?.toLowerCase().includes(q) ||
         t.shortName?.toLowerCase().includes(q)
       )
+      .sort((a, b) => getTeamTier(a.competitionCodes) - getTeamTier(b.competitionCodes) || a.name.localeCompare(b.name))
       .slice(0, 30);
   }, [allTeams, query, enabled]);
 
