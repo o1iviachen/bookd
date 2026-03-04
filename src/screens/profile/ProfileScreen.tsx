@@ -110,8 +110,8 @@ export function ProfileScreen() {
       {/* Header bar */}
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border }}>
         <View style={{ width: 32 }} />
-        <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 17 }}>
-          {profile?.username || 'Profile'}
+        <Text style={{ fontSize: 24, fontWeight: '700', color: colors.primary, letterSpacing: -0.5 }}>
+          bookd.
         </Text>
         <Pressable onPress={() => navigation.navigate('Settings')}>
           <Ionicons name="settings-outline" size={22} color={colors.foreground} />
@@ -133,9 +133,6 @@ export function ProfileScreen() {
         {/* Favourite team & country badges */}
         {(followedTeamCrests.length > 0 || profile?.favoriteCountry) && (
           <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm }}>
-            {profile?.favoriteCountry && (
-              <Text style={{ fontSize: 22 }}>{nationalityFlag(profile.favoriteCountry)}</Text>
-            )}
             {followedTeamCrests.map((club) => (
               <Pressable
                 key={club.id}
@@ -144,6 +141,9 @@ export function ProfileScreen() {
                 <TeamLogo uri={club.crest} size={28} />
               </Pressable>
             ))}
+            {profile?.favoriteCountry && (
+              <Text style={{ fontSize: 22 }}>{nationalityFlag(profile.favoriteCountry)}</Text>
+            )}
           </View>
         )}
 

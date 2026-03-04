@@ -167,9 +167,6 @@ export function UserProfileScreen({ route, navigation }: any) {
         {/* Favourite team & country badges */}
         {(followedTeamCrests.length > 0 || profile?.favoriteCountry) && (
           <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm }}>
-            {profile?.favoriteCountry && (
-              <Text style={{ fontSize: 22 }}>{nationalityFlag(profile.favoriteCountry)}</Text>
-            )}
             {followedTeamCrests.map((club) => (
               <Pressable
                 key={club.id}
@@ -178,6 +175,9 @@ export function UserProfileScreen({ route, navigation }: any) {
                 <TeamLogo uri={club.crest} size={28} />
               </Pressable>
             ))}
+            {profile?.favoriteCountry && (
+              <Text style={{ fontSize: 22 }}>{nationalityFlag(profile.favoriteCountry)}</Text>
+            )}
           </View>
         )}
 
