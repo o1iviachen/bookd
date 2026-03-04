@@ -118,14 +118,20 @@ export function MatchDetailScreen({ route, navigation }: Props) {
   const { data: matchLists } = useListsForMatch(matchId);
   const { data: matchDetail } = useMatchDetail(matchId);
 
-  // Compute MOTM winner from reviews
+  // MOTM winner from aggregated votes on match doc
   const motmWinnerId = useMemo(() => {
-    const votes = (reviews || []).filter((r) => r.motmPlayerId);
-    if (votes.length === 0) return null;
-    const counts = new Map<number, number>();
-    for (const r of votes) counts.set(r.motmPlayerId!, (counts.get(r.motmPlayerId!) || 0) + 1);
-    return [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
-  }, [reviews]);
+    const votes = match?.motmVotes;
+    if (!votes) return null;
+    let maxCount = 0;
+    let winnerId: number | null = null;
+    for (const [playerId, count] of Object.entries(votes)) {
+      if (count > maxCount) {
+        maxCount = count;
+        winnerId = Number(playerId);
+      }
+    }
+    return winnerId;
+  }, [match?.motmVotes]);
 
   // Fetch reviewer team affiliations for ratings filter
   const reviewerUserIds = useMemo(() => (reviews || []).map((r) => r.userId), [reviews]);

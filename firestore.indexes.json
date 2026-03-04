@@ -83,6 +83,14 @@
       ]
     },
     {
+      "collectionGroup": "reviews",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "matchId", "order": "ASCENDING" },
+        { "fieldPath": "upvotes", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "players",
       "queryScope": "COLLECTION",
       "fields": [

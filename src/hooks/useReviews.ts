@@ -16,6 +16,7 @@ import {
   getReviewsUpvotedByUser,
   searchReviews,
   getReviewsForMatches,
+  getUserMotmVote,
 } from '../services/firestore/reviews';
 import { ReviewMedia } from '../types/review';
 import { useAuth } from '../context/AuthContext';
@@ -126,6 +127,10 @@ export function useCreateReview() {
       queryClient.invalidateQueries({ queryKey: ['reviews', 'match', params.matchId] });
       queryClient.invalidateQueries({ queryKey: ['reviews', 'user', params.userId] });
       queryClient.invalidateQueries({ queryKey: ['reviews', 'recent'] });
+      if (params.motmPlayerId) {
+        queryClient.invalidateQueries({ queryKey: ['match', params.matchId] });
+        queryClient.invalidateQueries({ queryKey: ['motmVote', params.matchId] });
+      }
     },
   });
 }
@@ -145,10 +150,15 @@ export function useUpdateReview() {
         motmPlayerId?: number | null;
         motmPlayerName?: string | null;
       };
-    }) => updateReview(params.reviewId, params.data),
+      matchId?: number;
+      userId?: string;
+    }) => updateReview(params.reviewId, params.data, params.matchId, params.userId),
     onSuccess: (_, params) => {
       queryClient.invalidateQueries({ queryKey: ['review', params.reviewId] });
       queryClient.invalidateQueries({ queryKey: ['reviews'] });
+      if (params.matchId) {
+        queryClient.invalidateQueries({ queryKey: ['match', params.matchId] });
+      }
     },
   });
 }
@@ -242,7 +252,18 @@ export function useDeleteReview() {
     mutationFn: deleteReview,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['reviews'] });
+      queryClient.invalidateQueries({ queryKey: ['match'] });
+      queryClient.invalidateQueries({ queryKey: ['motmVote'] });
     },
+  });
+}
+
+export function useUserMotmVote(matchId: number, userId?: string) {
+  return useQuery({
+    queryKey: ['motmVote', matchId, userId],
+    queryFn: () => getUserMotmVote(matchId, userId!),
+    enabled: !!matchId && !!userId,
+    staleTime: 5 * 60 * 1000,
   });
 }
 

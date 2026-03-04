@@ -8,7 +8,7 @@ import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useMatch, useMatchDetail } from '../../hooks/useMatches';
-import { useCreateReview, useUpdateReview, useReview } from '../../hooks/useReviews';
+import { useCreateReview, useUpdateReview, useReview, useUserMotmVote } from '../../hooks/useReviews';
 import { MOTMPickerModal } from '../../components/review/MOTMPickerModal';
 import { useUserProfile, useAddCustomTag, useMarkWatched, useToggleWatched, useToggleLiked } from '../../hooks/useUser';
 import { uploadReviewMedia } from '../../services/storage';
@@ -48,6 +48,7 @@ export function CreateReviewScreen({ route, navigation }: any) {
   const toggleWatched = useToggleWatched();
   const toggleLiked = useToggleLiked();
 
+  const { data: existingMotmVote } = useUserMotmVote(matchId, user?.uid);
   const isLiked = profile?.likedMatchIds?.some((id) => String(id) === String(matchId)) || false;
 
   const [rating, setRating] = useState(0);
@@ -86,10 +87,17 @@ export function CreateReviewScreen({ route, navigation }: any) {
       setSelectedTags(existingReview.tags);
       setExistingMedia(existingReview.media || []);
       setIsSpoiler(existingReview.isSpoiler || false);
-      setMotmPlayerId(existingReview.motmPlayerId ?? null);
+      setMotmPlayerId(existingMotmVote ?? existingReview.motmPlayerId ?? null);
       setInitialized(true);
     }
-  }, [isEditMode, existingReview, initialized]);
+  }, [isEditMode, existingReview, initialized, existingMotmVote]);
+
+  // Pre-populate MOTM from user's existing vote (new review mode)
+  useEffect(() => {
+    if (!isEditMode && existingMotmVote !== undefined && existingMotmVote !== null && motmPlayerId === null) {
+      setMotmPlayerId(existingMotmVote);
+    }
+  }, [isEditMode, existingMotmVote]);
 
   const userTags = profile?.customTags || [];
 
@@ -354,6 +362,8 @@ export function CreateReviewScreen({ route, navigation }: any) {
             motmPlayerId: motmPlayerId ?? null,
             motmPlayerName: motmData?.selectedName ?? null,
           },
+          matchId,
+          userId: user.uid,
         });
       } else {
         // Auto-mark as watched when submitting a review/log

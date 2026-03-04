@@ -52,6 +52,63 @@ async function getUserVote(reviewId: string, userId: string): Promise<'up' | 'do
   return voteSnap.data().voteType;
 }
 
+// ─── MOTM voting ───
+
+export async function voteMotm(
+  matchId: number,
+  userId: string,
+  playerId: number,
+): Promise<void> {
+  const voteRef = doc(db, 'matches', String(matchId), 'motmVotes', userId);
+  const matchRef = doc(db, 'matches', String(matchId));
+  const voteSnap = await getDoc(voteRef);
+
+  if (voteSnap.exists()) {
+    const existingPlayerId = voteSnap.data().playerId as number;
+    if (existingPlayerId === playerId) return; // same vote, no-op
+    // Switch vote: decrement old, increment new
+    await updateDoc(matchRef, {
+      [`motmVotes.${existingPlayerId}`]: increment(-1),
+      [`motmVotes.${playerId}`]: increment(1),
+    });
+    await setDoc(voteRef, { playerId });
+  } else {
+    // New vote
+    await updateDoc(matchRef, {
+      [`motmVotes.${playerId}`]: increment(1),
+    });
+    await setDoc(voteRef, { playerId });
+  }
+}
+
+export async function removeMotmVote(
+  matchId: number,
+  userId: string,
+): Promise<void> {
+  const voteRef = doc(db, 'matches', String(matchId), 'motmVotes', userId);
+  const voteSnap = await getDoc(voteRef);
+  if (!voteSnap.exists()) return;
+
+  const playerId = voteSnap.data().playerId as number;
+  const matchRef = doc(db, 'matches', String(matchId));
+  await updateDoc(matchRef, {
+    [`motmVotes.${playerId}`]: increment(-1),
+  });
+  await deleteDoc(voteRef);
+}
+
+export async function getUserMotmVote(
+  matchId: number,
+  userId: string,
+): Promise<number | null> {
+  const voteRef = doc(db, 'matches', String(matchId), 'motmVotes', userId);
+  const voteSnap = await getDoc(voteRef);
+  if (!voteSnap.exists()) return null;
+  return voteSnap.data().playerId as number;
+}
+
+// ─── Reviews ───
+
 export async function createReview(
   matchId: number,
   userId: string,
@@ -81,9 +138,14 @@ export async function createReview(
     ...(motmPlayerId !== undefined && { motmPlayerId }),
     ...(motmPlayerName !== undefined && { motmPlayerName }),
   });
-  // Match aggregate stats (ratingSum/ratingCount/reviewCount) are updated by
-  // the onReviewCreated Cloud Function trigger — not from the client, since
-  // Firestore rules block client writes to the matches collection.
+  
+  // Could potentially use Cloud Function triggers (onReviewCreated, onReviewUpdated, onReviewDeleted)
+  // to do all MOTM vote syncing server-side as well, but for simplicity we'll just do it here on the client since the 
+  // same user is making both the review write and the MOTM vote.
+  if (motmPlayerId !== undefined) {
+    await voteMotm(matchId, userId, motmPlayerId);
+  }
+
   return reviewRef.id;
 }
 
@@ -320,16 +382,45 @@ export async function updateReview(
     isSpoiler?: boolean;
     motmPlayerId?: number | null;
     motmPlayerName?: string | null;
-  }
+  },
+  matchId?: number,
+  userId?: string,
 ): Promise<void> {
   const reviewRef = doc(db, 'reviews', reviewId);
   // Match aggregate stats are updated by the onReviewUpdated Cloud Function trigger.
   await updateDoc(reviewRef, { ...data, editedAt: serverTimestamp() });
+
+  // Sync MOTM vote if motmPlayerId changed and we have match/user context
+  if (data.motmPlayerId !== undefined && matchId && userId) {
+    if (data.motmPlayerId === null) {
+      await removeMotmVote(matchId, userId);
+    } else {
+      await voteMotm(matchId, userId, data.motmPlayerId);
+    }
+  }
 }
 
 export async function deleteReview(reviewId: string): Promise<void> {
-  // Match aggregate stats are updated by the onReviewDeleted Cloud Function trigger.
-  await deleteDoc(doc(db, 'reviews', reviewId));
+  // Read review before deleting to check for MOTM vote
+  const reviewSnap = await getDoc(doc(db, 'reviews', reviewId));
+  if (reviewSnap.exists()) {
+    const data = reviewSnap.data();
+    const matchId = data.matchId as number;
+    const userId = data.userId as string;
+    const motmPlayerId = data.motmPlayerId as number | undefined;
+
+    await deleteDoc(doc(db, 'reviews', reviewId));
+
+    // If this review had a MOTM pick, check if it matches the user's current vote
+    if (motmPlayerId && matchId && userId) {
+      const currentVote = await getUserMotmVote(matchId, userId);
+      if (currentVote === motmPlayerId) {
+        await removeMotmVote(matchId, userId);
+      }
+    }
+  } else {
+    await deleteDoc(doc(db, 'reviews', reviewId));
+  }
 }
 
 // Search reviews by text content, username, or matchLabel
