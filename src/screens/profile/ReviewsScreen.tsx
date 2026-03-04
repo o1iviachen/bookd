@@ -185,7 +185,7 @@ export function ReviewsScreen({ route, navigation }: any) {
         <FlatList indicatorStyle={isDark ? 'white' : 'default'}
           data={visibleEntries}
           keyExtractor={(item) => item.review.id}
-          contentContainerStyle={{ paddingBottom: 60 }}
+          contentContainerStyle={{ paddingBottom: 16 }}
           onEndReached={handleEndReached}
           onEndReachedThreshold={0.3}
           renderItem={({ item, index }) => (

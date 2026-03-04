@@ -607,6 +607,11 @@ export function CreateReviewScreen({ route, navigation }: any) {
               </View>
             </Pressable>
           )}
+          {isEditMode && motmData && (
+            <Text style={{ ...typography.small, color: colors.textSecondary, marginTop: -spacing.md, marginBottom: spacing.lg }}>
+              Only your latest vote counts toward the final MOTM result.
+            </Text>
+          )}
 
           {/* Tags — user custom */}
           <Text style={{ ...typography.bodyBold, color: colors.foreground, marginBottom: spacing.sm }}>

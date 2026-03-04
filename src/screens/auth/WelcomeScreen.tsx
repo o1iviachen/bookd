@@ -2,9 +2,9 @@ import React from 'react';
 import { View, Text, ImageBackground, Dimensions, StyleSheet } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { Button } from '../../components/ui/Button';
+import { BookdLogo } from '../../components/ui/BookdLogo';
 import { AuthStackParamList } from '../../types/navigation';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Welcome'>;
@@ -41,7 +41,9 @@ export function WelcomeScreen({ navigation }: Props) {
       >
         {/* Logo + slogan */}
         <View style={{ alignItems: 'center', marginBottom: spacing.xl }}>
-          <Ionicons name="football" size={56} color={colors.primary} style={{ marginBottom: spacing.sm }} />
+          <View style={{ marginBottom: -20 }}>
+            <BookdLogo size={96} />
+          </View>
           <Text
             style={{
               fontSize: 36,
@@ -50,7 +52,7 @@ export function WelcomeScreen({ navigation }: Props) {
               letterSpacing: -1,
             }}
           >
-            bookd
+            bookd.
           </Text>
           <Text
             style={{
