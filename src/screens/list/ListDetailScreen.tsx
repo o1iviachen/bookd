@@ -6,7 +6,7 @@ import { useQueries } from '@tanstack/react-query';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useUserProfile } from '../../hooks/useUser';
-import { useList, useDeleteList, useListLikedBy, useToggleListLike, useListComments, useCreateListComment, useDeleteListComment } from '../../hooks/useLists';
+import { useList, useDeleteList, useListLikedBy, useToggleListLike, useListComments, useCreateListComment, useToggleListCommentLike, useDeleteListComment } from '../../hooks/useLists';
 import { getMatchById } from '../../services/matchService';
 import { getUserProfile } from '../../services/firestore/users';
 import { MatchPosterCard } from '../../components/match/MatchPosterCard';
@@ -24,6 +24,9 @@ import { formatRelativeTime } from '../../utils/formatDate';
 import { POPULAR_TEAMS } from '../../utils/constants';
 import { Match } from '../../types/match';
 import { User } from '../../types/user';
+import { ReportModal } from '../../components/ui/ReportModal';
+import { EmptyState } from '../../components/ui/EmptyState';
+import { ListComment } from '../../services/firestore/lists';
 import { isTextClean } from '../../utils/moderation';
 
 const NUM_COLUMNS = 3;
@@ -52,13 +55,16 @@ export function ListDetailScreen({ route, navigation }: any) {
   const toggleLike = useToggleListLike();
   const { data: comments } = useListComments(listId);
   const createComment = useCreateListComment();
-  const deleteComment = useDeleteListComment();
+  const toggleCommentLike = useToggleListCommentLike();
+  const deleteCommentMutation = useDeleteListComment();
   const [sortBy, setSortBy] = useState<SortBy>('list');
   const [showMenu, setShowMenu] = useState(false);
   const [showLikes, setShowLikes] = useState(false);
   const [filters, setFilters] = useState<MatchFilterState>({ league: 'all', team: 'all', season: 'all' });
   const [commentText, setCommentText] = useState('');
+  const [replyingTo, setReplyingTo] = useState<{ id: string; username: string } | null>(null);
   const commentInputRef = useRef<RNTextInput | null>(null);
+  const scrollViewRef = useRef<ScrollView>(null);
 
   const { data: listAuthorProfile } = useUserProfile(list?.userId || '');
   const listAuthorName = listAuthorProfile?.displayName || listAuthorProfile?.username || list?.username || '';
@@ -152,6 +158,11 @@ export function ListDetailScreen({ route, navigation }: any) {
     return map;
   }, [commentAuthorQueries]);
 
+  const sortedComments = useMemo(() => {
+    if (!comments) return [];
+    return [...comments].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  }, [comments]);
+
   if (isLoading || !list) return <LoadingSpinner />;
 
   const handleShare = () => {
@@ -185,6 +196,50 @@ export function ListDetailScreen({ route, navigation }: any) {
         },
       ]
     );
+  };
+
+  const handleReply = (_commentId: string, username: string) => {
+    setReplyingTo({ id: _commentId, username });
+    setCommentText(`@${username} `);
+    commentInputRef.current?.focus();
+  };
+
+  const handleSubmitComment = async () => {
+    if (!user || !commentText.trim() || !profile) return;
+    if (!isTextClean(commentText)) {
+      Alert.alert('Content Warning', 'Your comment contains inappropriate language. Please revise.');
+      return;
+    }
+    createComment.mutate({
+      listId,
+      userId: user.uid,
+      username: profile.username,
+      userAvatar: profile.avatar,
+      text: commentText.trim(),
+      parentId: replyingTo?.id || null,
+    });
+    setCommentText('');
+    setReplyingTo(null);
+  };
+
+  const handleDeleteComment = (commentId: string) => {
+    Alert.alert(
+      'Delete Comment',
+      'Are you sure you want to delete this comment?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => deleteCommentMutation.mutate({ commentId, listId }),
+        },
+      ]
+    );
+  };
+
+  const handleLikeComment = (commentId: string) => {
+    if (!user) return;
+    toggleCommentLike.mutate({ commentId, userId: user.uid, listId });
   };
 
   const showRankedControls = list.ranked && sortBy === 'list' && !hasActiveFilters;
@@ -226,8 +281,10 @@ export function ListDetailScreen({ route, navigation }: any) {
       />
 
       <ScrollView
+        ref={scrollViewRef}
         indicatorStyle={isDark ? 'white' : 'default'}
         contentContainerStyle={{ paddingBottom: 100 }}
+        keyboardShouldPersistTaps="handled"
       >
         {/* List metadata */}
         <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.md }}>
@@ -269,22 +326,18 @@ export function ListDetailScreen({ route, navigation }: any) {
               style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
             >
               <Ionicons name={isLiked ? 'heart' : 'heart-outline'} size={20} color={isLiked ? '#ef4444' : colors.textSecondary} />
+              {likeCount > 0 && (
+                <Pressable onPress={() => setShowLikes(true)} hitSlop={6}>
+                  <Text style={{ ...typography.caption, color: isLiked ? '#ef4444' : colors.textSecondary }}>{likeCount}</Text>
+                </Pressable>
+              )}
             </Pressable>
-            {likeCount > 0 && (
-              <Pressable onPress={() => setShowLikes(true)} hitSlop={6}>
-                <Text style={{ ...typography.caption, color: isLiked ? '#ef4444' : colors.textSecondary }}>{likeCount}</Text>
-              </Pressable>
-            )}
             <Pressable onPress={() => commentInputRef.current?.focus()} hitSlop={6} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
               <Ionicons name="chatbubble-outline" size={18} color={colors.textSecondary} />
               {(comments?.length || 0) > 0 && (
                 <Text style={{ ...typography.caption, color: colors.textSecondary }}>{comments?.length}</Text>
               )}
             </Pressable>
-            <Text style={{ ...typography.caption, color: colors.textSecondary }}>
-              {list.matchIds.length} {list.matchIds.length === 1 ? 'match' : 'matches'}
-            </Text>
-
             <Pressable onPress={handleShare} hitSlop={6}>
               <Ionicons name="share-social-outline" size={18} color={colors.textSecondary} />
             </Pressable>
@@ -346,19 +399,24 @@ export function ListDetailScreen({ route, navigation }: any) {
                     {showRankedControls && (
                       <View pointerEvents="none" style={{
                         position: 'absolute',
-                        top: spacing.sm,
-                        right: spacing.sm,
-                        backgroundColor: 'rgba(0,0,0,0.7)',
-                        borderRadius: 10,
-                        minWidth: 20,
-                        height: 20,
+                        bottom: -7,
+                        left: 0,
+                        right: 0,
                         alignItems: 'center',
-                        justifyContent: 'center',
-                        paddingHorizontal: 5,
                       }}>
-                        <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>
-                          {listIndex + 1}
-                        </Text>
+                        <View style={{
+                          backgroundColor: '#556677',
+                          borderRadius: 7,
+                          minWidth: 14,
+                          height: 14,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          paddingHorizontal: 3,
+                        }}>
+                          <Text style={{ color: '#fff', fontSize: 8, fontWeight: '700' }}>
+                            {listIndex + 1}
+                          </Text>
+                        </View>
                       </View>
                     )}
                   </View>
@@ -374,71 +432,71 @@ export function ListDetailScreen({ route, navigation }: any) {
           </Text>
         </View>
 
-        {(comments || []).length === 0 ? (
-          <View style={{ alignItems: 'center', paddingVertical: spacing.xl }}>
-            <Ionicons name="chatbubbles-outline" size={36} color={colors.textSecondary} />
-            <Text style={{ ...typography.body, color: colors.textSecondary, marginTop: spacing.sm }}>
-              No comments yet. Start the conversation!
-            </Text>
-          </View>
+        {sortedComments.length === 0 ? (
+          <EmptyState
+            icon="chatbubbles-outline"
+            title="No comments yet. Start the conversation!"
+          />
         ) : (
-          <View style={{ paddingHorizontal: spacing.md }}>
-            {(comments || []).map((comment) => {
-              const cAuthor = commentAuthorMap.get(comment.userId);
-              const cDisplayName = cAuthor?.displayName || cAuthor?.username || comment.username;
-              const cDisplayUsername = cAuthor?.username || comment.username;
-              const cDisplayAvatar = cAuthor?.avatar ?? comment.userAvatar;
-              const cTeamCrests = (cAuthor?.favoriteTeams || []).slice(0, 3).map((id) => {
-                const team = POPULAR_TEAMS.find((t) => t.id === String(id));
-                return team ? { id: team.id, crest: team.crest } : null;
-              }).filter(Boolean) as { id: string; crest: string }[];
-              return (
-                <View key={comment.id} style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md }}>
-                  <Pressable onPress={() => navigation.navigate('UserProfile', { userId: comment.userId })}>
-                    <Avatar uri={cDisplayAvatar} name={cDisplayName} size={32} />
-                  </Pressable>
-                  <View style={{ flex: 1 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
-                      <Pressable onPress={() => navigation.navigate('UserProfile', { userId: comment.userId })}>
-                        <Text style={{ ...typography.caption, color: colors.foreground, fontWeight: '600' }}>
-                          {cDisplayName}
-                        </Text>
-                      </Pressable>
-                      <Text style={{ ...typography.small, color: colors.textSecondary }}>
-                        @{cDisplayUsername}
-                      </Text>
-                      {cTeamCrests.map((t) => (
-                        <TeamLogo key={t.id} uri={t.crest} size={14} />
-                      ))}
-                      <Text style={{ ...typography.small, color: colors.textSecondary }}>
-                        {formatRelativeTime(comment.createdAt)}
-                      </Text>
-                    </View>
-                    <MentionText text={comment.text} style={{ marginTop: 2 }} />
-                  </View>
-                  {comment.userId === user?.uid && (
-                    <Pressable
-                      onPress={() => {
-                        Alert.alert('Delete Comment', 'Are you sure?', [
-                          { text: 'Cancel', style: 'cancel' },
-                          { text: 'Delete', style: 'destructive', onPress: () => deleteComment.mutate({ commentId: comment.id, listId }) },
-                        ]);
-                      }}
-                      hitSlop={8}
-                    >
-                      <Ionicons name="trash-outline" size={14} color={colors.textSecondary} />
-                    </Pressable>
-                  )}
-                </View>
-              );
-            })}
-          </View>
+          (() => {
+            const topLevel = sortedComments.filter((c) => !c.parentId);
+            const replies = sortedComments.filter((c) => !!c.parentId);
+            const replyMap = new Map<string, ListComment[]>();
+            for (const r of replies) {
+              const arr = replyMap.get(r.parentId!) || [];
+              arr.push(r);
+              replyMap.set(r.parentId!, arr);
+            }
+            return topLevel.map((comment) => (
+              <View key={comment.id}>
+                <ListCommentRow
+                  comment={comment}
+                  userId={user?.uid || null}
+                  onLike={handleLikeComment}
+                  onReply={handleReply}
+                  onDelete={handleDeleteComment}
+                  colors={colors}
+                  spacing={spacing}
+                  typography={typography}
+                  isReply={false}
+                  navigation={navigation}
+                  authorMap={commentAuthorMap}
+                />
+                {(replyMap.get(comment.id) || []).map((reply) => (
+                  <ListCommentRow
+                    key={reply.id}
+                    comment={reply}
+                    userId={user?.uid || null}
+                    onLike={handleLikeComment}
+                    onReply={handleReply}
+                    onDelete={handleDeleteComment}
+                    colors={colors}
+                    spacing={spacing}
+                    typography={typography}
+                    isReply={true}
+                    navigation={navigation}
+                    authorMap={commentAuthorMap}
+                  />
+                ))}
+              </View>
+            ));
+          })()
         )}
       </ScrollView>
 
       {/* Sticky comment input bar */}
       {user && (
         <View style={{ borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.background, zIndex: 10 }}>
+          {replyingTo && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingTop: spacing.sm, gap: spacing.xs }}>
+              <Text style={{ ...typography.small, color: colors.textSecondary }}>
+                Replying to <Text style={{ fontWeight: '600', color: colors.foreground }}>@{replyingTo.username}</Text>
+              </Text>
+              <Pressable onPress={() => setReplyingTo(null)} hitSlop={8}>
+                <Ionicons name="close-circle" size={16} color={colors.textSecondary} />
+              </Pressable>
+            </View>
+          )}
           <View style={{
             flexDirection: 'row',
             alignItems: 'center',
@@ -450,9 +508,10 @@ export function ListDetailScreen({ route, navigation }: any) {
             <MentionInput
               value={commentText}
               onChangeText={setCommentText}
-              placeholder="Add a comment..."
+              placeholder={replyingTo ? `Reply to @${replyingTo.username}...` : 'Add a comment...'}
               maxLength={500}
               inputRef={commentInputRef}
+              onFocus={() => setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 300)}
               containerStyle={{ flex: 1 }}
               inputStyle={{
                 backgroundColor: colors.muted,
@@ -462,22 +521,8 @@ export function ListDetailScreen({ route, navigation }: any) {
               }}
             />
             <Pressable
-              onPress={() => {
-                if (!commentText.trim() || !user || !profile) return;
-                if (!isTextClean(commentText)) {
-                  Alert.alert('Content Warning', 'Your comment contains inappropriate language. Please revise.');
-                  return;
-                }
-                createComment.mutate({
-                  listId,
-                  userId: user.uid,
-                  username: profile.username,
-                  userAvatar: profile.avatar,
-                  text: commentText.trim(),
-                });
-                setCommentText('');
-              }}
-              disabled={!commentText.trim()}
+              onPress={handleSubmitComment}
+              disabled={!commentText.trim() || createComment.isPending}
               style={{ opacity: commentText.trim() ? 1 : 0.4 }}
             >
               <Ionicons name="send" size={22} color={commentText.trim() ? colors.primary : colors.textSecondary} />
@@ -488,5 +533,131 @@ export function ListDetailScreen({ route, navigation }: any) {
       </KeyboardAvoidingView>
 
     </SafeAreaView>
+  );
+}
+
+/* ─── Comment row (identical to ReviewDetailScreen) ─── */
+
+function ListCommentRow({
+  comment,
+  userId,
+  onLike,
+  onReply,
+  onDelete,
+  colors,
+  spacing,
+  typography,
+  isReply,
+  navigation,
+  authorMap,
+}: {
+  comment: ListComment;
+  userId: string | null;
+  onLike: (id: string) => void;
+  onReply: (id: string, username: string) => void;
+  onDelete: (id: string) => void;
+  colors: any;
+  spacing: any;
+  typography: any;
+  isReply: boolean;
+  navigation: any;
+  authorMap: Map<string, { username: string; displayName: string; avatar: string | null; favoriteTeams: string[] }>;
+}) {
+  const [showReport, setShowReport] = React.useState(false);
+  const isLiked = userId ? comment.likedBy.includes(userId) : false;
+  const isOwn = userId === comment.userId;
+  const avatarSize = isReply ? 24 : 32;
+  const currentAuthor = authorMap.get(comment.userId);
+  const displayName = currentAuthor?.displayName || currentAuthor?.username || comment.username;
+  const displayUsername = currentAuthor?.username || comment.username;
+  const displayAvatar = currentAuthor?.avatar ?? comment.userAvatar;
+  const teamCrests = (currentAuthor?.favoriteTeams || []).slice(0, 3).map((id: string) => {
+    const team = POPULAR_TEAMS.find((t) => t.id === String(id));
+    return team ? { id: team.id, crest: team.crest } : null;
+  }).filter(Boolean) as { id: string; crest: string }[];
+
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        paddingHorizontal: spacing.md,
+        paddingVertical: spacing.sm,
+        paddingLeft: isReply ? spacing.md + 32 + spacing.sm : spacing.md,
+      }}
+    >
+      <Pressable onPress={() => navigation.navigate('UserProfile', { userId: comment.userId })}>
+        <Avatar uri={displayAvatar} name={displayName} size={avatarSize} />
+      </Pressable>
+      <View style={{ marginLeft: spacing.sm, flex: 1 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+          <Pressable onPress={() => navigation.navigate('UserProfile', { userId: comment.userId })}>
+            <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: isReply ? 12 : 13 }}>
+              {displayName}
+            </Text>
+          </Pressable>
+          <Text style={{ ...typography.small, color: colors.textSecondary, fontSize: isReply ? 11 : 12 }}>
+            @{displayUsername}
+          </Text>
+          {teamCrests.map((t) => (
+            <TeamLogo key={t.id} uri={t.crest} size={14} />
+          ))}
+          <Text style={{ ...typography.small, color: colors.textSecondary }}>
+            {formatRelativeTime(comment.createdAt)}
+          </Text>
+        </View>
+        <MentionText text={comment.text} fontSize={isReply ? 14 : 15} style={{ marginTop: 2 }} />
+
+        {/* Like + Reply + Delete actions */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: 6 }}>
+          <Pressable
+            onPress={() => onLike(comment.id)}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}
+          >
+            <Ionicons
+              name={isLiked ? 'heart' : 'heart-outline'}
+              size={14}
+              color={isLiked ? '#ef4444' : colors.textSecondary}
+            />
+            {comment.likes > 0 && (
+              <Text style={{ fontSize: 11, color: isLiked ? '#ef4444' : colors.textSecondary }}>
+                {comment.likes}
+              </Text>
+            )}
+          </Pressable>
+
+          <Pressable
+            onPress={() => onReply(comment.id, displayName)}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}
+          >
+            <Ionicons name="chatbubble-outline" size={13} color={colors.textSecondary} />
+            <Text style={{ fontSize: 11, color: colors.textSecondary }}>Reply</Text>
+          </Pressable>
+
+          {isOwn ? (
+            <Pressable
+              onPress={() => onDelete(comment.id)}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}
+            >
+              <Ionicons name="trash-outline" size={13} color={colors.textSecondary} />
+              <Text style={{ fontSize: 11, color: colors.textSecondary }}>Delete</Text>
+            </Pressable>
+          ) : (
+            <Pressable
+              onPress={() => setShowReport(true)}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}
+            >
+              <Ionicons name="flag-outline" size={13} color={colors.textSecondary} />
+              <Text style={{ fontSize: 11, color: colors.textSecondary }}>Report</Text>
+            </Pressable>
+          )}
+        </View>
+      </View>
+      <ReportModal
+        visible={showReport}
+        onClose={() => setShowReport(false)}
+        contentType="comment"
+        contentId={comment.id}
+      />
+    </View>
   );
 }

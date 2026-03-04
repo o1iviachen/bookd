@@ -197,10 +197,13 @@ export async function getListLikedBy(listId: string): Promise<string[]> {
 export interface ListComment {
   id: string;
   listId: string;
+  parentId: string | null;
   userId: string;
   username: string;
   userAvatar: string | null;
   text: string;
+  likes: number;
+  likedBy: string[];
   createdAt: Date;
 }
 
@@ -209,10 +212,13 @@ function docToListComment(docSnap: any): ListComment {
   return {
     id: docSnap.id,
     listId: data.listId,
+    parentId: data.parentId || null,
     userId: data.userId,
     username: data.username || 'Anonymous',
     userAvatar: data.userAvatar || null,
     text: data.text || '',
+    likes: data.likes || 0,
+    likedBy: data.likedBy || [],
     createdAt: data.createdAt?.toDate() || new Date(),
   };
 }
@@ -223,13 +229,17 @@ export async function createListComment(
   username: string,
   userAvatar: string | null,
   text: string,
+  parentId: string | null = null,
 ): Promise<string> {
   const ref = await addDoc(collection(db, 'listComments'), {
     listId,
+    parentId,
     userId,
     username,
     userAvatar,
     text,
+    likes: 0,
+    likedBy: [],
     createdAt: serverTimestamp(),
   });
 
@@ -263,6 +273,26 @@ export async function getCommentsForList(listId: string): Promise<ListComment[]>
   );
   const snapshot = await getDocs(q);
   return snapshot.docs.map(docToListComment);
+}
+
+export async function toggleListCommentLike(commentId: string, userId: string): Promise<void> {
+  const ref = doc(db, 'listComments', commentId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return;
+
+  const data = snap.data();
+  const likedBy: string[] = data.likedBy || [];
+  if (likedBy.includes(userId)) {
+    await updateDoc(ref, {
+      likedBy: arrayRemove(userId),
+      likes: Math.max((data.likes || 1) - 1, 0),
+    });
+  } else {
+    await updateDoc(ref, {
+      likedBy: arrayUnion(userId),
+      likes: (data.likes || 0) + 1,
+    });
+  }
 }
 
 export async function deleteListComment(commentId: string): Promise<void> {

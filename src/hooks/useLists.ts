@@ -16,6 +16,7 @@ import {
   getListLikedBy,
   getCommentsForList,
   createListComment,
+  toggleListCommentLike,
   deleteListComment,
   searchLists,
 } from '../services/firestore/lists';
@@ -191,10 +192,22 @@ export function useCreateListComment() {
       username: string;
       userAvatar: string | null;
       text: string;
-    }) => createListComment(params.listId, params.userId, params.username, params.userAvatar, params.text),
+      parentId?: string | null;
+    }) => createListComment(params.listId, params.userId, params.username, params.userAvatar, params.text, params.parentId || null),
     onSuccess: (_, params) => {
       queryClient.invalidateQueries({ queryKey: ['listComments', params.listId] });
       queryClient.invalidateQueries({ queryKey: ['lists'] });
+    },
+  });
+}
+
+export function useToggleListCommentLike() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (params: { commentId: string; userId: string; listId: string }) =>
+      toggleListCommentLike(params.commentId, params.userId),
+    onSuccess: (_, params) => {
+      queryClient.invalidateQueries({ queryKey: ['listComments', params.listId] });
     },
   });
 }

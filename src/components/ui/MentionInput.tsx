@@ -16,6 +16,7 @@ interface MentionInputProps {
   multiline?: boolean;
   inputStyle?: TextStyle;
   containerStyle?: ViewStyle;
+  onFocus?: () => void;
 }
 
 export function MentionInput({
@@ -27,6 +28,7 @@ export function MentionInput({
   multiline = true,
   inputStyle,
   containerStyle,
+  onFocus,
 }: MentionInputProps) {
   const { theme } = useTheme();
   const { colors } = theme;
@@ -41,6 +43,7 @@ export function MentionInput({
         placeholderTextColor={colors.textSecondary}
         multiline={multiline}
         maxLength={maxLength}
+        onFocus={onFocus}
         style={[
           {
             color: colors.foreground,
