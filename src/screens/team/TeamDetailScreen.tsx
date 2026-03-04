@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
-import { View, Text, ScrollView, Pressable, useWindowDimensions, NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
+import { View, Text, ScrollView, Pressable, useWindowDimensions, NativeScrollEvent, NativeSyntheticEvent, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
@@ -271,6 +271,9 @@ export function TeamDetailScreen({ route, navigation }: any) {
                     />
                   ))}
                 </View>
+                {visibleMatches.length < filteredMatches.length && (
+                  <ActivityIndicator style={{ paddingVertical: spacing.md }} color={colors.primary} />
+                )}
               </>
             )}
           </View>
@@ -369,16 +372,14 @@ export function TeamDetailScreen({ route, navigation }: any) {
 
                   {/* Competitions */}
                   {teamDetail && teamDetail.activeCompetitions.length > 0 && (
-                    <View style={{ flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border }}>
-                      <Text style={{ ...typography.body, color: colors.textSecondary, fontSize: 14, width: 100 }}>Competitions</Text>
-                      <View style={{ flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, justifyContent: 'flex-end' }}>
-                        {teamDetail.activeCompetitions.map((comp) => (
-                          <View key={comp.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                            <Image source={{ uri: comp.emblem }} style={{ width: 14, height: 14 }} contentFit="contain" />
-                            <Text style={{ ...typography.caption, color: colors.foreground, fontWeight: '500' }}>{comp.name}</Text>
-                          </View>
-                        ))}
-                      </View>
+                    <View style={{ borderTopWidth: 1, borderTopColor: colors.border, paddingHorizontal: spacing.md, paddingVertical: spacing.sm }}>
+                      <Text style={{ ...typography.body, color: colors.textSecondary, fontSize: 14, marginBottom: spacing.xs }}>Competitions</Text>
+                      {teamDetail.activeCompetitions.map((comp) => (
+                        <View key={comp.id} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 6, paddingHorizontal: spacing.sm, backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)', borderRadius: borderRadius.sm, marginTop: 4 }}>
+                          <Image source={{ uri: comp.emblem }} style={{ width: 18, height: 18 }} contentFit="contain" />
+                          <Text style={{ ...typography.body, color: colors.foreground, fontSize: 14, fontWeight: '500' }}>{comp.name}</Text>
+                        </View>
+                      ))}
                     </View>
                   )}
                 </View>
