@@ -1,5 +1,5 @@
 import { ApiFixture, ApiFixtureEvent, ApiFixtureLineup, ApiFixtureStats, ApiStanding } from './apiFootball';
-import { SYNC_LEAGUES } from './config';
+import { SyncLeague } from './leagueHelper';
 
 /** Decode common HTML entities that API-Football may embed in names. */
 function decodeEntities(text: string): string {
@@ -41,9 +41,8 @@ const STATUS_MAP: Record<string, string> = {
 };
 
 // Find our internal competition code from API-Football league ID
-function getCompetitionCode(apiLeagueId: number): string | null {
-  const league = SYNC_LEAGUES.find((l) => l.apiId === apiLeagueId);
-  return league?.code || null;
+function getCompetitionCode(apiLeagueId: number, leagueMap: Map<number, SyncLeague>): string | null {
+  return leagueMap.get(apiLeagueId)?.code || null;
 }
 
 // Generate a shortName from a full team name
@@ -61,11 +60,11 @@ function makeShortName(name: string): string {
 
 // ─── Fixture → Match Document ───
 
-export function transformFixtureToMatch(fixture: ApiFixture): Record<string, any> | null {
-  const code = getCompetitionCode(fixture.league.id);
+export function transformFixtureToMatch(fixture: ApiFixture, leagueMap: Map<number, SyncLeague>): Record<string, any> | null {
+  const code = getCompetitionCode(fixture.league.id, leagueMap);
   if (!code) return null;
 
-  const league = SYNC_LEAGUES.find((l) => l.apiId === fixture.league.id);
+  const league = leagueMap.get(fixture.league.id);
 
   return {
     id: fixture.fixture.id,

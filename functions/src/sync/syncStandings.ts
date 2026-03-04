@@ -1,8 +1,8 @@
 import * as admin from 'firebase-admin';
 import { getStandings } from '../apiFootball';
 import { transformStandings } from '../transforms';
-import { SYNC_LEAGUES, COLLECTIONS } from '../config';
-import { getCurrentSeason } from './syncMatches';
+import { COLLECTIONS } from '../config';
+import { getEnabledLeagues, getSeasonForLeague } from '../leagueHelper';
 
 const db = admin.firestore();
 
@@ -11,11 +11,12 @@ const db = admin.firestore();
  * Writes to the `standings` collection with doc ID: `{code}_{season}`
  */
 export async function syncAllStandings(): Promise<number> {
+  const leagues = await getEnabledLeagues();
   let totalSynced = 0;
 
-  for (const league of SYNC_LEAGUES) {
+  for (const league of leagues) {
     try {
-      const season = getCurrentSeason(league.apiId);
+      const season = getSeasonForLeague(league);
       const standingsGroups = await getStandings(league.apiId, season);
 
       if (standingsGroups.length === 0) continue;

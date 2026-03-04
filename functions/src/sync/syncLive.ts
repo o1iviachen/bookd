@@ -1,17 +1,15 @@
 import * as admin from 'firebase-admin';
 import { getLiveFixtures, getFixtures } from '../apiFootball';
 import { transformFixtureToMatch } from '../transforms';
-import { COLLECTIONS, SYNC_LEAGUES, FIRESTORE_BATCH_SIZE } from '../config';
+import { COLLECTIONS, FIRESTORE_BATCH_SIZE } from '../config';
+import { SyncLeague, getEnabledLeagues, getLeagueByApiIdMap } from '../leagueHelper';
 
 const db = admin.firestore();
 
-// Set of league IDs we track
-const TRACKED_LEAGUE_IDS = new Set(SYNC_LEAGUES.map((l) => l.apiId));
-
 /**
  * Fetches all currently live fixtures and updates scores in Firestore.
- * Also checks for stale matches (kickoff 3+ hours ago but still SCHEDULED/TIMED)
- * and updates their status from the API.
+ * Also checks for stale matches (IN_PLAY/PAUSED 2+ hrs, SCHEDULED/TIMED 3+ hrs)
+ * and re-fetches their status from the API.
  * Called every 2 minutes via Cloud Scheduler.
  */
 export async function syncLiveMatches(): Promise<number> {
@@ -19,8 +17,11 @@ export async function syncLiveMatches(): Promise<number> {
 
   try {
     // 1. Update currently live matches
+    const leagues = await getEnabledLeagues();
+    const trackedIds = new Set(leagues.map((l) => l.apiId));
+    const leagueMap = await getLeagueByApiIdMap();
     const liveFixtures = await getLiveFixtures();
-    const tracked = liveFixtures.filter((f) => TRACKED_LEAGUE_IDS.has(f.league.id));
+    const tracked = liveFixtures.filter((f) => trackedIds.has(f.league.id));
 
     if (tracked.length > 0) {
       for (let i = 0; i < tracked.length; i += FIRESTORE_BATCH_SIZE) {
@@ -28,7 +29,7 @@ export async function syncLiveMatches(): Promise<number> {
         const batch = db.batch();
 
         for (const fixture of chunk) {
-          const matchDoc = transformFixtureToMatch(fixture);
+          const matchDoc = transformFixtureToMatch(fixture, leagueMap);
           if (!matchDoc) continue;
 
           const ref = db.collection(COLLECTIONS.MATCHES).doc(String(fixture.fixture.id));
@@ -46,7 +47,7 @@ export async function syncLiveMatches(): Promise<number> {
     }
 
     // 2. Check for stale matches: kickoff was 3+ hours ago but still not FINISHED
-    const staleUpdated = await syncStaleMatches();
+    const staleUpdated = await syncStaleMatches(leagueMap);
     updated += staleUpdated;
 
     if (updated === 0) {
@@ -61,29 +62,39 @@ export async function syncLiveMatches(): Promise<number> {
 }
 
 /**
- * Finds matches in Firestore that should be finished (kickoff 3+ hours ago)
- * but still have a non-finished status, then re-fetches from API to update.
+ * Finds matches in Firestore that should be finished but still have a
+ * non-finished status, then re-fetches from API to update.
+ *
+ * Two cases:
+ * - IN_PLAY/PAUSED with kickoff 2+ hours ago (match should be over by now)
+ * - SCHEDULED/TIMED with kickoff 3+ hours ago (match was never marked live)
  */
-async function syncStaleMatches(): Promise<number> {
+async function syncStaleMatches(leagueMap: Map<number, SyncLeague>): Promise<number> {
   try {
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
     const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000);
 
-    // Query for matches with kickoff before 3 hours ago that aren't finished
-    const staleStatuses = ['SCHEDULED', 'TIMED'];
+    const staleQueries: { statuses: string[]; cutoff: string }[] = [
+      { statuses: ['IN_PLAY', 'PAUSED'], cutoff: twoHoursAgo.toISOString() },
+      { statuses: ['SCHEDULED', 'TIMED'], cutoff: threeHoursAgo.toISOString() },
+    ];
     const staleIds: number[] = [];
 
-    for (const status of staleStatuses) {
-      const snap = await db.collection(COLLECTIONS.MATCHES)
-        .where('status', '==', status)
-        .where('kickoff', '<=', threeHoursAgo.toISOString())
-        .limit(20)
-        .get();
+    for (const { statuses, cutoff } of staleQueries) {
+      for (const status of statuses) {
+        const snap = await db.collection(COLLECTIONS.MATCHES)
+          .where('status', '==', status)
+          .where('kickoff', '<=', cutoff)
+          .limit(20)
+          .get();
 
-      snap.docs.forEach((d) => {
-        const id = d.data().id;
-        if (id && !staleIds.includes(id)) staleIds.push(id);
-      });
+        snap.docs.forEach((d) => {
+          const id = d.data().id;
+          if (id && !staleIds.includes(id)) staleIds.push(id);
+        });
 
+        if (staleIds.length >= 20) break;
+      }
       if (staleIds.length >= 20) break;
     }
 
@@ -105,7 +116,7 @@ async function syncStaleMatches(): Promise<number> {
       const batch = db.batch();
 
       for (const fixture of chunk) {
-        const matchDoc = transformFixtureToMatch(fixture);
+        const matchDoc = transformFixtureToMatch(fixture, leagueMap);
         if (!matchDoc) continue;
 
         const ref = db.collection(COLLECTIONS.MATCHES).doc(String(fixture.fixture.id));

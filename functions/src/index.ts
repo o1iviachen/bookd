@@ -7,7 +7,9 @@ import { syncMatchesForDateRange } from './sync/syncMatches';
 import { syncAllStandings } from './sync/syncStandings';
 import { syncMissingDetails, syncMatchDetails } from './sync/syncDetails';
 import { syncLiveMatches } from './sync/syncLive';
-import { runBackfill, buildTeamsFromMatches, buildPlayersAndEnrichTeams, fetchTeamColors, enrichPlayersFromSquads, refreshSquadsOnly, backfillPlayerNameLower, generateSearchPrefixes, getLeagueTier } from './sync/backfill';
+import { runBackfill, buildTeamsFromMatches, buildPlayersAndEnrichTeams, fetchTeamColors, enrichPlayersFromSquads, refreshSquadsOnly, backfillPlayerNameLower, generateSearchPrefixes } from './sync/backfill';
+import { getLeagueTier } from './leagueHelper';
+import { SYNC_LEAGUES, COLLECTIONS } from './config';
 
 // ─── Push Notifications ───
 export { sendPushNotification } from './notifications';
@@ -565,7 +567,7 @@ export const migrateLeagueTier = functions
           const data = d.data();
           const teamId = data.currentTeam?.id;
           const codes = teamId ? teamCompCodes.get(teamId) : undefined;
-          const tier = getLeagueTier(codes);
+          const tier = await getLeagueTier(codes);
           batch.update(d.ref, { leagueTier: tier });
         }
         await batch.commit();
@@ -1279,7 +1281,7 @@ export const auditTeamIds = functions
     console.log(`[auditTeamIds] Found ${fixes.length} team ID mismatches, ${deletions.length} seasonless matches`);
 
     // Step 3: Check teams collection for stale entries
-    const staleTeams: { id: string; name: string; canonicalId: number }[] = [];
+    const staleTeams: { id: string; name: string; canonicalId: number; reason: string }[] = [];
     lastDoc = null;
     while (true) {
       let q: FirebaseFirestore.Query = db.collection('teams').limit(BATCH_SIZE);
@@ -1290,10 +1292,18 @@ export const auditTeamIds = functions
       for (const d of snap.docs) {
         const data = d.data();
         if (!data.name) continue;
+
+        // Flag teams with legacy football-data.org crests
+        const crest = data.crest || '';
+        if (crest.includes('crests.football-data.org')) {
+          staleTeams.push({ id: d.id, name: data.name, canonicalId: 0, reason: 'legacy-crest' });
+          continue;
+        }
+
         const name = data.name.toLowerCase().trim();
         const canonical = canonicalIds.get(name);
         if (canonical && canonical !== data.id) {
-          staleTeams.push({ id: d.id, name: data.name, canonicalId: canonical });
+          staleTeams.push({ id: d.id, name: data.name, canonicalId: canonical, reason: 'id-mismatch' });
         }
       }
       lastDoc = snap.docs[snap.docs.length - 1];
@@ -1453,6 +1463,64 @@ export const diagnoseTeams = functions
       suspectMatches: suspectMatches.slice(0, 100),
     });
   });
+
+/**
+ * One-time seed: populate the `leagues` collection with all league metadata.
+ * Consolidates SYNC_LEAGUES, LEAGUE_TIER, FOLLOWABLE_LEAGUES, CUP_COMPETITIONS,
+ * calendar-year logic, and display order into a single Firestore collection.
+ *   GET /seedLeagues
+ */
+export const seedLeagues = functions.https.onRequest(async (_req, res) => {
+  const CUP_CODES = new Set(['CL', 'EL', 'ECL', 'FAC', 'EFL', 'WC', 'EURO', 'NL', 'CA']);
+  const CALENDAR_YEAR_IDS = new Set([253, 71, 128, 98, 188]); // MLS, BSA, ARG, JPL, AUS
+  const NON_FOLLOWABLE = new Set(['NL', 'CA']);
+
+  const TIER_MAP: Record<string, number> = {
+    PL: 1, CL: 1, PD: 1, BL1: 1, SA: 1, FL1: 1,
+    EL: 2, ECL: 2, ELC: 2, DED: 2, PPL: 2,
+    FAC: 3, EFL: 3, SPL: 3, SL: 3, BEL: 3, BSA: 3, ARG: 3,
+    MLS: 4, LMX: 4, SAU: 4, JPL: 4, AUS: 4,
+    WC: 5, EURO: 5, NL: 5, CA: 5,
+  };
+
+  // Display order matches current FOLLOWABLE_LEAGUES order + remaining leagues
+  const DISPLAY_ORDER: Record<string, number> = {
+    PL: 1, BL1: 2, PD: 3, SA: 4, FL1: 5,
+    CL: 6, EL: 7, ELC: 8, DED: 9, PPL: 10,
+    BSA: 11, MLS: 12, LMX: 13, SAU: 14, SL: 15,
+    ECL: 16, FAC: 17, EFL: 18, SPL: 19, BEL: 20,
+    ARG: 21, JPL: 22, AUS: 23, WC: 24, EURO: 25,
+    NL: 26, CA: 27,
+  };
+
+  const batch = admin.firestore().batch();
+  let count = 0;
+
+  for (const league of SYNC_LEAGUES) {
+    const doc: Record<string, any> = {
+      code: league.code,
+      apiId: league.apiId,
+      name: league.name,
+      country: league.country,
+      emblem: `https://media.api-sports.io/football/leagues/${league.apiId}.png`,
+      tier: TIER_MAP[league.code] || 6,
+      isCup: CUP_CODES.has(league.code),
+      seasonType: CALENDAR_YEAR_IDS.has(league.apiId) ? 'calendar-year' : 'european',
+      displayOrder: DISPLAY_ORDER[league.code] || 99,
+      enabled: true,
+      followable: !NON_FOLLOWABLE.has(league.code),
+    };
+    batch.set(
+      admin.firestore().collection(COLLECTIONS.LEAGUES).doc(league.code),
+      doc,
+      { merge: true }
+    );
+    count++;
+  }
+
+  await batch.commit();
+  res.json({ seeded: count });
+});
 
 function formatDate(date: Date): string {
   return date.toISOString().split('T')[0];
