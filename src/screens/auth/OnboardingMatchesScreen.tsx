@@ -1,12 +1,12 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, ScrollView, Pressable, TextInput as RNTextInput, Modal, useWindowDimensions, FlatList } from 'react-native';
+import { View, Text, ScrollView, Pressable, TextInput as RNTextInput, Modal, useWindowDimensions, FlatList, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { subDays } from 'date-fns';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
-import { useMatchesRange } from '../../hooks/useMatches';
+import { useMatchesRange, useSearchMatches } from '../../hooks/useMatches';
 import { updateUserProfile } from '../../services/firestore/users';
 import { getMatchById } from '../../services/matchService';
 import { MatchPosterCard } from '../../components/match/MatchPosterCard';
@@ -33,9 +33,15 @@ export function OnboardingMatchesScreen() {
   const [pickerSearch, setPickerSearch] = useState('');
   const [filters, setFilters] = useState<MatchFilterState>({ league: 'all', team: 'all', season: 'all' });
 
+  // Recent matches (default picker view)
   const today = new Date();
   const monthAgo = subDays(today, 30);
-  const { data: recentMatches, isLoading: matchesLoading } = useMatchesRange(monthAgo, today);
+  const { data: recentMatches, isLoading: recentLoading } = useMatchesRange(monthAgo, today);
+
+  // Search-powered results (when user types 2+ chars)
+  const isSearching = pickerSearch.trim().length >= 2;
+  const { data: searchResults, isLoading: searchLoading, fetchNextPage, hasNextPage } = useSearchMatches(pickerSearch.trim(), isSearching);
+  const searchMatches = useMemo(() => searchResults?.pages.flatMap((p) => p.matches) || [], [searchResults]);
 
   const addMatch = (matchId: number) => {
     if (selected.length >= MAX_FAVOURITES) return;
@@ -61,10 +67,12 @@ export function OnboardingMatchesScreen() {
   };
 
   const pickerMatches = useMemo(() => {
-    if (!recentMatches) return [];
-    let filtered = recentMatches.filter((m) => !selected.includes(m.id));
+    const source = isSearching ? searchMatches : (recentMatches || []);
+    let filtered = source.filter((m) => !selected.includes(m.id));
     filtered = applyMatchFilters(filtered, filters);
-    if (pickerSearch.trim()) {
+
+    // Only apply local text filter for recent matches
+    if (!isSearching && pickerSearch.trim()) {
       const q = pickerSearch.toLowerCase();
       filtered = filtered.filter(
         (m) =>
@@ -75,9 +83,12 @@ export function OnboardingMatchesScreen() {
           m.competition.name.toLowerCase().includes(q)
       );
     }
-    filtered.sort((a, b) => new Date(b.kickoff).getTime() - new Date(a.kickoff).getTime());
-    return filtered.slice(0, 30);
-  }, [recentMatches, selected, pickerSearch, filters]);
+
+    if (!isSearching) {
+      filtered.sort((a, b) => new Date(b.kickoff).getTime() - new Date(a.kickoff).getTime());
+    }
+    return filtered.slice(0, 60);
+  }, [recentMatches, searchMatches, selected, pickerSearch, filters, isSearching]);
 
   const matchQueries = useQueries({
     queries: selected.map((id) => ({
@@ -89,6 +100,8 @@ export function OnboardingMatchesScreen() {
   const selectedMatches = matchQueries
     .map((q) => q.data)
     .filter((m): m is Match => m !== undefined);
+
+  const pickerLoading = isSearching ? searchLoading : recentLoading;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
@@ -174,11 +187,12 @@ export function OnboardingMatchesScreen() {
       {/* Match Picker Modal */}
       <Modal visible={showPicker} animationType="slide" presentationStyle="pageSheet">
         <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border }}>
-            <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 17 }}>Select a Match</Text>
-            <Pressable onPress={() => { setShowPicker(false); setPickerSearch(''); setFilters({ league: 'all', team: 'all', season: 'all' }); }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+            <Pressable onPress={() => { setShowPicker(false); setPickerSearch(''); setFilters({ league: 'all', team: 'all', season: 'all' }); }} style={{ width: 60 }}>
               <Text style={{ color: colors.primary, fontSize: 16 }}>Cancel</Text>
             </Pressable>
+            <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 17 }}>Select a Match</Text>
+            <View style={{ width: 60 }} />
           </View>
 
           <View style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border }}>
@@ -191,6 +205,8 @@ export function OnboardingMatchesScreen() {
                 onChangeText={setPickerSearch}
                 autoCapitalize="none"
                 autoCorrect={false}
+                textContentType="none"
+                autoComplete="off"
                 style={{
                   flex: 1,
                   paddingLeft: 10,
@@ -210,11 +226,11 @@ export function OnboardingMatchesScreen() {
           <MatchFilters
             filters={filters}
             onFiltersChange={setFilters}
-            matches={recentMatches || []}
+            matches={(isSearching ? searchMatches : recentMatches) || []}
             showMinLogs={false}
           />
 
-          {matchesLoading ? (
+          {pickerLoading ? (
             <View style={{ flex: 1, justifyContent: 'center' }}><LoadingSpinner fullScreen={false} /></View>
           ) : pickerMatches.length === 0 ? (
             <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
@@ -230,6 +246,8 @@ export function OnboardingMatchesScreen() {
               keyboardShouldPersistTaps="handled"
               contentContainerStyle={{ paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: 40 }}
               columnWrapperStyle={{ gap: GAP, marginBottom: GAP }}
+              onEndReached={() => { if (isSearching && hasNextPage) fetchNextPage(); }}
+              onEndReachedThreshold={0.5}
               renderItem={({ item }) => (
                 <MatchPosterCard
                   match={item}
@@ -237,6 +255,7 @@ export function OnboardingMatchesScreen() {
                   width={CARD_WIDTH}
                 />
               )}
+              ListFooterComponent={isSearching && searchLoading ? <ActivityIndicator style={{ paddingVertical: spacing.md }} color={colors.primary} /> : null}
             />
           )}
         </SafeAreaView>

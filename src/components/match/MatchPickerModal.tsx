@@ -1,10 +1,10 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { View, Text, Modal, FlatList, Pressable, TextInput as RNTextInput, useWindowDimensions } from 'react-native';
+import { View, Text, Modal, FlatList, Pressable, TextInput as RNTextInput, useWindowDimensions, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { subDays } from 'date-fns';
 import { useTheme } from '../../context/ThemeContext';
-import { useMatchesRange } from '../../hooks/useMatches';
+import { useMatchesRange, useSearchMatches } from '../../hooks/useMatches';
 import { MatchPosterCard } from './MatchPosterCard';
 import { MatchFilters, MatchFilterState, applyMatchFilters } from './MatchFilters';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
@@ -31,9 +31,15 @@ export function MatchPickerModal({ visible, onClose, onAddMatches, excludeMatchI
   const [filters, setFilters] = useState<MatchFilterState>({ league: 'all', team: 'all', season: 'all' });
   const [selected, setSelected] = useState<number[]>([]);
 
+  // Recent matches (default view)
   const today = new Date();
   const weekAgo = subDays(today, 7);
-  const { data: matches, isLoading } = useMatchesRange(weekAgo, today);
+  const { data: recentMatches, isLoading: recentLoading } = useMatchesRange(weekAgo, today);
+
+  // Search-powered results (when user types 2+ chars)
+  const isSearching = search.trim().length >= 2;
+  const { data: searchResults, isLoading: searchLoading, fetchNextPage, hasNextPage } = useSearchMatches(search.trim(), isSearching);
+  const searchMatches = useMemo(() => searchResults?.pages.flatMap((p) => p.matches) || [], [searchResults]);
 
   // Reset selected when modal opens
   useEffect(() => {
@@ -62,12 +68,13 @@ export function MatchPickerModal({ visible, onClose, onAddMatches, excludeMatchI
   };
 
   const filtered = useMemo(() => {
-    if (!matches) return [];
-    let result = matches.filter((m) => !excludeMatchIds.includes(m.id));
+    const source = isSearching ? searchMatches : (recentMatches || []);
+    let result = source.filter((m) => !excludeMatchIds.includes(m.id));
 
     result = applyMatchFilters(result, filters);
 
-    if (search.trim()) {
+    // Only apply local text filter for recent matches (search results are already filtered)
+    if (!isSearching && search.trim()) {
       const q = search.toLowerCase();
       result = result.filter(
         (m) =>
@@ -79,15 +86,19 @@ export function MatchPickerModal({ visible, onClose, onAddMatches, excludeMatchI
       );
     }
 
-    result.sort((a, b) => new Date(b.kickoff).getTime() - new Date(a.kickoff).getTime());
+    if (!isSearching) {
+      result.sort((a, b) => new Date(b.kickoff).getTime() - new Date(a.kickoff).getTime());
+    }
     return result.slice(0, 60);
-  }, [matches, excludeMatchIds, search, filters]);
+  }, [recentMatches, searchMatches, excludeMatchIds, search, filters, isSearching]);
+
+  const isLoading = isSearching ? searchLoading : recentLoading;
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
         {/* Header */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }}>
           <Pressable onPress={handleCancel}>
             <Text style={{ color: colors.primary, fontSize: 16 }}>Cancel</Text>
           </Pressable>
@@ -110,6 +121,8 @@ export function MatchPickerModal({ visible, onClose, onAddMatches, excludeMatchI
               value={search}
               onChangeText={setSearch}
               autoCapitalize="none"
+              textContentType="none"
+              autoComplete="off"
               style={{ flex: 1, paddingLeft: 10, paddingVertical: 10, color: colors.foreground, fontSize: 14 }}
             />
             {search.length > 0 && (
@@ -124,7 +137,7 @@ export function MatchPickerModal({ visible, onClose, onAddMatches, excludeMatchI
         <MatchFilters
           filters={filters}
           onFiltersChange={setFilters}
-          matches={matches || []}
+          matches={(isSearching ? searchMatches : recentMatches) || []}
           showMinLogs={false}
         />
 
@@ -145,33 +158,17 @@ export function MatchPickerModal({ visible, onClose, onAddMatches, excludeMatchI
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={{ paddingHorizontal: HORIZONTAL_PADDING, paddingTop: spacing.sm, paddingBottom: 40 }}
             columnWrapperStyle={{ gap: GAP, marginBottom: GAP }}
-            renderItem={({ item }) => {
-              const isSelected = selected.includes(item.id);
-              return (
-                <View>
-                  <MatchPosterCard
-                    match={item}
-                    onPress={() => toggleMatch(item.id)}
-                    width={CARD_WIDTH}
-                  />
-                  {isSelected && (
-                    <View style={{
-                      position: 'absolute',
-                      top: spacing.sm,
-                      right: spacing.sm,
-                      backgroundColor: colors.primary,
-                      borderRadius: 12,
-                      width: 22,
-                      height: 22,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}>
-                      <Ionicons name="checkmark" size={14} color="#fff" />
-                    </View>
-                  )}
-                </View>
-              );
-            }}
+            onEndReached={() => { if (isSearching && hasNextPage) fetchNextPage(); }}
+            onEndReachedThreshold={0.5}
+            renderItem={({ item }) => (
+              <MatchPosterCard
+                match={item}
+                onPress={() => toggleMatch(item.id)}
+                width={CARD_WIDTH}
+                selected={selected.includes(item.id)}
+              />
+            )}
+            ListFooterComponent={isSearching && searchLoading ? <ActivityIndicator style={{ paddingVertical: spacing.md }} color={colors.primary} /> : null}
           />
         )}
       </SafeAreaView>
