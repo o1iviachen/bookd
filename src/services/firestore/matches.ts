@@ -30,9 +30,9 @@ function matchToDoc(match: Match): Record<string, any> {
   };
 }
 
-function docToMatch(data: Record<string, any>): Match {
+function docToMatch(data: Record<string, any>, docId: string): Match {
   return {
-    id: data.id,
+    id: Number(docId),
     competition: data.competition,
     homeTeam: data.homeTeam,
     awayTeam: data.awayTeam,
@@ -49,7 +49,7 @@ function docToMatch(data: Record<string, any>): Match {
 export async function getCachedMatch(matchId: number): Promise<Match | null> {
   const docSnap = await getDoc(doc(db, MATCHES_COLLECTION, String(matchId)));
   if (!docSnap.exists()) return null;
-  return docToMatch(docSnap.data());
+  return docToMatch(docSnap.data(), docSnap.id);
 }
 
 export async function setCachedMatch(match: Match): Promise<void> {
@@ -74,7 +74,7 @@ export async function getCachedMatchesByIds(matchIds: number[]): Promise<Map<num
     );
     const snapshot = await getDocs(q);
     snapshot.docs.forEach((d) => {
-      const match = docToMatch(d.data());
+      const match = docToMatch(d.data(), d.id);
       result.set(match.id, match);
     });
   }
@@ -93,7 +93,7 @@ export async function getCachedMatchesByDate(dateStr: string): Promise<Match[]> 
     where('kickoff', '<=', endOfDay)
   );
   const snapshot = await getDocs(q);
-  return snapshot.docs.map((d) => docToMatch(d.data()));
+  return snapshot.docs.map((d) => docToMatch(d.data(), d.id));
 }
 
 export async function setCachedMatches(matches: Match[]): Promise<void> {

@@ -60,13 +60,13 @@ function cleanShortName(name: string, shortName?: string): string {
   return stripped || name;
 }
 
-function docToMatch(data: Record<string, any>): Match {
+function docToMatch(data: Record<string, any>, docId: string): Match {
   const home = data.homeTeam ?? { id: 0, name: 'Unknown', shortName: 'UNK', crest: '' };
   const away = data.awayTeam ?? { id: 0, name: 'Unknown', shortName: 'UNK', crest: '' };
   const ratingSum = data.ratingSum ?? 0;
   const ratingCount = data.ratingCount ?? 0;
   return {
-    id: data.id,
+    id: Number(docId),
     competition: data.competition ?? { id: 0, name: 'Unknown', code: '', emblem: '' },
     homeTeam: { ...home, shortName: cleanShortName(home.name, home.shortName) },
     awayTeam: { ...away, shortName: cleanShortName(away.name, away.shortName) },
@@ -123,9 +123,8 @@ export async function getMatchesByDate(date: Date): Promise<Match[]> {
 
     const snapshot = await getDocs(q);
     return snapshot.docs
-      .map((d) => d.data())
-      .filter(isValidMatch)
-      .map(docToMatch);
+      .filter((d) => isValidMatch(d.data()))
+      .map((d) => docToMatch(d.data(), d.id));
   } catch (err) {
     console.error('[getMatchesByDate] Firestore query failed:', err);
     return [];
@@ -152,9 +151,8 @@ export async function getMatchesByDateRange(from: Date, to: Date): Promise<Match
 
     const snapshot = await getDocs(q);
     return snapshot.docs
-      .map((d) => d.data())
-      .filter(isValidMatch)
-      .map(docToMatch);
+      .filter((d) => isValidMatch(d.data()))
+      .map((d) => docToMatch(d.data(), d.id));
   } catch (err) {
     console.error('[getMatchesByDateRange] Firestore query failed:', err);
     return [];
@@ -174,9 +172,9 @@ export async function getMatchById(id: number): Promise<Match> {
     if (snapshot.empty) {
       throw new Error(`Match ${id} not found`);
     }
-    return docToMatch(snapshot.docs[0].data());
+    return docToMatch(snapshot.docs[0].data(), snapshot.docs[0].id);
   }
-  return docToMatch(docSnap.data());
+  return docToMatch(docSnap.data()!, docSnap.id);
 }
 
 // ─── Competition queries ───
@@ -230,9 +228,8 @@ export async function getCompetitionMatches(
 
     const snapshot = await getDocs(q);
     let matches = snapshot.docs
-      .map((d) => d.data())
-      .filter(isValidMatch)
-      .map(docToMatch);
+      .filter((d) => isValidMatch(d.data()))
+      .map((d) => docToMatch(d.data(), d.id));
 
     if (matchday) {
       matches = matches.filter((m) => m.matchday === matchday);
@@ -264,9 +261,8 @@ export async function getCompetitionMatchesByCode(
 
     const snapshot = await getDocs(q);
     let matches = snapshot.docs
-      .map((d) => d.data())
-      .filter(isValidMatch)
-      .map(docToMatch);
+      .filter((d) => isValidMatch(d.data()))
+      .map((d) => docToMatch(d.data(), d.id));
 
     if (matchday) {
       matches = matches.filter((m) => m.matchday === matchday);
@@ -499,7 +495,7 @@ export async function getTeamMatches(teamId: number, status?: string): Promise<M
     for (const d of [...homeSnap.docs, ...awaySnap.docs]) {
       const data = d.data();
       if (!isValidMatch(data)) continue; // Require season to exclude old football-data.org matches (conflicting team IDs)
-      const match = docToMatch(data);
+      const match = docToMatch(data, d.id);
       if (status && match.status !== status) continue;
       matchMap.set(match.id, match);
     }
@@ -655,7 +651,7 @@ export async function getMatchesForPerson(personId: number): Promise<PersonMatch
       ));
       for (const d of snap.docs) {
         const data = d.data();
-        if (isValidMatch(data)) matches.push(docToMatch(data));
+        if (isValidMatch(data)) matches.push(docToMatch(data, d.id));
       }
     }
 
@@ -806,9 +802,8 @@ export async function getAllMatchesPaginated(
 
     const snapshot = await getDocs(query(collection(db, MATCHES), ...constraints));
     const matches = snapshot.docs
-      .map((d) => d.data())
-      .filter(isValidMatch)
-      .map(docToMatch);
+      .filter((d) => isValidMatch(d.data()))
+      .map((d) => docToMatch(d.data(), d.id));
 
     const lastDoc = snapshot.docs[snapshot.docs.length - 1];
     const nextCursor = snapshot.docs.length < BROWSE_PAGE_SIZE
@@ -902,7 +897,7 @@ export async function searchMatchesQuery(
             h2hIds.add(d.id);
             const data = d.data() as Record<string, any>;
             if (isValidMatch(data)) {
-              h2hMatches.push(docToMatch(data));
+              h2hMatches.push(docToMatch(data, d.id));
             }
           }
         }
@@ -934,7 +929,7 @@ export async function searchMatchesQuery(
         if (seen.has(d.id) || h2hIds.has(d.id)) continue;
         seen.add(d.id);
         if (isValidMatch(data)) {
-          allMatches.push(docToMatch(data));
+          allMatches.push(docToMatch(data, d.id));
         }
       }
     }
