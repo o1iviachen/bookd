@@ -18,14 +18,9 @@ import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { MatchesStackParamList } from '../../types/navigation';
 import { Match } from '../../types/match';
 import { POPULAR_TEAMS } from '../../utils/constants';
+import { useLeagueMap } from '../../hooks/useLeagues';
 
 type Nav = NativeStackNavigationProp<MatchesStackParamList, 'Matches'>;
-
-// Top leagues ranked by popularity for ordering "other" leagues
-const LEAGUE_RANK: Record<string, number> = {
-  PL: 1, CL: 2, PD: 3, BL1: 4, SA: 5, FL1: 6,
-  ELC: 7, DED: 8, PPL: 9, BSA: 10, CLI: 11,
-};
 
 const DATE_RANGE = 14;
 const todayKey = new Date().toISOString().split('T')[0];
@@ -51,6 +46,7 @@ const MatchDayPage = React.memo(function MatchDayPage({
   const { colors, spacing, typography, borderRadius } = theme;
   const navigation = useNavigation<Nav>();
   const [favouritesExpanded, setFavouritesExpanded] = useState(true);
+  const { data: leagueMap } = useLeagueMap();
 
   const { data: matches, isLoading, refetch } = useMatchesByDate(date, active);
   const [manualRefreshing, setManualRefreshing] = useState(false);
@@ -96,11 +92,11 @@ const MatchDayPage = React.memo(function MatchDayPage({
 
     const followed = entries
       .filter(([, lm]) => followedLeagues.includes(lm[0]?.competition.code))
-      .sort((a, b) => (LEAGUE_RANK[a[1][0]?.competition.code] || 99) - (LEAGUE_RANK[b[1][0]?.competition.code] || 99));
+      .sort((a, b) => (leagueMap.get(a[1][0]?.competition.code)?.displayOrder ?? 99) - (leagueMap.get(b[1][0]?.competition.code)?.displayOrder ?? 99));
 
     const other = entries
       .filter(([, lm]) => !followedLeagues.includes(lm[0]?.competition.code))
-      .sort((a, b) => (LEAGUE_RANK[a[1][0]?.competition.code] || 99) - (LEAGUE_RANK[b[1][0]?.competition.code] || 99));
+      .sort((a, b) => (leagueMap.get(a[1][0]?.competition.code)?.displayOrder ?? 99) - (leagueMap.get(b[1][0]?.competition.code)?.displayOrder ?? 99));
 
     return { followedLeagueEntries: followed, otherLeagueEntries: other };
   }, [filteredMatches, favouriteMatches, followedLeagues]);

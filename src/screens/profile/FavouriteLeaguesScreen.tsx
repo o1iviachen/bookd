@@ -8,7 +8,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useUserProfile } from '../../hooks/useUser';
 import { updateUserProfile } from '../../services/firestore/users';
 import { TeamLogo } from '../../components/match/TeamLogo';
-import { FOLLOWABLE_LEAGUES } from '../../utils/constants';
+import { useFollowableLeagues } from '../../hooks/useLeagues';
+import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { useQueryClient } from '@tanstack/react-query';
 
 export function FavouriteLeaguesScreen() {
@@ -19,6 +20,7 @@ export function FavouriteLeaguesScreen() {
   const { data: profile } = useUserProfile(user?.uid || '');
   const queryClient = useQueryClient();
 
+  const { data: followableLeagues, isLoading: leaguesLoading } = useFollowableLeagues();
   const [selected, setSelected] = useState<string[]>([]);
 
   useEffect(() => {
@@ -58,14 +60,19 @@ export function FavouriteLeaguesScreen() {
       </Text>
 
       <ScrollView indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: 100 }}>
+        {leaguesLoading ? (
+          <View style={{ marginTop: spacing.xxl }}>
+            <LoadingSpinner fullScreen={false} />
+          </View>
+        ) : (
         <View style={{ paddingHorizontal: spacing.md }}>
           <View style={{ backgroundColor: colors.card, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' }}>
-            {FOLLOWABLE_LEAGUES.map((league, i) => {
-              const isSelected = selected.includes(league.id);
+            {followableLeagues.map((league, i) => {
+              const isSelected = selected.includes(league.code);
               return (
                 <Pressable
-                  key={league.id}
-                  onPress={() => toggle(league.id)}
+                  key={league.code}
+                  onPress={() => toggle(league.code)}
                   style={({ pressed }) => ({
                     flexDirection: 'row',
                     alignItems: 'center',
@@ -96,6 +103,7 @@ export function FavouriteLeaguesScreen() {
             })}
           </View>
         </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );

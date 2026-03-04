@@ -9,7 +9,8 @@ import { updateUserProfile } from '../../services/firestore/users';
 import { TextInput } from '../../components/ui/TextInput';
 import { ScreenHeader } from '../../components/ui/ScreenHeader';
 import { TeamLogo } from '../../components/match/TeamLogo';
-import { FOLLOWABLE_LEAGUES } from '../../utils/constants';
+import { useFollowableLeagues } from '../../hooks/useLeagues';
+import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 
 export function FollowedLeaguesScreen({ navigation }: any) {
   const { theme, isDark } = useTheme();
@@ -18,16 +19,17 @@ export function FollowedLeaguesScreen({ navigation }: any) {
   const { data: profile, refetch } = useUserProfile(user?.uid || '');
 
   const [search, setSearch] = useState('');
+  const { data: allFollowable, isLoading: leaguesLoading } = useFollowableLeagues();
 
   const followedLeagues = profile?.followedLeagues || [];
 
   const filteredLeagues = useMemo(() => {
-    if (!search) return FOLLOWABLE_LEAGUES;
+    if (!search) return allFollowable;
     const q = search.toLowerCase();
-    return FOLLOWABLE_LEAGUES.filter(
+    return allFollowable.filter(
       (l) => l.name.toLowerCase().includes(q) || l.country.toLowerCase().includes(q)
     );
-  }, [search]);
+  }, [search, allFollowable]);
 
   const toggleLeague = async (leagueId: string) => {
     if (!user) return;
@@ -57,12 +59,13 @@ export function FollowedLeaguesScreen({ navigation }: any) {
           autoCorrect={false}
         />
         <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
+          {leaguesLoading && <LoadingSpinner fullScreen={false} />}
           {filteredLeagues.map((league) => {
-            const isFollowing = followedLeagues.includes(league.id);
+            const isFollowing = followedLeagues.includes(league.code);
             return (
               <Pressable
-                key={league.id}
-                onPress={() => toggleLeague(league.id)}
+                key={league.code}
+                onPress={() => toggleLeague(league.code)}
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',

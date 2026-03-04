@@ -11,9 +11,7 @@ import { TeamLogo } from '../../components/match/TeamLogo';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { formatFullDate } from '../../utils/formatDate';
 import { Match } from '../../types/match';
-
-// Competitions that have knockout rounds
-const CUP_COMPETITIONS = new Set(['CL', 'EL', 'ECL', 'FAC', 'EFL', 'WC', 'EURO']);
+import { useLeagueMap } from '../../hooks/useLeagues';
 
 function PulsingDot() {
   const opacity = useRef(new Animated.Value(1)).current;
@@ -77,6 +75,7 @@ export function LeagueDetailScreen({ route, navigation }: any) {
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
   const { competitionCode, competitionName, competitionEmblem, initialTab } = route.params;
+  const { data: leagueMap } = useLeagueMap();
   const defaultTabIndex = initialTab === 'fixtures' ? 1 : 0;
   const [activeTabIndex, setActiveTabIndex] = useState(defaultTabIndex);
   const pagerRef = useRef<PagerView>(null);
@@ -229,7 +228,7 @@ export function LeagueDetailScreen({ route, navigation }: any) {
   }, [activeTabIndex]);
 
   // Build tabs — only include knockout for cup competitions
-  const isCup = CUP_COMPETITIONS.has(competitionCode);
+  const isCup = leagueMap.get(competitionCode)?.isCup ?? false;
   const tabs: { key: Tab; label: string }[] = [
     { key: 'table', label: 'Table' },
     { key: 'fixtures', label: 'Fixtures' },

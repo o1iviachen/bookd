@@ -45,6 +45,11 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /leagues/{leagueCode} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     // ─── User profiles ───
     match /users/{userId} {
       allow read: if true;

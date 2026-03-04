@@ -7,7 +7,8 @@ import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { updateUserProfile } from '../../services/firestore/users';
 import { TeamLogo } from '../../components/match/TeamLogo';
-import { FOLLOWABLE_LEAGUES } from '../../utils/constants';
+import { useFollowableLeagues } from '../../hooks/useLeagues';
+import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 
 const DEFAULT_LEAGUES = ['PL', 'BL1', 'PD', 'SA', 'FL1'];
 
@@ -17,6 +18,7 @@ export function OnboardingLeaguesScreen() {
   const { colors, spacing, typography, borderRadius } = theme;
   const { user, completeOnboarding } = useAuth();
 
+  const { data: followableLeagues, isLoading } = useFollowableLeagues();
   const [selected, setSelected] = useState<string[]>(DEFAULT_LEAGUES);
 
   const toggleLeague = (leagueId: string) => {
@@ -59,12 +61,15 @@ export function OnboardingLeaguesScreen() {
         indicatorStyle={isDark ? 'white' : 'default'}
         contentContainerStyle={{ padding: spacing.md, paddingBottom: 120, gap: spacing.sm }}
       >
-        {FOLLOWABLE_LEAGUES.map((league) => {
-          const isSelected = selected.includes(league.id);
+        {isLoading ? (
+          <LoadingSpinner fullScreen={false} />
+        ) : null}
+        {followableLeagues.map((league) => {
+          const isSelected = selected.includes(league.code);
           return (
             <Pressable
-              key={league.id}
-              onPress={() => toggleLeague(league.id)}
+              key={league.code}
+              onPress={() => toggleLeague(league.code)}
               style={{
                 flexDirection: 'row',
                 alignItems: 'center',

@@ -21,42 +21,6 @@ export const MATCH_TAGS = [
   'Red Card',
 ] as const;
 
-// League info for the Following screen
-export interface LeagueInfo {
-  id: string; // competition code (PL, BL1, etc.)
-  name: string;
-  country: string;
-  emblem: string;
-}
-
-export const FOLLOWABLE_LEAGUES: LeagueInfo[] = [
-  { id: 'PL', name: 'Premier League', country: 'England', emblem: 'https://media.api-sports.io/football/leagues/39.png' },
-  { id: 'BL1', name: 'Bundesliga', country: 'Germany', emblem: 'https://media.api-sports.io/football/leagues/78.png' },
-  { id: 'PD', name: 'La Liga', country: 'Spain', emblem: 'https://media.api-sports.io/football/leagues/140.png' },
-  { id: 'SA', name: 'Serie A', country: 'Italy', emblem: 'https://media.api-sports.io/football/leagues/135.png' },
-  { id: 'FL1', name: 'Ligue 1', country: 'France', emblem: 'https://media.api-sports.io/football/leagues/61.png' },
-  { id: 'CL', name: 'Champions League', country: 'Europe', emblem: 'https://media.api-sports.io/football/leagues/2.png' },
-  { id: 'EL', name: 'Europa League', country: 'Europe', emblem: 'https://media.api-sports.io/football/leagues/3.png' },
-  { id: 'ELC', name: 'Championship', country: 'England', emblem: 'https://media.api-sports.io/football/leagues/40.png' },
-  { id: 'DED', name: 'Eredivisie', country: 'Netherlands', emblem: 'https://media.api-sports.io/football/leagues/88.png' },
-  { id: 'PPL', name: 'Primeira Liga', country: 'Portugal', emblem: 'https://media.api-sports.io/football/leagues/94.png' },
-  { id: 'BSA', name: 'Brasileirão', country: 'Brazil', emblem: 'https://media.api-sports.io/football/leagues/71.png' },
-  { id: 'MLS', name: 'MLS', country: 'USA', emblem: 'https://media.api-sports.io/football/leagues/253.png' },
-  { id: 'LMX', name: 'Liga MX', country: 'Mexico', emblem: 'https://media.api-sports.io/football/leagues/262.png' },
-  { id: 'SAU', name: 'Saudi Pro League', country: 'Saudi Arabia', emblem: 'https://media.api-sports.io/football/leagues/307.png' },
-  { id: 'SL', name: 'Super Lig', country: 'Turkey', emblem: 'https://media.api-sports.io/football/leagues/203.png' },
-  { id: 'ECL', name: 'Conference League', country: 'Europe', emblem: 'https://media.api-sports.io/football/leagues/848.png' },
-  { id: 'FAC', name: 'FA Cup', country: 'England', emblem: 'https://media.api-sports.io/football/leagues/45.png' },
-  { id: 'EFL', name: 'EFL Cup', country: 'England', emblem: 'https://media.api-sports.io/football/leagues/46.png' },
-  { id: 'SPL', name: 'Scottish Premiership', country: 'Scotland', emblem: 'https://media.api-sports.io/football/leagues/179.png' },
-  { id: 'BEL', name: 'Jupiler Pro League', country: 'Belgium', emblem: 'https://media.api-sports.io/football/leagues/144.png' },
-  { id: 'ARG', name: 'Liga Profesional', country: 'Argentina', emblem: 'https://media.api-sports.io/football/leagues/128.png' },
-  { id: 'JPL', name: 'J1 League', country: 'Japan', emblem: 'https://media.api-sports.io/football/leagues/98.png' },
-  { id: 'AUS', name: 'A-League', country: 'Australia', emblem: 'https://media.api-sports.io/football/leagues/188.png' },
-  { id: 'WC', name: 'World Cup', country: 'World', emblem: 'https://media.api-sports.io/football/leagues/1.png' },
-  { id: 'EURO', name: 'Euro Championship', country: 'Europe', emblem: 'https://media.api-sports.io/football/leagues/4.png' },
-];
-
 // Team info for the Following screen
 // IDs are API-Football team IDs
 export interface TeamInfo {
