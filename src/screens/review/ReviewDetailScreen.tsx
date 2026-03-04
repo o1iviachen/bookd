@@ -426,17 +426,17 @@ export function ReviewDetailScreen({ route, navigation }: any) {
             </View>
           </View>
 
-          {/* ---- Discussion ---- */}
+          {/* ---- Replies ---- */}
           <View style={{ borderTopWidth: 1, borderTopColor: colors.border, marginTop: spacing.md }}>
             <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 15, marginBottom: spacing.md, paddingTop: spacing.lg, paddingHorizontal: spacing.md }}>
-              Discussion
+              Replies
             </Text>
           </View>
 
           {totalCount === 0 ? (
             <EmptyState
               icon="chatbubbles-outline"
-              title="No comments yet. Start the conversation!"
+              title="No replies yet. Start the conversation!"
             />
           ) : (
             (() => {
