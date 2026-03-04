@@ -107,6 +107,10 @@ export async function getUserMotmVote(
   return voteSnap.data().playerId as number;
 }
 
+// ─── Rating helpers ───
+
+const ratingKey = (r: number) => String(Math.round(r * 10));
+
 // ─── Reviews ───
 
 export async function createReview(
@@ -139,9 +143,16 @@ export async function createReview(
     ...(motmPlayerName !== undefined && { motmPlayerName }),
   });
   
-  // Could potentially use Cloud Function triggers (onReviewCreated, onReviewUpdated, onReviewDeleted)
-  // to do all MOTM vote syncing server-side as well, but for simplicity we'll just do it here on the client since the 
-  // same user is making both the review write and the MOTM vote.
+  // Update match aggregate stats atomically
+  const matchRef = doc(db, 'matches', String(matchId));
+  const ratingUpdate: Record<string, any> = { reviewCount: increment(1) };
+  if (rating > 0) {
+    ratingUpdate.ratingSum = increment(rating);
+    ratingUpdate.ratingCount = increment(1);
+    ratingUpdate[`ratingBuckets.${ratingKey(rating)}`] = increment(1);
+  }
+  await updateDoc(matchRef, ratingUpdate);
+
   if (motmPlayerId !== undefined) {
     await voteMotm(matchId, userId, motmPlayerId);
   }
@@ -385,10 +396,38 @@ export async function updateReview(
   },
   matchId?: number,
   userId?: string,
+  oldRating?: number,
 ): Promise<void> {
   const reviewRef = doc(db, 'reviews', reviewId);
-  // Match aggregate stats are updated by the onReviewUpdated Cloud Function trigger.
   await updateDoc(reviewRef, { ...data, editedAt: serverTimestamp() });
+
+  // Update match rating stats if rating changed
+  if (data.rating !== undefined && oldRating !== undefined && matchId && data.rating !== oldRating) {
+    const newRating = data.rating;
+    const matchRef = doc(db, 'matches', String(matchId));
+    const ratingUpdate: Record<string, any> = {};
+
+    if (newRating > 0 && oldRating > 0) {
+      // Both rated — adjust sum by delta, swap buckets
+      ratingUpdate.ratingSum = increment(newRating - oldRating);
+      ratingUpdate[`ratingBuckets.${ratingKey(oldRating)}`] = increment(-1);
+      ratingUpdate[`ratingBuckets.${ratingKey(newRating)}`] = increment(1);
+    } else if (newRating > 0 && oldRating === 0) {
+      // Unrated → rated
+      ratingUpdate.ratingSum = increment(newRating);
+      ratingUpdate.ratingCount = increment(1);
+      ratingUpdate[`ratingBuckets.${ratingKey(newRating)}`] = increment(1);
+    } else if (newRating === 0 && oldRating > 0) {
+      // Rated → unrated
+      ratingUpdate.ratingSum = increment(-oldRating);
+      ratingUpdate.ratingCount = increment(-1);
+      ratingUpdate[`ratingBuckets.${ratingKey(oldRating)}`] = increment(-1);
+    }
+
+    if (Object.keys(ratingUpdate).length > 0) {
+      await updateDoc(matchRef, ratingUpdate);
+    }
+  }
 
   // Sync MOTM vote if motmPlayerId changed and we have match/user context
   if (data.motmPlayerId !== undefined && matchId && userId) {
@@ -401,15 +440,27 @@ export async function updateReview(
 }
 
 export async function deleteReview(reviewId: string): Promise<void> {
-  // Read review before deleting to check for MOTM vote
   const reviewSnap = await getDoc(doc(db, 'reviews', reviewId));
   if (reviewSnap.exists()) {
     const data = reviewSnap.data();
     const matchId = data.matchId as number;
     const userId = data.userId as string;
+    const rating = (data.rating ?? 0) as number;
     const motmPlayerId = data.motmPlayerId as number | undefined;
 
     await deleteDoc(doc(db, 'reviews', reviewId));
+
+    // Decrement match rating stats
+    if (matchId) {
+      const matchRef = doc(db, 'matches', String(matchId));
+      const ratingUpdate: Record<string, any> = { reviewCount: increment(-1) };
+      if (rating > 0) {
+        ratingUpdate.ratingSum = increment(-rating);
+        ratingUpdate.ratingCount = increment(-1);
+        ratingUpdate[`ratingBuckets.${ratingKey(rating)}`] = increment(-1);
+      }
+      await updateDoc(matchRef, ratingUpdate);
+    }
 
     // If this review had a MOTM pick, check if it matches the user's current vote
     if (motmPlayerId && matchId && userId) {

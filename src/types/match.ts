@@ -42,6 +42,7 @@ export interface Match {
   // Aggregate stats — updated atomically on review write/delete
   ratingSum?: number;
   ratingCount?: number;
+  // Computed on read from ratingSum/ratingCount — not stored in Firestore
   avgRating?: number;
   reviewCount?: number;
   // Per-bucket rating counts: key = rating × 10 as string (e.g. 3.5 → "35")

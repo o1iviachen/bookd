@@ -8,9 +8,10 @@ service cloud.firestore {
     match /matches/{matchId} {
       allow read: if true;
       allow write: if false;
-      // Authenticated users can update only the motmVotes field
+      // Authenticated users can update only MOTM votes and rating aggregates
       allow update: if request.auth != null &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['motmVotes']);
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['motmVotes', 'ratingSum', 'ratingCount', 'reviewCount', 'ratingBuckets']);
 
       // MOTM votes subcollection — one doc per user
       match /motmVotes/{voteId} {

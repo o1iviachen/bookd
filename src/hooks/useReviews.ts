@@ -152,7 +152,8 @@ export function useUpdateReview() {
       };
       matchId?: number;
       userId?: string;
-    }) => updateReview(params.reviewId, params.data, params.matchId, params.userId),
+      oldRating?: number;
+    }) => updateReview(params.reviewId, params.data, params.matchId, params.userId, params.oldRating),
     onSuccess: (_, params) => {
       queryClient.invalidateQueries({ queryKey: ['review', params.reviewId] });
       queryClient.invalidateQueries({ queryKey: ['reviews'] });

@@ -364,6 +364,7 @@ export function CreateReviewScreen({ route, navigation }: any) {
           },
           matchId,
           userId: user.uid,
+          oldRating: existingReview?.rating,
         });
       } else {
         // Auto-mark as watched when submitting a review/log
