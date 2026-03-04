@@ -5,13 +5,13 @@ import {
   getRecentReviews,
   getRecentReviewsPaginated,
   getPopularMatchIdsThisWeek,
+  getPopularMatchIdsAllTime,
   getHighestRatedMatchIds,
   getReviewById,
   createReview,
   updateReview,
   voteOnReview,
   deleteReview,
-  getAvgRatingsForMatches,
   getReviewUpvoterIds,
   getReviewsUpvotedByUser,
   searchReviews,
@@ -65,6 +65,14 @@ export function usePopularMatchIdsThisWeek() {
   return useQuery({
     queryKey: ['reviews', 'popularThisWeek'],
     queryFn: () => getPopularMatchIdsThisWeek(),
+    staleTime: Infinity,
+  });
+}
+
+export function usePopularMatchIdsAllTime() {
+  return useQuery({
+    queryKey: ['reviews', 'popularAllTime'],
+    queryFn: () => getPopularMatchIdsAllTime(),
     staleTime: Infinity,
   });
 }
@@ -135,6 +143,7 @@ export function useUpdateReview() {
         media?: ReviewMedia[];
         isSpoiler?: boolean;
         motmPlayerId?: number | null;
+        motmPlayerName?: string | null;
       };
     }) => updateReview(params.reviewId, params.data),
     onSuccess: (_, params) => {
@@ -225,14 +234,6 @@ export function useReviewsForMatches(matchIds: number[]) {
   });
 }
 
-export function useAvgRatings(matchIds: number[]) {
-  return useQuery({
-    queryKey: ['avgRatings', matchIds],
-    queryFn: () => getAvgRatingsForMatches(matchIds),
-    staleTime: 10 * 60 * 1000,
-    enabled: matchIds.length > 0,
-  });
-}
 
 export function useDeleteReview() {
   const queryClient = useQueryClient();

@@ -63,6 +63,8 @@ function cleanShortName(name: string, shortName?: string): string {
 function docToMatch(data: Record<string, any>): Match {
   const home = data.homeTeam ?? { id: 0, name: 'Unknown', shortName: 'UNK', crest: '' };
   const away = data.awayTeam ?? { id: 0, name: 'Unknown', shortName: 'UNK', crest: '' };
+  const ratingSum = data.ratingSum ?? 0;
+  const ratingCount = data.ratingCount ?? 0;
   return {
     id: data.id,
     competition: data.competition ?? { id: 0, name: 'Unknown', code: '', emblem: '' },
@@ -75,6 +77,12 @@ function docToMatch(data: Record<string, any>): Match {
     venue: data.venue ?? null,
     matchday: data.matchday ?? null,
     stage: data.stage ?? null,
+    ratingSum,
+    ratingCount,
+    avgRating: ratingCount > 0 ? ratingSum / ratingCount : undefined,
+    reviewCount: data.reviewCount ?? undefined,
+    ratingBuckets: data.ratingBuckets ?? undefined,
+    legacyId: data.legacyId ?? undefined,
   };
 }
 
@@ -490,7 +498,7 @@ export async function getTeamMatches(teamId: number, status?: string): Promise<M
 
     for (const d of [...homeSnap.docs, ...awaySnap.docs]) {
       const data = d.data();
-      if (!isValidMatch(data)) continue;
+      if (!isValidMatch(data)) continue; // Require season to exclude old football-data.org matches (conflicting team IDs)
       const match = docToMatch(data);
       if (status && match.status !== status) continue;
       matchMap.set(match.id, match);

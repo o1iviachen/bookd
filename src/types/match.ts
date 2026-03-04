@@ -39,4 +39,13 @@ export interface Match {
   venue: string | null;
   matchday: number | null;
   stage: string | null;
+  // Aggregate stats — updated atomically on review write/delete
+  ratingSum?: number;
+  ratingCount?: number;
+  avgRating?: number;
+  reviewCount?: number;
+  // Per-bucket rating counts: key = rating × 10 as string (e.g. 3.5 → "35")
+  ratingBuckets?: Record<string, number>;
+  // Legacy ID from football-data.org migration — reviews may reference this old ID
+  legacyId?: number;
 }

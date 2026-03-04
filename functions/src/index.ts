@@ -691,7 +691,763 @@ export const backfillPlayerIds = functions
     }
   });
 
+/**
+ * Daily aggregate computation: runs at 03:00 UTC every day.
+ * Paginates through ALL reviews (no limit) and writes pre-computed
+ * popular + highest-rated match ID lists to the 'aggregates' collection.
+ * The app reads from these documents instead of doing expensive full scans.
+ */
+export const computeAggregates = functions
+  .runWith({ timeoutSeconds: 540, memory: '1GB' })
+  .pubsub.schedule('0 3 * * *')
+  .timeZone('UTC')
+  .onRun(async () => {
+    const db = admin.firestore();
+    const BATCH_SIZE = 500;
+
+    const counts = new Map<number, number>();
+    const totals = new Map<number, { sum: number; count: number }>();
+
+    let lastDoc: FirebaseFirestore.QueryDocumentSnapshot | null = null;
+    let totalProcessed = 0;
+
+    // Paginate through all reviews — no limit
+    while (true) {
+      let q: FirebaseFirestore.Query = db.collection('reviews').orderBy('createdAt', 'desc').limit(BATCH_SIZE);
+      if (lastDoc) q = q.startAfter(lastDoc);
+
+      const snap = await q.get();
+      if (snap.empty) break;
+
+      for (const d of snap.docs) {
+        const data = d.data();
+        const matchId = data.matchId as number;
+        const rating = data.rating as number;
+        if (!matchId) continue;
+
+        // Popular: count by matchId
+        counts.set(matchId, (counts.get(matchId) || 0) + 1);
+
+        // Highest rated: sum ratings
+        if (rating) {
+          const existing = totals.get(matchId) || { sum: 0, count: 0 };
+          existing.sum += rating;
+          existing.count += 1;
+          totals.set(matchId, existing);
+        }
+      }
+
+      lastDoc = snap.docs[snap.docs.length - 1];
+      totalProcessed += snap.docs.length;
+      console.log(`[computeAggregates] Processed ${totalProcessed} reviews...`);
+    }
+
+    // Build and sort popular list
+    const popularEntries = [...counts.entries()]
+      .map(([matchId, count]) => ({ matchId, count }))
+      .sort((a, b) => b.count - a.count);
+
+    // Build and sort highest-rated list
+    const highestRatedEntries = [...totals.entries()]
+      .map(([matchId, { sum, count }]) => ({ matchId, avgRating: Math.round((sum / count) * 100) / 100, count }))
+      .sort((a, b) => b.avgRating - a.avgRating || b.count - a.count);
+
+    const updatedAt = admin.firestore.FieldValue.serverTimestamp();
+
+    await db.collection('aggregates').doc('popularMatchIds').set({
+      entries: popularEntries,
+      updatedAt,
+    });
+
+    await db.collection('aggregates').doc('highestRatedMatchIds').set({
+      entries: highestRatedEntries,
+      updatedAt,
+    });
+
+    console.log(`[computeAggregates] Done. ${popularEntries.length} popular, ${highestRatedEntries.length} rated. Total reviews: ${totalProcessed}`);
+  });
+
+/**
+ * Manual trigger for computeAggregates — same logic as the scheduled function.
+ * Run via: GET /triggerAggregates
+ */
+export const triggerAggregates = functions
+  .runWith({ timeoutSeconds: 540, memory: '1GB' })
+  .https.onRequest(async (_req, res) => {
+    const db = admin.firestore();
+    const BATCH_SIZE = 500;
+    const counts = new Map<number, number>();
+    const totals = new Map<number, { sum: number; count: number }>();
+    let lastDoc: FirebaseFirestore.QueryDocumentSnapshot | null = null;
+    let totalProcessed = 0;
+
+    while (true) {
+      let q: FirebaseFirestore.Query = db.collection('reviews').orderBy('createdAt', 'desc').limit(BATCH_SIZE);
+      if (lastDoc) q = q.startAfter(lastDoc);
+      const snap = await q.get();
+      if (snap.empty) break;
+      for (const d of snap.docs) {
+        const data = d.data();
+        const matchId = data.matchId as number;
+        const rating = data.rating as number;
+        if (!matchId) continue;
+        counts.set(matchId, (counts.get(matchId) || 0) + 1);
+        if (rating) {
+          const existing = totals.get(matchId) || { sum: 0, count: 0 };
+          existing.sum += rating;
+          existing.count += 1;
+          totals.set(matchId, existing);
+        }
+      }
+      lastDoc = snap.docs[snap.docs.length - 1];
+      totalProcessed += snap.docs.length;
+    }
+
+    const popularEntries = [...counts.entries()]
+      .map(([matchId, count]) => ({ matchId, count }))
+      .sort((a, b) => b.count - a.count);
+
+    const highestRatedEntries = [...totals.entries()]
+      .map(([matchId, { sum, count }]) => ({ matchId, avgRating: Math.round((sum / count) * 100) / 100, count }))
+      .sort((a, b) => b.avgRating - a.avgRating || b.count - a.count);
+
+    const updatedAt = admin.firestore.FieldValue.serverTimestamp();
+    await db.collection('aggregates').doc('popularMatchIds').set({ entries: popularEntries, updatedAt });
+    await db.collection('aggregates').doc('highestRatedMatchIds').set({ entries: highestRatedEntries, updatedAt });
+
+    res.json({ popular: popularEntries.length, highestRated: highestRatedEntries.length, totalReviews: totalProcessed });
+  });
+
+/**
+ * One-time backfill: compute ratingSum, ratingCount, reviewCount, ratingBuckets for all existing match docs.
+ * Run once after deployment via: GET /backfillMatchRatings
+ * Safe to re-run — overwrites with correct values each time.
+ */
+export const backfillMatchRatings = functions
+  .runWith({ timeoutSeconds: 540, memory: '1GB' })
+  .https.onRequest(async (_req, res) => {
+    const db = admin.firestore();
+    const BATCH_SIZE = 500;
+
+    // Aggregate all reviews into per-match stats
+    const stats = new Map<number, { ratingSum: number; ratingCount: number; reviewCount: number; ratingBuckets: Record<string, number> }>();
+    let lastDoc: FirebaseFirestore.QueryDocumentSnapshot | null = null;
+    let totalReviews = 0;
+
+    while (true) {
+      let q: FirebaseFirestore.Query = db.collection('reviews').limit(BATCH_SIZE);
+      if (lastDoc) q = q.startAfter(lastDoc);
+      const snap = await q.get();
+      if (snap.empty) break;
+
+      for (const d of snap.docs) {
+        const data = d.data();
+        const matchId = data.matchId as number;
+        const rating = (data.rating ?? 0) as number;
+        if (!matchId) continue;
+        const existing = stats.get(matchId) || { ratingSum: 0, ratingCount: 0, reviewCount: 0, ratingBuckets: {} };
+        existing.reviewCount++;
+        if (rating > 0) {
+          existing.ratingSum += rating;
+          existing.ratingCount++;
+          const key = String(Math.round(rating * 10));
+          existing.ratingBuckets[key] = (existing.ratingBuckets[key] || 0) + 1;
+        }
+        stats.set(matchId, existing);
+      }
+
+      lastDoc = snap.docs[snap.docs.length - 1];
+      totalReviews += snap.docs.length;
+    }
+
+    // Write to match docs in batches of 500
+    let matchesUpdated = 0;
+    const entries = Array.from(stats.entries());
+    for (let i = 0; i < entries.length; i += 500) {
+      const batch = db.batch();
+      for (const [matchId, { ratingSum, ratingCount, reviewCount, ratingBuckets }] of entries.slice(i, i + 500)) {
+        batch.update(db.collection('matches').doc(String(matchId)), { ratingSum, ratingCount, reviewCount, ratingBuckets });
+        matchesUpdated++;
+      }
+      await batch.commit();
+    }
+
+    console.log(`[backfillMatchRatings] Done. ${totalReviews} reviews → ${matchesUpdated} matches updated`);
+    res.json({ success: true, reviewsProcessed: totalReviews, matchesUpdated });
+  });
+
 // ─── Helpers ───
+
+// ─── Review Triggers — update match aggregate stats ───────────────────────────
+//
+// Client-side code cannot write to the 'matches' collection (rules: write: false).
+// These Cloud Function triggers run with admin SDK and keep ratingSum / ratingCount /
+// reviewCount / ratingBuckets in sync whenever a review is created, updated, or deleted.
+//
+// ratingBuckets keys are rating × 10 as integer strings (e.g. 3.5 → "35") to avoid
+// Firestore dot-notation ambiguity with decimal keys.
+
+function ratingKey(rating: number): string {
+  return String(Math.round(rating * 10));
+}
+
+export const onReviewCreated = functions.firestore
+  .document('reviews/{reviewId}')
+  .onCreate(async (snap) => {
+    const data = snap.data();
+    const matchId = data?.matchId as number | undefined;
+    const rating = (data?.rating ?? 0) as number;
+    if (!matchId) return;
+
+    const db = admin.firestore();
+    const matchRef = db.collection('matches').doc(String(matchId));
+    const update: Record<string, FirebaseFirestore.FieldValue> = {
+      reviewCount: admin.firestore.FieldValue.increment(1),
+    };
+    if (rating > 0) {
+      update.ratingSum = admin.firestore.FieldValue.increment(rating);
+      update.ratingCount = admin.firestore.FieldValue.increment(1);
+      update[`ratingBuckets.${ratingKey(rating)}`] = admin.firestore.FieldValue.increment(1);
+    }
+    await matchRef.update(update).catch((err) => {
+      // Match doc may not exist yet (e.g. review for an unsynced match) — non-fatal
+      console.warn(`[onReviewCreated] Could not update match ${matchId}:`, err.message);
+    });
+  });
+
+export const onReviewDeleted = functions.firestore
+  .document('reviews/{reviewId}')
+  .onDelete(async (snap) => {
+    const data = snap.data();
+    const matchId = data?.matchId as number | undefined;
+    const rating = (data?.rating ?? 0) as number;
+    if (!matchId) return;
+
+    const db = admin.firestore();
+    const matchRef = db.collection('matches').doc(String(matchId));
+    const update: Record<string, FirebaseFirestore.FieldValue> = {
+      reviewCount: admin.firestore.FieldValue.increment(-1),
+    };
+    if (rating > 0) {
+      update.ratingSum = admin.firestore.FieldValue.increment(-rating);
+      update.ratingCount = admin.firestore.FieldValue.increment(-1);
+      update[`ratingBuckets.${ratingKey(rating)}`] = admin.firestore.FieldValue.increment(-1);
+    }
+    await matchRef.update(update).catch((err) => {
+      console.warn(`[onReviewDeleted] Could not update match ${matchId}:`, err.message);
+    });
+  });
+
+export const onReviewUpdated = functions.firestore
+  .document('reviews/{reviewId}')
+  .onUpdate(async (change) => {
+    const before = change.before.data();
+    const after = change.after.data();
+    const matchId = after?.matchId as number | undefined;
+    if (!matchId) return;
+
+    const oldRating = (before?.rating ?? 0) as number;
+    const newRating = (after?.rating ?? 0) as number;
+    if (oldRating === newRating) return; // rating unchanged — nothing to do
+
+    const db = admin.firestore();
+    const matchRef = db.collection('matches').doc(String(matchId));
+    const update: Record<string, FirebaseFirestore.FieldValue> = {};
+
+    if (newRating > 0 && oldRating > 0) {
+      // Both rated — adjust sum by delta and swap bucket counts
+      update.ratingSum = admin.firestore.FieldValue.increment(newRating - oldRating);
+      update[`ratingBuckets.${ratingKey(oldRating)}`] = admin.firestore.FieldValue.increment(-1);
+      update[`ratingBuckets.${ratingKey(newRating)}`] = admin.firestore.FieldValue.increment(1);
+    } else if (newRating > 0 && oldRating === 0) {
+      // Unrated → rated
+      update.ratingSum = admin.firestore.FieldValue.increment(newRating);
+      update.ratingCount = admin.firestore.FieldValue.increment(1);
+      update[`ratingBuckets.${ratingKey(newRating)}`] = admin.firestore.FieldValue.increment(1);
+    } else if (newRating === 0 && oldRating > 0) {
+      // Rated → unrated
+      update.ratingSum = admin.firestore.FieldValue.increment(-oldRating);
+      update.ratingCount = admin.firestore.FieldValue.increment(-1);
+      update[`ratingBuckets.${ratingKey(oldRating)}`] = admin.firestore.FieldValue.increment(-1);
+    }
+
+    if (Object.keys(update).length > 0) {
+      await matchRef.update(update).catch((err) => {
+        console.warn(`[onReviewUpdated] Could not update match ${matchId}:`, err.message);
+      });
+    }
+  });
+
+/**
+ * One-time migration: clean up old football-data.org match documents.
+ *
+ * Old matches (pre-API-Football) lack a `season` field and use football-data.org
+ * team/match IDs which collide with API-Football IDs (e.g. Man City = 65 in
+ * football-data.org but Nottingham Forest = 65 in API-Football).
+ *
+ * For each old match:
+ * 1. Try to find a matching API-Football match (same kickoff date + similar team names)
+ * 2. If found: remap reviews to the new matchId, set legacyId, delete old docs
+ * 3. If not found: delete old match doc (reviews become orphaned)
+ *
+ * Usage:
+ *   GET /migrateLegacyMatches              — dry run (preview only)
+ *   GET /migrateLegacyMatches?dryRun=false — execute migration
+ */
+export const migrateLegacyMatches = functions
+  .runWith({ timeoutSeconds: 540, memory: '1GB' })
+  .https.onRequest(async (req, res) => {
+    const dryRun = req.query.dryRun !== 'false';
+    const db = admin.firestore();
+
+    console.log(`[migrateLegacyMatches] Starting (dryRun=${dryRun})...`);
+
+    // Step 1: Find all old matches (no season field)
+    const BATCH_SIZE = 500;
+    const legacyMatches: { id: string; data: Record<string, any> }[] = [];
+    let lastDoc: FirebaseFirestore.QueryDocumentSnapshot | null = null;
+
+    while (true) {
+      let q: FirebaseFirestore.Query = db.collection('matches').limit(BATCH_SIZE);
+      if (lastDoc) q = q.startAfter(lastDoc);
+      const snap = await q.get();
+      if (snap.empty) break;
+
+      for (const d of snap.docs) {
+        const data = d.data();
+        if (data.season == null) {
+          legacyMatches.push({ id: d.id, data });
+        }
+      }
+      lastDoc = snap.docs[snap.docs.length - 1];
+    }
+
+    console.log(`[migrateLegacyMatches] Found ${legacyMatches.length} legacy match docs`);
+
+    if (legacyMatches.length === 0) {
+      res.json({ success: true, message: 'No legacy matches found', dryRun });
+      return;
+    }
+
+    // Step 2: Build a lookup of API-Football matches by kickoff date for matching
+    // Group legacy matches by kickoff date to batch-query
+    const dateSet = new Set<string>();
+    for (const m of legacyMatches) {
+      if (m.data.kickoff) {
+        dateSet.add(m.data.kickoff.split('T')[0]); // YYYY-MM-DD
+      }
+    }
+
+    // For each date, load all API-Football matches (have season field)
+    const apiMatchesByDate = new Map<string, { id: string; data: Record<string, any> }[]>();
+    for (const date of dateSet) {
+      const dayStart = `${date}T00:00:00`;
+      const dayEnd = `${date}T23:59:59`;
+      const snap = await db.collection('matches')
+        .where('kickoff', '>=', dayStart)
+        .where('kickoff', '<=', dayEnd)
+        .get();
+
+      const matches = snap.docs
+        .filter((d) => d.data().season != null) // Only API-Football matches
+        .map((d) => ({ id: d.id, data: d.data() }));
+      apiMatchesByDate.set(date, matches);
+    }
+
+    // Step 3: For each legacy match, try to find a corresponding API-Football match
+    function normalize(name: string): string {
+      return name.toLowerCase().replace(/[^a-z0-9]/g, '');
+    }
+
+    function teamsMatch(legacyHome: string, legacyAway: string, apiHome: string, apiAway: string): boolean {
+      const lh = normalize(legacyHome);
+      const la = normalize(legacyAway);
+      const ah = normalize(apiHome);
+      const aa = normalize(apiAway);
+      // Substring match in either direction (e.g. "Arsenal" matches "Arsenal FC")
+      return (ah.includes(lh) || lh.includes(ah)) && (aa.includes(la) || la.includes(aa));
+    }
+
+    const results: {
+      matched: { legacyId: string; newId: string; home: string; away: string; reviewsRemapped: number }[];
+      unmatched: { legacyId: string; home: string; away: string; reviewCount: number }[];
+      errors: string[];
+    } = { matched: [], unmatched: [], errors: [] };
+
+    for (const legacy of legacyMatches) {
+      const legacyId = legacy.id;
+      const homeName = legacy.data.homeTeam?.name || '';
+      const awayName = legacy.data.awayTeam?.name || '';
+      const kickoff = legacy.data.kickoff || '';
+      const date = kickoff.split('T')[0];
+
+      // Find reviews for this legacy match
+      const reviewSnap = await db.collection('reviews')
+        .where('matchId', '==', Number(legacyId))
+        .get();
+      const reviewCount = reviewSnap.docs.length;
+
+      // Try to find matching API-Football match
+      const candidates = apiMatchesByDate.get(date) || [];
+      const match = candidates.find((c) => {
+        const cHome = c.data.homeTeam?.name || '';
+        const cAway = c.data.awayTeam?.name || '';
+        return teamsMatch(homeName, awayName, cHome, cAway);
+      });
+
+      if (match) {
+        const newMatchId = match.id;
+        console.log(`  [MATCH] Legacy ${legacyId} (${homeName} vs ${awayName}) → API-Football ${newMatchId}`);
+
+        if (!dryRun) {
+          try {
+            const batch = db.batch();
+
+            // Set legacyId on the API-Football match doc
+            batch.update(db.collection('matches').doc(newMatchId), {
+              legacyId: Number(legacyId),
+            });
+
+            // Remap reviews to new matchId
+            for (const reviewDoc of reviewSnap.docs) {
+              batch.update(reviewDoc.ref, { matchId: Number(newMatchId) });
+            }
+
+            // Delete old match doc
+            batch.delete(db.collection('matches').doc(legacyId));
+
+            // Move matchDetails if exists
+            const oldDetailSnap = await db.collection('matchDetails').doc(legacyId).get();
+            if (oldDetailSnap.exists) {
+              batch.delete(db.collection('matchDetails').doc(legacyId));
+              // Don't copy old details — API-Football details are better
+            }
+
+            await batch.commit();
+          } catch (err: any) {
+            results.errors.push(`Failed to migrate ${legacyId}: ${err.message}`);
+            console.error(`  [ERROR] ${legacyId}:`, err.message);
+            continue;
+          }
+        }
+
+        results.matched.push({ legacyId, newId: newMatchId, home: homeName, away: awayName, reviewsRemapped: reviewCount });
+      } else {
+        console.log(`  [NO MATCH] Legacy ${legacyId} (${homeName} vs ${awayName}) — ${reviewCount} reviews`);
+
+        if (!dryRun) {
+          try {
+            const batch = db.batch();
+            batch.delete(db.collection('matches').doc(legacyId));
+
+            const oldDetailSnap = await db.collection('matchDetails').doc(legacyId).get();
+            if (oldDetailSnap.exists) {
+              batch.delete(db.collection('matchDetails').doc(legacyId));
+            }
+
+            // Leave reviews as-is — they'll get "match not found" but no data loss
+            await batch.commit();
+          } catch (err: any) {
+            results.errors.push(`Failed to delete ${legacyId}: ${err.message}`);
+            console.error(`  [ERROR] ${legacyId}:`, err.message);
+          }
+        }
+
+        results.unmatched.push({ legacyId, home: homeName, away: awayName, reviewCount });
+      }
+    }
+
+    const summary = {
+      success: true,
+      dryRun,
+      totalLegacy: legacyMatches.length,
+      matched: results.matched.length,
+      unmatched: results.unmatched.length,
+      errors: results.errors.length,
+      details: results,
+    };
+
+    console.log(`[migrateLegacyMatches] Done. ${results.matched.length} matched, ${results.unmatched.length} unmatched, ${results.errors.length} errors`);
+    res.json(summary);
+  });
+
+/**
+ * Thorough team ID audit + fix for ALL matches.
+ *
+ * Builds a reliable team name → API-Football ID mapping from matches that have a
+ * `season` field (known-good API-Football data), then scans every match document
+ * and fixes any where the team ID doesn't match the expected ID for that team name.
+ *
+ * Also cleans up the `teams` collection: deletes team docs whose ID doesn't match
+ * the canonical API-Football ID for that team name.
+ *
+ * Usage:
+ *   GET /auditTeamIds              — dry run (report only)
+ *   GET /auditTeamIds?dryRun=false — execute fixes
+ */
+export const auditTeamIds = functions
+  .runWith({ timeoutSeconds: 540, memory: '1GB' })
+  .https.onRequest(async (req, res) => {
+    const dryRun = req.query.dryRun !== 'false';
+    const db = admin.firestore();
+    const BATCH_SIZE = 500;
+
+    console.log(`[auditTeamIds] Starting (dryRun=${dryRun})...`);
+
+    // Step 1: Build canonical name → ID map from API-Football matches (have season)
+    // Use the most frequent ID per team name as the canonical one
+    const nameIdCounts = new Map<string, Map<number, number>>();
+    let lastDoc: FirebaseFirestore.QueryDocumentSnapshot | null = null;
+
+    while (true) {
+      let q: FirebaseFirestore.Query = db.collection('matches').limit(BATCH_SIZE);
+      if (lastDoc) q = q.startAfter(lastDoc);
+      const snap = await q.get();
+      if (snap.empty) break;
+
+      for (const d of snap.docs) {
+        const data = d.data();
+        if (!data.season) continue; // Skip non-API-Football matches
+        for (const side of ['homeTeam', 'awayTeam']) {
+          const team = data[side];
+          if (!team?.name || !team?.id) continue;
+          const name = team.name.toLowerCase().trim();
+          if (!nameIdCounts.has(name)) nameIdCounts.set(name, new Map());
+          const idMap = nameIdCounts.get(name)!;
+          idMap.set(team.id, (idMap.get(team.id) || 0) + 1);
+        }
+      }
+      lastDoc = snap.docs[snap.docs.length - 1];
+    }
+
+    // Determine canonical ID per name (most frequent)
+    const canonicalIds = new Map<string, number>();
+    for (const [name, idMap] of nameIdCounts.entries()) {
+      let bestId = 0, bestCount = 0;
+      for (const [id, count] of idMap.entries()) {
+        if (count > bestCount) { bestId = id; bestCount = count; }
+      }
+      canonicalIds.set(name, bestId);
+    }
+
+    console.log(`[auditTeamIds] Built canonical map for ${canonicalIds.size} team names`);
+
+    // Step 2: Scan ALL matches and find team ID mismatches
+    const fixes: { matchId: string; side: string; teamName: string; oldId: number; newId: number }[] = [];
+    const deletions: string[] = []; // Match IDs to delete (no season, leftover)
+    lastDoc = null;
+
+    while (true) {
+      let q: FirebaseFirestore.Query = db.collection('matches').limit(BATCH_SIZE);
+      if (lastDoc) q = q.startAfter(lastDoc);
+      const snap = await q.get();
+      if (snap.empty) break;
+
+      for (const d of snap.docs) {
+        const data = d.data();
+
+        // Delete matches without season (leftover football-data.org)
+        if (!data.season) {
+          deletions.push(d.id);
+          continue;
+        }
+
+        for (const side of ['homeTeam', 'awayTeam'] as const) {
+          const team = data[side];
+          if (!team?.name || !team?.id) continue;
+          const name = team.name.toLowerCase().trim();
+          const canonical = canonicalIds.get(name);
+          if (canonical && canonical !== team.id) {
+            fixes.push({
+              matchId: d.id,
+              side,
+              teamName: team.name,
+              oldId: team.id,
+              newId: canonical,
+            });
+          }
+        }
+      }
+      lastDoc = snap.docs[snap.docs.length - 1];
+    }
+
+    console.log(`[auditTeamIds] Found ${fixes.length} team ID mismatches, ${deletions.length} seasonless matches`);
+
+    // Step 3: Check teams collection for stale entries
+    const staleTeams: { id: string; name: string; canonicalId: number }[] = [];
+    lastDoc = null;
+    while (true) {
+      let q: FirebaseFirestore.Query = db.collection('teams').limit(BATCH_SIZE);
+      if (lastDoc) q = q.startAfter(lastDoc);
+      const snap = await q.get();
+      if (snap.empty) break;
+
+      for (const d of snap.docs) {
+        const data = d.data();
+        if (!data.name) continue;
+        const name = data.name.toLowerCase().trim();
+        const canonical = canonicalIds.get(name);
+        if (canonical && canonical !== data.id) {
+          staleTeams.push({ id: d.id, name: data.name, canonicalId: canonical });
+        }
+      }
+      lastDoc = snap.docs[snap.docs.length - 1];
+    }
+
+    console.log(`[auditTeamIds] Found ${staleTeams.length} stale team docs`);
+
+    // Step 4: Apply fixes
+    if (!dryRun) {
+      // Fix match team IDs
+      for (let i = 0; i < fixes.length; i += 500) {
+        const batch = db.batch();
+        for (const fix of fixes.slice(i, i + 500)) {
+          const matchRef = db.collection('matches').doc(fix.matchId);
+          batch.update(matchRef, {
+            [`${fix.side}.id`]: fix.newId,
+          });
+        }
+        await batch.commit();
+      }
+
+      // Delete seasonless matches
+      for (let i = 0; i < deletions.length; i += 500) {
+        const batch = db.batch();
+        for (const id of deletions.slice(i, i + 500)) {
+          batch.delete(db.collection('matches').doc(id));
+        }
+        await batch.commit();
+      }
+
+      // Delete stale team docs
+      for (let i = 0; i < staleTeams.length; i += 500) {
+        const batch = db.batch();
+        for (const t of staleTeams.slice(i, i + 500)) {
+          batch.delete(db.collection('teams').doc(t.id));
+        }
+        await batch.commit();
+      }
+    }
+
+    const summary = {
+      success: true,
+      dryRun,
+      teamIdFixes: fixes.length,
+      seasonlessDeleted: deletions.length,
+      staleTeamsDeleted: staleTeams.length,
+      fixes: fixes.slice(0, 50), // Limit output size
+      staleTeams,
+      deletions: deletions.slice(0, 20),
+    };
+
+    console.log(`[auditTeamIds] Done.`);
+    res.json(summary);
+  });
+
+/**
+ * Deep diagnostic: find all matches where team name + crest don't match.
+ * Also dumps the teams collection entries for suspect teams.
+ * Usage: GET /diagnoseTeams?names=wolves,swansea,arsenal,ipswich
+ */
+export const diagnoseTeams = functions
+  .runWith({ timeoutSeconds: 300, memory: '512MB' })
+  .https.onRequest(async (req, res) => {
+    const db = admin.firestore();
+    const namesParam = (req.query.names as string || 'wolves,swansea,arsenal,ipswich').toLowerCase();
+    const searchNames = namesParam.split(',').map(n => n.trim());
+    const BATCH_SIZE = 500;
+
+    // 1. Dump ALL team docs that match the search names
+    const teamDocs: any[] = [];
+    let lastDoc: FirebaseFirestore.QueryDocumentSnapshot | null = null;
+    while (true) {
+      let q: FirebaseFirestore.Query = db.collection('teams').limit(BATCH_SIZE);
+      if (lastDoc) q = q.startAfter(lastDoc);
+      const snap = await q.get();
+      if (snap.empty) break;
+      for (const d of snap.docs) {
+        const data = d.data();
+        const nameLC = (data.name || '').toLowerCase();
+        const shortLC = (data.shortName || '').toLowerCase();
+        if (searchNames.some(s => nameLC.includes(s) || shortLC.includes(s))) {
+          teamDocs.push({ docId: d.id, id: data.id, name: data.name, shortName: data.shortName, crest: data.crest });
+        }
+      }
+      lastDoc = snap.docs[snap.docs.length - 1];
+    }
+
+    // 2. Build full team ID → {name, crest} map from all API-Football matches
+    // Collect every unique (teamId, name, crest) triple
+    const teamIdData = new Map<number, { name: string; crest: string; count: number }[]>();
+    lastDoc = null;
+    while (true) {
+      let q: FirebaseFirestore.Query = db.collection('matches').limit(BATCH_SIZE);
+      if (lastDoc) q = q.startAfter(lastDoc);
+      const snap = await q.get();
+      if (snap.empty) break;
+      for (const d of snap.docs) {
+        const data = d.data();
+        for (const side of ['homeTeam', 'awayTeam']) {
+          const team = data[side];
+          if (!team?.id) continue;
+          const key = team.id as number;
+          if (!teamIdData.has(key)) teamIdData.set(key, []);
+          const entries = teamIdData.get(key)!;
+          const existing = entries.find(e => e.name === team.name && e.crest === team.crest);
+          if (existing) {
+            existing.count++;
+          } else {
+            entries.push({ name: team.name, crest: team.crest, count: 1 });
+          }
+        }
+      }
+      lastDoc = snap.docs[snap.docs.length - 1];
+    }
+
+    // 3. Find team IDs that have CONFLICTING data (multiple name/crest combos)
+    const conflicts: { teamId: number; variants: { name: string; crest: string; count: number }[] }[] = [];
+    for (const [teamId, variants] of teamIdData.entries()) {
+      if (variants.length > 1) {
+        conflicts.push({ teamId, variants });
+      }
+    }
+
+    // 4. Find matches where search names appear with unexpected data
+    const suspectMatches: any[] = [];
+    lastDoc = null;
+    while (true) {
+      let q: FirebaseFirestore.Query = db.collection('matches').limit(BATCH_SIZE);
+      if (lastDoc) q = q.startAfter(lastDoc);
+      const snap = await q.get();
+      if (snap.empty) break;
+      for (const d of snap.docs) {
+        const data = d.data();
+        for (const side of ['homeTeam', 'awayTeam']) {
+          const team = data[side];
+          if (!team?.name) continue;
+          const nameLC = team.name.toLowerCase();
+          if (searchNames.some(s => nameLC.includes(s))) {
+            suspectMatches.push({
+              matchId: d.id,
+              side,
+              teamId: team.id,
+              teamName: team.name,
+              crest: team.crest,
+              season: data.season || null,
+              kickoff: data.kickoff?.toDate?.()?.toISOString?.() || data.kickoff,
+            });
+          }
+        }
+      }
+      lastDoc = snap.docs[snap.docs.length - 1];
+    }
+
+    res.json({
+      teamDocs,
+      conflicts: conflicts.sort((a, b) => b.variants.length - a.variants.length),
+      suspectMatches: suspectMatches.slice(0, 100),
+    });
+  });
 
 function formatDate(date: Date): string {
   return date.toISOString().split('T')[0];

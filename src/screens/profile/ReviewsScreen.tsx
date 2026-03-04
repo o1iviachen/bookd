@@ -1,10 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { View, Text, FlatList, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQueries } from '@tanstack/react-query';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
-import { useReviewsForUser, useAvgRatings } from '../../hooks/useReviews';
+import { useReviewsForUser } from '../../hooks/useReviews';
 import { getMatchById } from '../../services/matchService';
 import { TeamLogo } from '../../components/match/TeamLogo';
 import { ReviewCard } from '../../components/review/ReviewCard';
@@ -15,6 +15,8 @@ import { ScreenHeader } from '../../components/ui/ScreenHeader';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { Review } from '../../types/review';
 import { Match } from '../../types/match';
+
+const PAGE_SIZE = 20;
 
 type SortKey = 'recent_reviewed' | 'recent_played' | 'rating_high' | 'rating_low' | 'avg_rating_high' | 'avg_rating_low' | 'popular_review' | 'popular_match';
 
@@ -47,10 +49,9 @@ export function ReviewsScreen({ route, navigation }: any) {
     () => [...new Set((reviews || []).map((r) => r.matchId))],
     [reviews]
   );
-  const { data: avgRatingsMap } = useAvgRatings(matchIds);
-
   const [sort, setSort] = useState<SortKey>('recent_reviewed');
   const [filters, setFilters] = useState<MatchFilterState>({ league: 'all', team: 'all', season: 'all' });
+  const [displayedCount, setDisplayedCount] = useState(PAGE_SIZE);
 
   // Fetch match data
   const matchQueries = useQueries({
@@ -89,10 +90,10 @@ export function ReviewsScreen({ route, navigation }: any) {
       .map((r) => ({
         review: r,
         match: matchMap.get(r.matchId) || null,
-        avgPublicRating: avgRatingsMap?.get(r.matchId) || 0,
+        avgPublicRating: matchMap.get(r.matchId)?.avgRating || 0,
         matchReviewCount: matchReviewCounts.get(r.matchId) || 0,
       }));
-  }, [reviews, matchMap, avgRatingsMap, matchReviewCounts]);
+  }, [reviews, matchMap, matchReviewCounts]);
 
   const filtered = useMemo(() => {
     const filteredMatches = applyMatchFilters(allMatches, filters);
@@ -134,6 +135,16 @@ export function ReviewsScreen({ route, navigation }: any) {
     return result;
   }, [entries, allMatches, filters, sort]);
 
+  useEffect(() => {
+    setDisplayedCount(PAGE_SIZE);
+  }, [sort, filters]);
+
+  const visibleEntries = useMemo(() => filtered.slice(0, displayedCount), [filtered, displayedCount]);
+
+  const handleEndReached = useCallback(() => {
+    setDisplayedCount(prev => Math.min(prev + PAGE_SIZE, filtered.length));
+  }, [filtered.length]);
+
   const loadingAll = isLoading || matchQueries.some((q) => q.isLoading);
   if (loadingAll && entries.length === 0) return <LoadingSpinner />;
 
@@ -172,9 +183,11 @@ export function ReviewsScreen({ route, navigation }: any) {
         />
       ) : (
         <FlatList indicatorStyle={isDark ? 'white' : 'default'}
-          data={filtered}
+          data={visibleEntries}
           keyExtractor={(item) => item.review.id}
           contentContainerStyle={{ paddingBottom: 60 }}
+          onEndReached={handleEndReached}
+          onEndReachedThreshold={0.3}
           renderItem={({ item, index }) => (
             <View>
               {/* Match info line */}
@@ -210,7 +223,7 @@ export function ReviewsScreen({ route, navigation }: any) {
               <ReviewCard
                 review={item.review}
                 onPress={() => navigation.navigate('ReviewDetail', { reviewId: item.review.id })}
-                isLast={index === filtered.length - 1}
+                isLast={index === visibleEntries.length - 1}
               />
             </View>
           )}

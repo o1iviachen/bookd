@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useMemo } from 'react';
-import { View, Text, PanResponder, LayoutChangeEvent, Pressable } from 'react-native';
+import { View, Text, PanResponder, LayoutChangeEvent, Pressable, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { Review } from '../../types/review';
@@ -8,29 +8,44 @@ type RatingFilter = 'everyone' | 'neutral' | 'home' | 'away';
 
 interface RatingChartProps {
   reviews: Review[];
+  // Pre-aggregated bucket counts (key = rating × 10 as string, e.g. "35" for 3.5).
+  // When provided, used instead of computing from reviews — O(1) read path.
+  ratingBuckets?: Record<string, number>;
   showStats?: boolean;
   homeTeamId?: number;
   awayTeamId?: number;
   homeTeamName?: string;
   awayTeamName?: string;
   reviewerTeamMap?: Map<string, string[]>;
+  season?: string;
+  seasonOptions?: { value: string; label: string }[];
+  onSeasonChange?: (season: string) => void;
+  loading?: boolean;
+  onTouchStart?: () => void;
+  onTouchEnd?: () => void;
 }
 
 const BUCKETS = [0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5];
 const BAR_HEIGHT = 40;
 
-export function RatingChart({ reviews, showStats = false, homeTeamId, awayTeamId, homeTeamName, awayTeamName, reviewerTeamMap }: RatingChartProps) {
+export function RatingChart({ reviews, ratingBuckets, showStats = false, homeTeamId, awayTeamId, homeTeamName, awayTeamName, reviewerTeamMap, season, seasonOptions, onSeasonChange, loading = false, onTouchStart, onTouchEnd }: RatingChartProps) {
   const { theme } = useTheme();
   const { colors, spacing, borderRadius } = theme;
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const [filter, setFilter] = useState<RatingFilter>('everyone');
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [seasonDropdownOpen, setSeasonDropdownOpen] = useState(false);
   const barAreaWidth = useRef(0);
   const barAreaX = useRef(0);
+  const onTouchStartRef = useRef(onTouchStart);
+  onTouchStartRef.current = onTouchStart;
+  const onTouchEndRef = useRef(onTouchEnd);
+  onTouchEndRef.current = onTouchEnd;
 
   const hasTeamData = !!reviewerTeamMap && !!(homeTeamName || awayTeamName);
 
   const filteredReviews = useMemo(() => {
+    if (ratingBuckets) return []; // not used when buckets are pre-aggregated
     if (!hasTeamData || filter === 'everyone') return reviews;
     // reviewerTeamMap values are team NAMES (e.g. "Arsenal", "Manchester City")
     // homeTeamName / awayTeamName are full names from football-data.org (e.g. "Arsenal FC")
@@ -48,9 +63,13 @@ export function RatingChart({ reviews, showStats = false, homeTeamId, awayTeamId
         default: return true;
       }
     });
-  }, [reviews, filter, reviewerTeamMap, homeTeamName, awayTeamName, hasTeamData]);
+  }, [reviews, ratingBuckets, filter, reviewerTeamMap, homeTeamName, awayTeamName, hasTeamData]);
 
-  const counts = BUCKETS.map((b) => filteredReviews.filter((r) => r.rating === b).length);
+  // When ratingBuckets provided (O(1) pre-aggregated path), read directly from them.
+  // Otherwise compute from individual review ratings.
+  const counts = ratingBuckets
+    ? BUCKETS.map((b) => ratingBuckets[String(Math.round(b * 10))] || 0)
+    : BUCKETS.map((b) => filteredReviews.filter((r) => r.rating === b).length);
   const maxCount = Math.max(...counts, 1);
   const totalRated = counts.reduce((sum, c) => sum + c, 0);
 
@@ -72,6 +91,7 @@ export function RatingChart({ reviews, showStats = false, homeTeamId, awayTeamId
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: (evt) => {
+        onTouchStartRef.current?.();
         const idx = getIndexFromX(evt.nativeEvent.pageX);
         setActiveIndex(idx);
       },
@@ -80,9 +100,11 @@ export function RatingChart({ reviews, showStats = false, homeTeamId, awayTeamId
         setActiveIndex(idx);
       },
       onPanResponderRelease: () => {
+        onTouchEndRef.current?.();
         setActiveIndex(null);
       },
       onPanResponderTerminate: () => {
+        onTouchEndRef.current?.();
         setActiveIndex(null);
       },
     })
@@ -106,37 +128,86 @@ export function RatingChart({ reviews, showStats = false, homeTeamId, awayTeamId
 
   const filterOptions: { key: RatingFilter; label: string }[] = [
     { key: 'everyone', label: 'Everyone' },
-    { key: 'neutral', label: 'Neutral fans' },
+    { key: 'neutral', label: awayTeamName ? 'Neutral fans' : 'Other fans' },
     { key: 'home', label: awayTeamName ? (homeTeamName || 'Home fans') : `${homeTeamName || 'Team'} fans` },
     ...(awayTeamName ? [{ key: 'away' as RatingFilter, label: awayTeamName || 'Away fans' }] : []),
   ];
 
   const activeFilterLabel = filterOptions.find((f) => f.key === filter)?.label || 'Everyone';
 
+  const hasSeasonPicker = !!(seasonOptions && seasonOptions.length > 0 && onSeasonChange);
+  const activeSeasonLabel = seasonOptions?.find((o) => o.value === season)?.label ?? season ?? 'All seasons';
+
   return (
-    <View style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.md, backgroundColor: `${colors.accent}30`, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.border }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm }}>
+    <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: spacing.md, backgroundColor: `${colors.accent}30`, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.border }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md }}>
         <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1 }}>
           Ratings
         </Text>
-        {hasTeamData && (
-          <Pressable
-            onPress={() => setDropdownOpen(!dropdownOpen)}
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 4,
-              backgroundColor: colors.muted,
-              paddingHorizontal: 8,
-              paddingVertical: 3,
-              borderRadius: borderRadius.full,
-            }}
-          >
-            <Text style={{ fontSize: 11, fontWeight: '500', color: colors.foreground }}>{activeFilterLabel}</Text>
-            <Ionicons name={dropdownOpen ? 'chevron-up' : 'chevron-down'} size={12} color={colors.textSecondary} />
-          </Pressable>
-        )}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+          {hasSeasonPicker && (
+            <Pressable
+              onPress={() => { setSeasonDropdownOpen(!seasonDropdownOpen); setDropdownOpen(false); }}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 4,
+                backgroundColor: colors.muted,
+                paddingHorizontal: 8,
+                paddingVertical: 3,
+                borderRadius: borderRadius.full,
+              }}
+            >
+              <Text style={{ fontSize: 11, fontWeight: '500', color: colors.foreground }}>{activeSeasonLabel}</Text>
+              <Ionicons name={seasonDropdownOpen ? 'chevron-up' : 'chevron-down'} size={12} color={colors.textSecondary} />
+            </Pressable>
+          )}
+          {hasTeamData && (
+            <Pressable
+              onPress={() => { setDropdownOpen(!dropdownOpen); setSeasonDropdownOpen(false); }}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 4,
+                backgroundColor: colors.muted,
+                paddingHorizontal: 8,
+                paddingVertical: 3,
+                borderRadius: borderRadius.full,
+              }}
+            >
+              <Text style={{ fontSize: 11, fontWeight: '500', color: colors.foreground }}>{activeFilterLabel}</Text>
+              <Ionicons name={dropdownOpen ? 'chevron-up' : 'chevron-down'} size={12} color={colors.textSecondary} />
+            </Pressable>
+          )}
+        </View>
       </View>
+
+      {/* Season dropdown */}
+      {seasonDropdownOpen && hasSeasonPicker && (
+        <View style={{ marginBottom: spacing.sm, backgroundColor: colors.card, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' }}>
+          {seasonOptions!.map((opt, i) => (
+            <Pressable
+              key={opt.value}
+              onPress={() => { onSeasonChange!(opt.value); setSeasonDropdownOpen(false); }}
+              style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                backgroundColor: pressed ? colors.accent : 'transparent',
+                borderTopWidth: i > 0 ? 1 : 0,
+                borderTopColor: colors.border,
+              })}
+            >
+              <Text style={{ fontSize: 13, color: season === opt.value ? colors.primary : colors.foreground, fontWeight: season === opt.value ? '600' : '400' }}>
+                {opt.label}
+              </Text>
+              {season === opt.value && <Ionicons name="checkmark" size={16} color={colors.primary} />}
+            </Pressable>
+          ))}
+        </View>
+      )}
 
       {/* Filter dropdown */}
       {dropdownOpen && hasTeamData && (
@@ -165,81 +236,87 @@ export function RatingChart({ reviews, showStats = false, homeTeamId, awayTeamId
         </View>
       )}
 
-      <View style={{ flexDirection: 'row', alignItems: 'flex-end' }}>
-        {/* 1 star label on left */}
-        <View style={{ justifyContent: 'flex-end', marginRight: 6, paddingBottom: 1 }}>
-          <Ionicons name="star" size={10} color={colors.primary} />
+      {loading ? (
+        <View style={{ height: BAR_HEIGHT + 8, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="small" color={colors.textSecondary} />
         </View>
+      ) : (
+        <View style={{ flexDirection: 'row', alignItems: 'flex-end' }}>
+          {/* 1 star label on left */}
+          <View style={{ justifyContent: 'flex-end', marginRight: 6, paddingBottom: 1 }}>
+            <Ionicons name="star" size={10} color={colors.primary} />
+          </View>
 
-        {/* Vertical bars — pan responder for swipe */}
-        <View
-          style={{ flex: 1, flexDirection: 'row', alignItems: 'flex-end', gap: 3 }}
-          onLayout={onBarAreaLayout}
-          {...panResponder.panHandlers}
-        >
-          {BUCKETS.map((bucket, i) => {
-            const count = counts[i];
-            const heightPct = count > 0 ? (count / maxCount) * BAR_HEIGHT : 0;
-            const isActive = activeIndex === i;
+          {/* Vertical bars — pan responder for swipe */}
+          <View
+            style={{ flex: 1, flexDirection: 'row', alignItems: 'flex-end', gap: 3 }}
+            onLayout={onBarAreaLayout}
+            {...panResponder.panHandlers}
+          >
+            {BUCKETS.map((bucket, i) => {
+              const count = counts[i];
+              const heightPct = count > 0 ? (count / maxCount) * BAR_HEIGHT : 0;
+              const isActive = activeIndex === i;
 
-            return (
-              <View
-                key={bucket}
-                style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-end', height: BAR_HEIGHT }}
-              >
+              return (
                 <View
-                  style={{
-                    width: '100%',
-                    height: Math.max(heightPct, count > 0 ? 3 : 1),
-                    backgroundColor: isActive ? colors.primary : colors.muted,
-                    borderRadius: 2,
-                  }}
-                />
-              </View>
-            );
-          })}
-        </View>
+                  key={bucket}
+                  style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-end', height: BAR_HEIGHT }}
+                >
+                  <View
+                    style={{
+                      width: '100%',
+                      height: Math.max(heightPct, count > 0 ? 3 : 1),
+                      backgroundColor: isActive ? colors.primary : colors.muted,
+                      borderRadius: 2,
+                    }}
+                  />
+                </View>
+              );
+            })}
+          </View>
 
-        {/* Right side */}
-        <View style={{ justifyContent: 'flex-end', marginLeft: 6, paddingBottom: 1, alignItems: 'flex-end' }}>
-          {showSelected ? (
-            <>
-              <Text style={{ fontSize: 10, color: colors.textSecondary, textAlign: 'right', marginBottom: 2 }}>
-                {counts[activeIndex!]} {counts[activeIndex!] === 1 ? 'rating' : 'ratings'}
-              </Text>
-              <View style={{ flexDirection: 'row' }}>
-                {Array.from({ length: selectedFullStars }).map((_, s) => (
-                  <Ionicons key={`f${s}`} name="star" size={10} color={colors.primary} />
-                ))}
-                {selectedHalfStar && (
-                  <Ionicons name="star-half" size={10} color={colors.primary} />
-                )}
-                {Array.from({ length: selectedEmptyStars }).map((_, s) => (
-                  <Ionicons key={`e${s}`} name="star-outline" size={10} color={colors.primary} />
-                ))}
-              </View>
-            </>
-          ) : (
-            <>
-              {showStats && totalRated > 0 && (
-                <Text style={{ fontSize: 14, fontWeight: '700', color: colors.foreground, lineHeight: 16, textAlign: 'right', marginBottom: 1 }}>
-                  {avgRating.toFixed(1)}
-                </Text>
-              )}
-              {totalRated > 0 && (
+          {/* Right side */}
+          <View style={{ justifyContent: 'flex-end', marginLeft: 6, paddingBottom: 1, alignItems: 'flex-end' }}>
+            {showSelected ? (
+              <>
                 <Text style={{ fontSize: 10, color: colors.textSecondary, textAlign: 'right', marginBottom: 2 }}>
-                  {totalRated} {totalRated === 1 ? 'rating' : 'ratings'}
+                  {counts[activeIndex!]} {counts[activeIndex!] === 1 ? 'rating' : 'ratings'}
                 </Text>
-              )}
-              <View style={{ flexDirection: 'row' }}>
-                {Array.from({ length: 5 }).map((_, s) => (
-                  <Ionicons key={`f${s}`} name="star" size={10} color={colors.primary} />
-                ))}
-              </View>
-            </>
-          )}
+                <View style={{ flexDirection: 'row' }}>
+                  {Array.from({ length: selectedFullStars }).map((_, s) => (
+                    <Ionicons key={`f${s}`} name="star" size={10} color={colors.primary} />
+                  ))}
+                  {selectedHalfStar && (
+                    <Ionicons name="star-half" size={10} color={colors.primary} />
+                  )}
+                  {Array.from({ length: selectedEmptyStars }).map((_, s) => (
+                    <Ionicons key={`e${s}`} name="star-outline" size={10} color={colors.primary} />
+                  ))}
+                </View>
+              </>
+            ) : (
+              <>
+                {showStats && totalRated > 0 && (
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: colors.foreground, lineHeight: 16, textAlign: 'right', marginBottom: 1 }}>
+                    {avgRating.toFixed(1)}
+                  </Text>
+                )}
+                {totalRated > 0 && (
+                  <Text style={{ fontSize: 10, color: colors.textSecondary, textAlign: 'right', marginBottom: 2 }}>
+                    {totalRated} {totalRated === 1 ? 'rating' : 'ratings'}
+                  </Text>
+                )}
+                <View style={{ flexDirection: 'row' }}>
+                  {Array.from({ length: 5 }).map((_, s) => (
+                    <Ionicons key={`f${s}`} name="star" size={10} color={colors.primary} />
+                  ))}
+                </View>
+              </>
+            )}
+          </View>
         </View>
-      </View>
+      )}
     </View>
   );
 }

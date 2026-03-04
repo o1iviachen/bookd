@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { View, Text, FlatList, ScrollView, useWindowDimensions } from 'react-native';
 import PagerView from 'react-native-pager-view';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -6,7 +6,7 @@ import { useQueries } from '@tanstack/react-query';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useUserProfile } from '../../hooks/useUser';
-import { useReviewsForUser, useAvgRatings, useLikedReviews } from '../../hooks/useReviews';
+import { useReviewsForUser, useLikedReviews } from '../../hooks/useReviews';
 import { useLikedLists } from '../../hooks/useLists';
 import { getMatchById } from '../../services/matchService';
 import { MatchPosterCard } from '../../components/match/MatchPosterCard';
@@ -19,6 +19,8 @@ import { ScreenHeader } from '../../components/ui/ScreenHeader';
 import { SegmentedControl } from '../../components/ui/SegmentedControl';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { Match } from '../../types/match';
+
+const PAGE_SIZE = 30;
 
 const TABS = ['Matches', 'Reviews', 'Lists'] as const;
 type Tab = (typeof TABS)[number];
@@ -66,11 +68,10 @@ export function LikesScreen({ route, navigation }: any) {
     setActiveTabIndex(e.nativeEvent.position);
   }, []);
   const [filters, setFilters] = useState<MatchFilterState>({ league: 'all', team: 'all', season: 'all' });
+  const [displayedCount, setDisplayedCount] = useState(PAGE_SIZE);
 
   // ─── Matches tab data ───
   const likedMatchIds = useMemo(() => profile?.likedMatchIds || [], [profile]);
-  const { data: avgRatingsMap } = useAvgRatings(likedMatchIds);
-
   const GAP = spacing.sm;
   const HORIZONTAL_PADDING = spacing.md;
   const NUM_COLUMNS = 3;
@@ -123,13 +124,13 @@ export function LikesScreen({ route, navigation }: any) {
           matchId: id,
           match,
           userRating: userInfo?.avgRating || 0,
-          avgPublicRating: avgRatingsMap?.get(id) || 0,
+          avgPublicRating: match.avgRating || 0,
           reviewCount: userInfo?.count || 0,
           likedIndex: index,
         };
       })
       .filter(Boolean) as LikedEntry[];
-  }, [likedMatchIds, matchMap, avgRatingsMap, userRatingMap]);
+  }, [likedMatchIds, matchMap, userRatingMap]);
 
   const filtered = useMemo(() => {
     const filteredMatches = applyMatchFilters(allMatches, filters);
@@ -162,6 +163,14 @@ export function LikesScreen({ route, navigation }: any) {
 
     return result;
   }, [entries, allMatches, filters, sort]);
+
+  useEffect(() => { setDisplayedCount(PAGE_SIZE); }, [sort, filters]);
+
+  const visibleEntries = filtered.slice(0, displayedCount);
+
+  const handleEndReached = useCallback(() => {
+    setDisplayedCount(prev => Math.min(prev + PAGE_SIZE, filtered.length));
+  }, [filtered.length]);
 
   // ─── Reviews tab data ───
   const { data: likedReviews, isLoading: likedReviewsLoading } = useLikedReviews(targetUserId);
@@ -219,11 +228,13 @@ export function LikesScreen({ route, navigation }: any) {
           ) : (
             <FlatList
               indicatorStyle={isDark ? 'white' : 'default'}
-              data={filtered}
+              data={visibleEntries}
               keyExtractor={(item) => String(item.matchId)}
               numColumns={NUM_COLUMNS}
               contentContainerStyle={{ padding: HORIZONTAL_PADDING, gap: GAP }}
               columnWrapperStyle={{ gap: GAP }}
+              onEndReached={handleEndReached}
+              onEndReachedThreshold={0.3}
               renderItem={({ item }) => (
                 <MatchPosterCard
                   match={item.match}

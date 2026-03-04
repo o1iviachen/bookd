@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { View, Text, Pressable, FlatList, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -16,6 +16,7 @@ import { Match } from '../../types/match';
 
 type Nav = NativeStackNavigationProp<SearchStackParamList, 'BrowseByDate'>;
 const NUM_COLUMNS = 3;
+const PAGE_SIZE = 30;
 
 type SortKey = 'date_asc' | 'date_desc' | 'popular' | 'your_rating_high' | 'your_rating_low' | 'avg_rating_high' | 'avg_rating_low';
 
@@ -38,6 +39,10 @@ export function BrowseByDateScreen() {
   const [filters, setFilters] = useState<MatchFilterState>({ league: 'all', team: 'all', season: 'all' });
   const [minLogs, setMinLogs] = useState(0);
   const [sort, setSort] = useState<SortKey>('date_asc');
+  const [displayedCount, setDisplayedCount] = useState(PAGE_SIZE);
+
+  // Reset page when filters, sort or month change
+  useEffect(() => { setDisplayedCount(PAGE_SIZE); }, [filters, minLogs, sort, selectedMonth]);
 
   const GAP = spacing.sm;
   const HORIZONTAL_PADDING = spacing.md;
@@ -84,6 +89,15 @@ export function BrowseByDateScreen() {
 
     return filtered;
   }, [matches, filters, minLogs, sort]);
+
+  const visibleMatches = useMemo(
+    () => filteredMatches.slice(0, displayedCount),
+    [filteredMatches, displayedCount],
+  );
+
+  const handleEndReached = useCallback(() => {
+    setDisplayedCount((c) => Math.min(c + PAGE_SIZE, filteredMatches.length));
+  }, [filteredMatches.length]);
 
   const renderItem = useCallback(({ item }: { item: Match }) => (
     <MatchPosterCard
@@ -158,7 +172,7 @@ export function BrowseByDateScreen() {
         </View>
       ) : (
         <FlatList
-          data={filteredMatches}
+          data={visibleMatches}
           renderItem={renderItem}
           keyExtractor={keyExtractor}
           numColumns={NUM_COLUMNS}
@@ -166,6 +180,8 @@ export function BrowseByDateScreen() {
           contentContainerStyle={{ paddingHorizontal: HORIZONTAL_PADDING, paddingTop: spacing.md, gap: GAP, paddingBottom: 40 }}
           indicatorStyle={isDark ? 'white' : 'default'}
           removeClippedSubviews
+          onEndReached={handleEndReached}
+          onEndReachedThreshold={0.3}
         />
       )}
     </SafeAreaView>

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { View, Text, FlatList, Pressable, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -16,6 +16,7 @@ import { Match } from '../../types/match';
 
 type Nav = NativeStackNavigationProp<SearchStackParamList, 'BrowseHighestRated'>;
 const NUM_COLUMNS = 3;
+const PAGE_SIZE = 20;
 
 export function BrowseHighestRatedScreen() {
   const { theme, isDark } = useTheme();
@@ -29,6 +30,9 @@ export function BrowseHighestRatedScreen() {
 
   const [filters, setFilters] = useState<MatchFilterState>({ league: 'all', team: 'all', season: 'all' });
   const [minLogs, setMinLogs] = useState(0);
+  const [displayedCount, setDisplayedCount] = useState(PAGE_SIZE);
+
+  useEffect(() => { setDisplayedCount(PAGE_SIZE); }, [filters, minLogs]);
 
   const { data: ratedIds, isLoading: idsLoading } = useHighestRatedMatchIds();
 
@@ -42,9 +46,6 @@ export function BrowseHighestRatedScreen() {
     })),
   });
 
-  const allLoaded = matchQueries.every((q) => !q.isLoading);
-  const isLoading = idsLoading || !allLoaded;
-
   const { ratingMap, logMap } = useMemo(() => {
     const rm = new Map<number, number>();
     const lm = new Map<number, number>();
@@ -57,25 +58,30 @@ export function BrowseHighestRatedScreen() {
     return { ratingMap: rm, logMap: lm };
   }, [ratedIds]);
 
+  // Show matches as they arrive — don't wait for all to load
   const allMatches = useMemo(() => {
-    return matchIds
-      .map((id, i) => matchQueries[i]?.data)
+    return matchQueries
+      .map((q) => q.data)
       .filter((m): m is Match => m !== undefined);
-  }, [matchIds, matchQueries]);
+  }, [matchQueries]);
 
   const highestRatedMatches = useMemo(() => {
     let filtered = allMatches.filter((m) => ratingMap.has(m.id));
-
     filtered = applyMatchFilters(filtered, filters);
-
     if (minLogs > 0) {
       filtered = filtered.filter((m) => (logMap.get(m.id) || 0) >= minLogs);
     }
-
     filtered.sort((a, b) => (ratingMap.get(b.id) || 0) - (ratingMap.get(a.id) || 0));
-
     return filtered;
   }, [allMatches, ratingMap, logMap, filters, minLogs]);
+
+  const visibleMatches = useMemo(
+    () => highestRatedMatches.slice(0, displayedCount),
+    [highestRatedMatches, displayedCount],
+  );
+
+  const isInitialLoading = idsLoading;
+  const isFetchingMore = !idsLoading && matchQueries.some((q) => q.isLoading);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
@@ -96,9 +102,9 @@ export function BrowseHighestRatedScreen() {
         matches={allMatches}
       />
 
-      {isLoading ? (
+      {isInitialLoading ? (
         <View style={{ flex: 1, justifyContent: 'center' }}><LoadingSpinner fullScreen={false} /></View>
-      ) : highestRatedMatches.length === 0 ? (
+      ) : highestRatedMatches.length === 0 && !isFetchingMore ? (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
           <Ionicons name="star-outline" size={48} color={colors.textSecondary} />
           <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.md }}>
@@ -106,12 +112,20 @@ export function BrowseHighestRatedScreen() {
           </Text>
         </View>
       ) : (
-        <FlatList indicatorStyle={isDark ? 'white' : 'default'}
-          data={highestRatedMatches}
+        <FlatList
+          indicatorStyle={isDark ? 'white' : 'default'}
+          data={visibleMatches}
           numColumns={NUM_COLUMNS}
           keyExtractor={(item) => item.id.toString()}
           contentContainerStyle={{ paddingHorizontal: HORIZONTAL_PADDING, paddingTop: spacing.md, paddingBottom: 40 }}
           columnWrapperStyle={{ gap: GAP, marginBottom: GAP }}
+          onEndReached={() => setDisplayedCount((c) => Math.min(c + PAGE_SIZE, highestRatedMatches.length))}
+          onEndReachedThreshold={0.3}
+          ListFooterComponent={isFetchingMore ? (
+            <View style={{ paddingVertical: spacing.md, alignItems: 'center' }}>
+              <LoadingSpinner fullScreen={false} />
+            </View>
+          ) : null}
           renderItem={({ item }) => (
             <MatchPosterCard
               match={item}

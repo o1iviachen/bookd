@@ -1,10 +1,10 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { View, Text, FlatList, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQueries } from '@tanstack/react-query';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
-import { useReviewsForUser, useAvgRatings } from '../../hooks/useReviews';
+import { useReviewsForUser } from '../../hooks/useReviews';
 import { useUserProfile } from '../../hooks/useUser';
 import { getMatchById } from '../../services/matchService';
 import { MatchPosterCard } from '../../components/match/MatchPosterCard';
@@ -15,6 +15,8 @@ import { ScreenHeader } from '../../components/ui/ScreenHeader';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { Review } from '../../types/review';
 import { Match } from '../../types/match';
+
+const PAGE_SIZE = 30;
 
 type SortKey = 'recent_logged' | 'recent_played' | 'rating_high' | 'rating_low' | 'avg_rating_high' | 'avg_rating_low' | 'popular';
 
@@ -54,10 +56,9 @@ export function GamesScreen({ route, navigation }: any) {
     () => [...new Set((reviews || []).map((r) => r.matchId))],
     [reviews]
   );
-  const { data: avgRatingsMap } = useAvgRatings(matchIds);
-
   const [sort, setSort] = useState<SortKey>('recent_logged');
   const [filters, setFilters] = useState<MatchFilterState>({ league: 'all', team: 'all', season: 'all' });
+  const [displayedCount, setDisplayedCount] = useState(PAGE_SIZE);
 
   const GAP = spacing.sm;
   const HORIZONTAL_PADDING = spacing.md;
@@ -109,7 +110,7 @@ export function GamesScreen({ route, navigation }: any) {
         matchId: match.id,
         match,
         userRating: avgUserRating,
-        avgPublicRating: avgRatingsMap?.get(match.id) || 0,
+        avgPublicRating: match.avgRating || 0,
         reviewCount: rs.length,
         latestReviewDate: latest.createdAt,
         reviewId: rs.length === 1 ? rs[0].id : '',
@@ -117,7 +118,7 @@ export function GamesScreen({ route, navigation }: any) {
         isJustLog: rs.length === 1 && rs[0].rating === 0 && !rs[0].text?.trim() && !rs[0].tags?.length && !rs[0].media?.length,
       };
     });
-  }, [reviews, matchMap, avgRatingsMap]);
+  }, [reviews, matchMap]);
 
   // Apply shared MatchFilters + sort
   const filtered = useMemo(() => {
@@ -154,6 +155,17 @@ export function GamesScreen({ route, navigation }: any) {
 
     return result;
   }, [entries, allMatches, filters, sort]);
+
+  // Reset pagination when sort or filters change
+  useEffect(() => {
+    setDisplayedCount(PAGE_SIZE);
+  }, [sort, filters]);
+
+  const visibleEntries = filtered.slice(0, displayedCount);
+
+  const handleEndReached = useCallback(() => {
+    setDisplayedCount(prev => Math.min(prev + PAGE_SIZE, filtered.length));
+  }, [filtered.length]);
 
   const handleMatchPress = useCallback((entry: MatchEntry) => {
     if (entry.totalReviews > 1) {
@@ -203,11 +215,13 @@ export function GamesScreen({ route, navigation }: any) {
         />
       ) : (
         <FlatList indicatorStyle={isDark ? 'white' : 'default'}
-          data={filtered}
+          data={visibleEntries}
           keyExtractor={(item) => String(item.matchId)}
           numColumns={NUM_COLUMNS}
           contentContainerStyle={{ padding: HORIZONTAL_PADDING, gap: GAP }}
           columnWrapperStyle={{ gap: GAP }}
+          onEndReached={handleEndReached}
+          onEndReachedThreshold={0.3}
           renderItem={({ item }) => (
             <MatchPosterCard
               match={item.match}

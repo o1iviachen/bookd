@@ -42,6 +42,7 @@ function docToReview(docSnap: any, userVote: 'up' | 'down' | null = null): Revie
     userVote,
     flagged: data.flagged || false,
     motmPlayerId: data.motmPlayerId ?? undefined,
+    motmPlayerName: data.motmPlayerName ?? undefined,
   };
 }
 
@@ -62,6 +63,7 @@ export async function createReview(
   media: ReviewMedia[] = [],
   isSpoiler: boolean = false,
   motmPlayerId?: number,
+  motmPlayerName?: string,
 ): Promise<string> {
   const reviewRef = await addDoc(collection(db, 'reviews'), {
     matchId,
@@ -77,7 +79,11 @@ export async function createReview(
     downvotes: 0,
     createdAt: serverTimestamp(),
     ...(motmPlayerId !== undefined && { motmPlayerId }),
+    ...(motmPlayerName !== undefined && { motmPlayerName }),
   });
+  // Match aggregate stats (ratingSum/ratingCount/reviewCount) are updated by
+  // the onReviewCreated Cloud Function trigger — not from the client, since
+  // Firestore rules block client writes to the matches collection.
   return reviewRef.id;
 }
 
@@ -197,34 +203,23 @@ export async function getPopularMatchIdsThisWeek(): Promise<{ matchId: number; c
   return [...counts.entries()]
     .map(([matchId, count]) => ({ matchId, count }))
     .sort((a, b) => b.count - a.count)
-    .slice(0, 20);
+    .slice(0, 50);
 }
 
-/** Returns top 20 matchIds ranked by average rating, with review count. */
+/** Returns all-time highest-rated matchIds from the pre-computed aggregates document. */
 export async function getHighestRatedMatchIds(): Promise<{ matchId: number; avgRating: number; count: number }[]> {
-  const q = query(
-    collection(db, 'reviews'),
-    orderBy('createdAt', 'desc'),
-    limit(200)
-  );
-  const snapshot = await getDocs(q);
+  const snap = await getDoc(doc(db, 'aggregates', 'highestRatedMatchIds'));
+  if (!snap.exists()) return [];
+  const entries = snap.data()?.entries as { matchId: number; avgRating: number; count: number }[] | undefined;
+  return entries ?? [];
+}
 
-  const totals = new Map<number, { sum: number; count: number }>();
-  for (const d of snapshot.docs) {
-    const data = d.data();
-    const matchId = data.matchId as number;
-    const rating = data.rating as number;
-    if (!matchId || !rating) continue;
-    const existing = totals.get(matchId) || { sum: 0, count: 0 };
-    existing.sum += rating;
-    existing.count += 1;
-    totals.set(matchId, existing);
-  }
-
-  return [...totals.entries()]
-    .map(([matchId, { sum, count }]) => ({ matchId, avgRating: sum / count, count }))
-    .sort((a, b) => b.avgRating - a.avgRating || b.count - a.count)
-    .slice(0, 20);
+/** Returns all-time popular matchIds from the pre-computed aggregates document. */
+export async function getPopularMatchIdsAllTime(): Promise<{ matchId: number; count: number }[]> {
+  const snap = await getDoc(doc(db, 'aggregates', 'popularMatchIds'));
+  if (!snap.exists()) return [];
+  const entries = snap.data()?.entries as { matchId: number; count: number }[] | undefined;
+  return entries ?? [];
 }
 
 export async function getReviewById(reviewId: string, currentUserId?: string): Promise<Review | null> {
@@ -324,13 +319,16 @@ export async function updateReview(
     media?: ReviewMedia[];
     isSpoiler?: boolean;
     motmPlayerId?: number | null;
+    motmPlayerName?: string | null;
   }
 ): Promise<void> {
   const reviewRef = doc(db, 'reviews', reviewId);
+  // Match aggregate stats are updated by the onReviewUpdated Cloud Function trigger.
   await updateDoc(reviewRef, { ...data, editedAt: serverTimestamp() });
 }
 
 export async function deleteReview(reviewId: string): Promise<void> {
+  // Match aggregate stats are updated by the onReviewDeleted Cloud Function trigger.
   await deleteDoc(doc(db, 'reviews', reviewId));
 }
 
@@ -366,52 +364,26 @@ export async function searchReviews(queryStr: string): Promise<Review[]> {
     .slice(0, 20);
 }
 
-export async function getAvgRatingsForMatches(matchIds: number[]): Promise<Map<number, number>> {
-  const result = new Map<number, number>();
-  if (matchIds.length === 0) return result;
-
-  // Firestore 'in' supports max 30 items per query
-  const batches: number[][] = [];
-  for (let i = 0; i < matchIds.length; i += 30) {
-    batches.push(matchIds.slice(i, i + 30));
-  }
-
-  for (const batch of batches) {
-    const q = query(collection(db, 'reviews'), where('matchId', 'in', batch));
-    const snapshot = await getDocs(q);
-    const grouped = new Map<number, number[]>();
-    snapshot.docs.forEach((d) => {
-      const data = d.data();
-      const ratings = grouped.get(data.matchId) || [];
-      ratings.push(data.rating);
-      grouped.set(data.matchId, ratings);
-    });
-    grouped.forEach((ratings, matchId) => {
-      result.set(matchId, ratings.reduce((a, b) => a + b, 0) / ratings.length);
-    });
-  }
-
-  return result;
-}
 
 export async function getReviewsForMatches(matchIds: number[]): Promise<Review[]> {
   if (matchIds.length === 0) return [];
 
-  const batches: number[][] = [];
-  for (let i = 0; i < matchIds.length; i += 30) {
-    batches.push(matchIds.slice(i, i + 30));
-  }
-
-  const results = await Promise.all(
-    batches.map((batch) =>
-      getDocs(query(collection(db, 'reviews'), where('matchId', 'in', batch)))
+  // Use individual equality queries per match — same pattern as getReviewsForMatch,
+  // which is known to work reliably with the auto single-field index on matchId.
+  const results = await Promise.allSettled(
+    matchIds.map((id) =>
+      getDocs(query(collection(db, 'reviews'), where('matchId', '==', id)))
     )
   );
 
   const reviews: Review[] = [];
   const seen = new Set<string>();
-  for (const snapshot of results) {
-    for (const d of snapshot.docs) {
+  for (const result of results) {
+    if (result.status === 'rejected') {
+      console.error('[getReviewsForMatches] query failed:', result.reason);
+      continue;
+    }
+    for (const d of result.value.docs) {
       if (!seen.has(d.id)) {
         seen.add(d.id);
         reviews.push(docToReview(d));
