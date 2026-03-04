@@ -3,14 +3,14 @@ import { View, Text, ScrollView, Pressable, TextInput as RNTextInput, Modal, use
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { subDays } from 'date-fns';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
-import { useMatchesRange, useSearchMatches } from '../../hooks/useMatches';
+import { useAllMatches, useSearchMatches } from '../../hooks/useMatches';
 import { updateUserProfile } from '../../services/firestore/users';
 import { getMatchById } from '../../services/matchService';
 import { MatchPosterCard } from '../../components/match/MatchPosterCard';
 import { MatchFilters, MatchFilterState, applyMatchFilters } from '../../components/match/MatchFilters';
+import { Select } from '../../components/ui/Select';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { Match } from '../../types/match';
 import { useQueries } from '@tanstack/react-query';
@@ -18,6 +18,12 @@ import { useQueries } from '@tanstack/react-query';
 const MAX_FAVOURITES = 4;
 
 const NUM_COLUMNS = 3;
+
+type SortBy = 'popular' | 'recent';
+const SORT_OPTIONS: { value: SortBy; label: string }[] = [
+  { value: 'popular', label: 'Most Popular' },
+  { value: 'recent', label: 'Most Recent' },
+];
 
 export function OnboardingMatchesScreen() {
   const navigation = useNavigation<any>();
@@ -32,15 +38,15 @@ export function OnboardingMatchesScreen() {
   const [showPicker, setShowPicker] = useState(false);
   const [pickerSearch, setPickerSearch] = useState('');
   const [filters, setFilters] = useState<MatchFilterState>({ league: 'all', team: 'all', season: 'all' });
+  const [sortBy, setSortBy] = useState<SortBy>('popular');
 
-  // Recent matches (default picker view)
-  const today = new Date();
-  const monthAgo = subDays(today, 30);
-  const { data: recentMatches, isLoading: recentLoading } = useMatchesRange(monthAgo, today);
+  // Browse all finished matches (paginated)
+  const { data: browseData, isLoading: browseLoading, fetchNextPage: browseFetchNext, hasNextPage: browseHasNext, isFetchingNextPage: browseIsFetchingNext } = useAllMatches();
+  const browseMatches = useMemo(() => browseData?.pages.flatMap((p) => p.matches) || [], [browseData]);
 
   // Search-powered results (when user types 2+ chars)
   const isSearching = pickerSearch.trim().length >= 2;
-  const { data: searchResults, isLoading: searchLoading, fetchNextPage, hasNextPage } = useSearchMatches(pickerSearch.trim(), isSearching);
+  const { data: searchResults, isLoading: searchLoading, fetchNextPage, hasNextPage, isFetchingNextPage } = useSearchMatches(pickerSearch.trim(), isSearching);
   const searchMatches = useMemo(() => searchResults?.pages.flatMap((p) => p.matches) || [], [searchResults]);
 
   const addMatch = (matchId: number) => {
@@ -67,11 +73,11 @@ export function OnboardingMatchesScreen() {
   };
 
   const pickerMatches = useMemo(() => {
-    const source = isSearching ? searchMatches : (recentMatches || []);
+    const source = isSearching ? searchMatches : browseMatches;
     let filtered = source.filter((m) => !selected.includes(m.id));
     filtered = applyMatchFilters(filtered, filters);
 
-    // Only apply local text filter for recent matches
+    // Only apply local text filter for browse matches
     if (!isSearching && pickerSearch.trim()) {
       const q = pickerSearch.toLowerCase();
       filtered = filtered.filter(
@@ -84,11 +90,16 @@ export function OnboardingMatchesScreen() {
       );
     }
 
+    // Sort
     if (!isSearching) {
-      filtered.sort((a, b) => new Date(b.kickoff).getTime() - new Date(a.kickoff).getTime());
+      if (sortBy === 'popular') {
+        filtered.sort((a, b) => (b.ratingCount || 0) - (a.ratingCount || 0));
+      } else {
+        filtered.sort((a, b) => new Date(b.kickoff).getTime() - new Date(a.kickoff).getTime());
+      }
     }
-    return filtered.slice(0, 60);
-  }, [recentMatches, searchMatches, selected, pickerSearch, filters, isSearching]);
+    return filtered;
+  }, [browseMatches, searchMatches, selected, pickerSearch, filters, isSearching, sortBy]);
 
   const matchQueries = useQueries({
     queries: selected.map((id) => ({
@@ -101,7 +112,7 @@ export function OnboardingMatchesScreen() {
     .map((q) => q.data)
     .filter((m): m is Match => m !== undefined);
 
-  const pickerLoading = isSearching ? searchLoading : recentLoading;
+  const pickerLoading = isSearching ? searchLoading : browseLoading;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
@@ -226,9 +237,26 @@ export function OnboardingMatchesScreen() {
           <MatchFilters
             filters={filters}
             onFiltersChange={setFilters}
-            matches={(isSearching ? searchMatches : recentMatches) || []}
+            matches={(isSearching ? searchMatches : browseMatches) || []}
             showMinLogs={false}
           />
+
+          {/* Count + Sort */}
+          {!isSearching && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingBottom: spacing.sm }}>
+              <Text style={{ ...typography.caption, color: colors.textSecondary }}>
+                {pickerMatches.length} matches
+              </Text>
+              <View style={{ width: 160 }}>
+                <Select
+                  value={sortBy}
+                  onValueChange={(v) => setSortBy(v as SortBy)}
+                  title="Sort By"
+                  options={SORT_OPTIONS}
+                />
+              </View>
+            </View>
+          )}
 
           {pickerLoading ? (
             <View style={{ flex: 1, justifyContent: 'center' }}><LoadingSpinner fullScreen={false} /></View>
@@ -246,7 +274,10 @@ export function OnboardingMatchesScreen() {
               keyboardShouldPersistTaps="handled"
               contentContainerStyle={{ paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: 40 }}
               columnWrapperStyle={{ gap: GAP, marginBottom: GAP }}
-              onEndReached={() => { if (isSearching && hasNextPage) fetchNextPage(); }}
+              onEndReached={() => {
+                if (isSearching && hasNextPage) fetchNextPage();
+                else if (!isSearching && browseHasNext) browseFetchNext();
+              }}
               onEndReachedThreshold={0.5}
               renderItem={({ item }) => (
                 <MatchPosterCard
@@ -255,7 +286,11 @@ export function OnboardingMatchesScreen() {
                   width={CARD_WIDTH}
                 />
               )}
-              ListFooterComponent={isSearching && searchLoading ? <ActivityIndicator style={{ paddingVertical: spacing.md }} color={colors.primary} /> : null}
+              ListFooterComponent={
+                (isSearching && isFetchingNextPage) || (!isSearching && browseIsFetchingNext)
+                  ? <ActivityIndicator style={{ paddingVertical: spacing.md }} color={colors.primary} />
+                  : null
+              }
             />
           )}
         </SafeAreaView>

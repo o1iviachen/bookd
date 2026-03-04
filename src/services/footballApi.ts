@@ -789,6 +789,39 @@ export async function searchPlayersQuery(
   }
 }
 
+// ─── Browse all finished matches — paginated, newest first ───
+
+const BROWSE_PAGE_SIZE = 30;
+
+export async function getAllMatchesPaginated(
+  cursor?: string,
+): Promise<MatchSearchPage> {
+  try {
+    const constraints = [
+      where('status', '==', 'FINISHED'),
+      orderBy('kickoff', 'desc'),
+      ...(cursor ? [startAfter(cursor)] : []),
+      limit(BROWSE_PAGE_SIZE),
+    ];
+
+    const snapshot = await getDocs(query(collection(db, MATCHES), ...constraints));
+    const matches = snapshot.docs
+      .map((d) => d.data())
+      .filter(isValidMatch)
+      .map(docToMatch);
+
+    const lastDoc = snapshot.docs[snapshot.docs.length - 1];
+    const nextCursor = snapshot.docs.length < BROWSE_PAGE_SIZE
+      ? null
+      : (lastDoc?.data().kickoff as string) ?? null;
+
+    return { matches, nextCursor };
+  } catch (err) {
+    console.error('[getAllMatchesPaginated] Firestore query failed:', err);
+    return { matches: [], nextCursor: null };
+  }
+}
+
 // Search matches by team name — paginated, no cap
 export interface MatchSearchPage {
   matches: Match[];

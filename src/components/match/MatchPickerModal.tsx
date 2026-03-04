@@ -2,14 +2,20 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { View, Text, Modal, FlatList, Pressable, TextInput as RNTextInput, useWindowDimensions, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { subDays } from 'date-fns';
 import { useTheme } from '../../context/ThemeContext';
-import { useMatchesRange, useSearchMatches } from '../../hooks/useMatches';
+import { useAllMatches, useSearchMatches } from '../../hooks/useMatches';
 import { MatchPosterCard } from './MatchPosterCard';
 import { MatchFilters, MatchFilterState, applyMatchFilters } from './MatchFilters';
+import { Select } from '../ui/Select';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
 
 const NUM_COLUMNS = 3;
+
+type SortBy = 'popular' | 'recent';
+const SORT_OPTIONS: { value: SortBy; label: string }[] = [
+  { value: 'popular', label: 'Most Popular' },
+  { value: 'recent', label: 'Most Recent' },
+];
 
 interface MatchPickerModalProps {
   visible: boolean;
@@ -30,15 +36,15 @@ export function MatchPickerModal({ visible, onClose, onAddMatches, excludeMatchI
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState<MatchFilterState>({ league: 'all', team: 'all', season: 'all' });
   const [selected, setSelected] = useState<number[]>([]);
+  const [sortBy, setSortBy] = useState<SortBy>('popular');
 
-  // Recent matches (default view)
-  const today = new Date();
-  const weekAgo = subDays(today, 7);
-  const { data: recentMatches, isLoading: recentLoading } = useMatchesRange(weekAgo, today);
+  // Browse all finished matches (paginated)
+  const { data: browseData, isLoading: browseLoading, fetchNextPage: browseFetchNext, hasNextPage: browseHasNext, isFetchingNextPage: browseIsFetchingNext } = useAllMatches();
+  const browseMatches = useMemo(() => browseData?.pages.flatMap((p) => p.matches) || [], [browseData]);
 
   // Search-powered results (when user types 2+ chars)
   const isSearching = search.trim().length >= 2;
-  const { data: searchResults, isLoading: searchLoading, fetchNextPage, hasNextPage } = useSearchMatches(search.trim(), isSearching);
+  const { data: searchResults, isLoading: searchLoading, fetchNextPage, hasNextPage, isFetchingNextPage } = useSearchMatches(search.trim(), isSearching);
   const searchMatches = useMemo(() => searchResults?.pages.flatMap((p) => p.matches) || [], [searchResults]);
 
   // Reset selected when modal opens
@@ -68,12 +74,12 @@ export function MatchPickerModal({ visible, onClose, onAddMatches, excludeMatchI
   };
 
   const filtered = useMemo(() => {
-    const source = isSearching ? searchMatches : (recentMatches || []);
+    const source = isSearching ? searchMatches : browseMatches;
     let result = source.filter((m) => !excludeMatchIds.includes(m.id));
 
     result = applyMatchFilters(result, filters);
 
-    // Only apply local text filter for recent matches (search results are already filtered)
+    // Only apply local text filter for browse matches (search results are already filtered)
     if (!isSearching && search.trim()) {
       const q = search.toLowerCase();
       result = result.filter(
@@ -86,13 +92,18 @@ export function MatchPickerModal({ visible, onClose, onAddMatches, excludeMatchI
       );
     }
 
+    // Sort
     if (!isSearching) {
-      result.sort((a, b) => new Date(b.kickoff).getTime() - new Date(a.kickoff).getTime());
+      if (sortBy === 'popular') {
+        result.sort((a, b) => (b.ratingCount || 0) - (a.ratingCount || 0));
+      } else {
+        result.sort((a, b) => new Date(b.kickoff).getTime() - new Date(a.kickoff).getTime());
+      }
     }
-    return result.slice(0, 60);
-  }, [recentMatches, searchMatches, excludeMatchIds, search, filters, isSearching]);
+    return result;
+  }, [browseMatches, searchMatches, excludeMatchIds, search, filters, isSearching, sortBy]);
 
-  const isLoading = isSearching ? searchLoading : recentLoading;
+  const isLoading = isSearching ? searchLoading : browseLoading;
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
@@ -133,13 +144,30 @@ export function MatchPickerModal({ visible, onClose, onAddMatches, excludeMatchI
           </View>
         </View>
 
-        {/* Filters */}
+        {/* Filters + Sort */}
         <MatchFilters
           filters={filters}
           onFiltersChange={setFilters}
-          matches={(isSearching ? searchMatches : recentMatches) || []}
+          matches={(isSearching ? searchMatches : browseMatches) || []}
           showMinLogs={false}
         />
+
+        {/* Count + Sort */}
+        {!isSearching && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingBottom: spacing.sm }}>
+            <Text style={{ ...typography.caption, color: colors.textSecondary }}>
+              {filtered.length} matches
+            </Text>
+            <View style={{ width: 160 }}>
+              <Select
+                value={sortBy}
+                onValueChange={(v) => setSortBy(v as SortBy)}
+                title="Sort By"
+                options={SORT_OPTIONS}
+              />
+            </View>
+          </View>
+        )}
 
         {/* Match grid */}
         {isLoading ? (
@@ -158,7 +186,10 @@ export function MatchPickerModal({ visible, onClose, onAddMatches, excludeMatchI
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={{ paddingHorizontal: HORIZONTAL_PADDING, paddingTop: spacing.sm, paddingBottom: 40 }}
             columnWrapperStyle={{ gap: GAP, marginBottom: GAP }}
-            onEndReached={() => { if (isSearching && hasNextPage) fetchNextPage(); }}
+            onEndReached={() => {
+              if (isSearching && hasNextPage) fetchNextPage();
+              else if (!isSearching && browseHasNext) browseFetchNext();
+            }}
             onEndReachedThreshold={0.5}
             renderItem={({ item }) => (
               <MatchPosterCard
@@ -168,7 +199,11 @@ export function MatchPickerModal({ visible, onClose, onAddMatches, excludeMatchI
                 selected={selected.includes(item.id)}
               />
             )}
-            ListFooterComponent={isSearching && searchLoading ? <ActivityIndicator style={{ paddingVertical: spacing.md }} color={colors.primary} /> : null}
+            ListFooterComponent={
+              (isSearching && isFetchingNextPage) || (!isSearching && browseIsFetchingNext)
+                ? <ActivityIndicator style={{ paddingVertical: spacing.md }} color={colors.primary} />
+                : null
+            }
           />
         )}
       </SafeAreaView>
