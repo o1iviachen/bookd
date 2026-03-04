@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
-import { View, Text, Pressable, ScrollView, Animated, useWindowDimensions, Share } from 'react-native';
+import { View, Text, Pressable, ScrollView, Animated, useWindowDimensions, Share, KeyboardAvoidingView, Platform } from 'react-native';
 import { Select } from '../../components/ui/Select';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -29,9 +29,11 @@ import { MatchesStackParamList } from '../../types/navigation';
 import { MatchDetail, MatchPlayer, MatchGoal, MatchBooking, MatchSubstitution } from '../../services/footballApi';
 import { shortName, lastName } from '../../utils/formatName';
 import { MatchPosterCard } from '../../components/match/MatchPosterCard';
+import { DiscussionSection, DiscussionInputBar } from '../../components/discussion/DiscussionSection';
+import { useDiscussion } from '../../hooks/useDiscussion';
 import { User } from '../../types/user';
 
-type MatchTab = 'reviews' | 'lineup' | 'info';
+type MatchTab = 'reviews' | 'discussion' | 'lineup' | 'info';
 
 type Props = NativeStackScreenProps<MatchesStackParamList, 'MatchDetail'>;
 
@@ -41,6 +43,7 @@ const HERO_HEIGHT = 320;
 const COMP_ROW_HEIGHT = 28;
 const TAB_BAR_HEIGHT = 44;
 const STICKY_NAV_HEIGHT = 44;
+const REFEREE_MOTM_ID = -1;
 
 export function MatchDetailScreen({ route, navigation }: Props) {
   const { theme, isDark } = useTheme();
@@ -50,6 +53,7 @@ export function MatchDetailScreen({ route, navigation }: Props) {
   const [showListModal, setShowListModal] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [activeTabIndex, setActiveTabIndex] = useState(0);
+  const [barChartActive, setBarChartActive] = useState(false);
   const scrollY = useRef(new Animated.Value(0)).current;
   const horizontalRef = useRef<ScrollView>(null);
   const insets = useSafeAreaInsets();
@@ -57,6 +61,7 @@ export function MatchDetailScreen({ route, navigation }: Props) {
 
   const MATCH_TABS: { key: MatchTab; label: string }[] = [
     { key: 'reviews', label: 'Reviews' },
+    { key: 'discussion', label: 'Discussion' },
     { key: 'lineup', label: 'Lineup' },
     { key: 'info', label: 'Info' },
   ];
@@ -136,6 +141,34 @@ export function MatchDetailScreen({ route, navigation }: Props) {
   const handleScrollEndDrag = useCallback((e: any) => {
     if (e.nativeEvent.contentOffset.y < -80) handleRefresh();
   }, [handleRefresh]);
+
+  // Discussion window: open 30 min before kickoff through full-time
+  const [now, setNow] = useState(Date.now());
+  const matchKickoff = match?.kickoff;
+  const matchStatus = match?.status;
+  useEffect(() => {
+    if (!matchKickoff) return;
+    const kickoffMs = new Date(matchKickoff).getTime();
+    const delta = (kickoffMs - 30 * 60 * 1000) - Date.now();
+    if (delta > 0 && delta < 60 * 60 * 1000) {
+      const timer = setTimeout(() => setNow(Date.now()), delta);
+      return () => clearTimeout(timer);
+    }
+  }, [matchKickoff]);
+
+  const isDiscussionOpen = useMemo(() => {
+    if (!matchKickoff || !matchStatus) return false;
+    const kickoffMs = new Date(matchKickoff).getTime();
+    const preMatchWindow = kickoffMs - 30 * 60 * 1000;
+    const live = matchStatus === 'IN_PLAY' || matchStatus === 'PAUSED';
+    return live || (['TIMED', 'SCHEDULED'].includes(matchStatus) && now >= preMatchWindow);
+  }, [matchKickoff, matchStatus, now]);
+
+  const isDiscussionReadable = isDiscussionOpen || matchStatus === 'FINISHED';
+  const isDiscussionTabActive = MATCH_TABS[activeTabIndex]?.key === 'discussion';
+
+  const { messages: discussionMessages, isLoading: discussionLoading } =
+    useDiscussion(matchId, isDiscussionTabActive && isDiscussionReadable);
 
   if (isLoading || !match) {
     return <LoadingSpinner />;
@@ -350,7 +383,7 @@ export function MatchDetailScreen({ route, navigation }: Props) {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.background }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       {/* ─── Single ScrollView with header + active tab content ─── */}
       <Animated.ScrollView
         style={{ backgroundColor: colors.background }}
@@ -370,6 +403,7 @@ export function MatchDetailScreen({ route, navigation }: Props) {
           pagingEnabled
           showsHorizontalScrollIndicator={false}
           nestedScrollEnabled
+          scrollEnabled={!barChartActive}
           onScroll={handleHorizontalScroll}
           scrollEventThrottle={16}
         >
@@ -405,6 +439,8 @@ export function MatchDetailScreen({ route, navigation }: Props) {
                 homeTeamName={match.homeTeam.name}
                 awayTeamName={match.awayTeam.name}
                 reviewerTeamMap={reviewerTeamMap}
+                onTouchStart={() => setBarChartActive(true)}
+                onTouchEnd={() => setBarChartActive(false)}
               />
             )}
 
@@ -475,6 +511,24 @@ export function MatchDetailScreen({ route, navigation }: Props) {
             )}
           </View>
 
+          {/* ─── Discussion tab ─── */}
+          <View style={{ width: screenWidth }}>
+            <DiscussionSection
+              matchId={matchId}
+              messages={discussionMessages}
+              isLoading={discussionLoading}
+              isOpen={isDiscussionOpen}
+              isReadable={isDiscussionReadable}
+              isFinished={isFinished}
+              userId={user?.uid || null}
+              colors={colors}
+              spacing={spacing}
+              typography={typography}
+              borderRadius={borderRadius}
+              navigation={navigation}
+            />
+          </View>
+
           {/* ─── Lineup tab ─── */}
           <View style={{ width: screenWidth }}>
             <LineupSection matchDetail={matchDetail || null} match={match} colors={colors} spacing={spacing} typography={typography} navigation={navigation} motmWinnerId={motmWinnerId} />
@@ -486,6 +540,18 @@ export function MatchDetailScreen({ route, navigation }: Props) {
           </View>
         </ScrollView>
       </Animated.ScrollView>
+
+      {/* ─── Discussion input bar — only when discussion tab active & writable ─── */}
+      {user && isDiscussionTabActive && isDiscussionOpen && (
+        <DiscussionInputBar
+          matchId={matchId}
+          userId={user.uid}
+          profile={profile}
+          colors={colors}
+          spacing={spacing}
+          borderRadius={borderRadius}
+        />
+      )}
 
       {/* ─── Sticky mini-header — fades in when hero scrolls away ─── */}
       <Animated.View
@@ -560,7 +626,7 @@ export function MatchDetailScreen({ route, navigation }: Props) {
         matchId={matchId}
       />
 
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -601,7 +667,7 @@ function WatchedByFriends({ reviews, matchId, following, colors, spacing, typogr
   });
 
   const friendWatchers = useMemo(() => {
-    const entries: { userId: string; profile: User; rating: number; hasText: boolean; likedMatch: boolean; username: string }[] = [];
+    const entries: { userId: string; profile: User; rating: number; hasText: boolean; likedMatch: boolean; username: string; reviewCount: number; singleReviewId: string | null }[] = [];
     profileQueries.forEach((q) => {
       if (!q.data) return;
       const p = q.data;
@@ -616,6 +682,8 @@ function WatchedByFriends({ reviews, matchId, following, colors, spacing, typogr
         hasText: hasAnyText,
         likedMatch: p.likedMatchIds?.some((id: number) => String(id) === String(matchId)) || false,
         username: p.displayName || p.username,
+        reviewCount: allUserReviews.length,
+        singleReviewId: allUserReviews.length === 1 ? allUserReviews[0].id : null,
       });
     });
     return entries;
@@ -643,7 +711,11 @@ function WatchedByFriends({ reviews, matchId, following, colors, spacing, typogr
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.md }}>
         {friendWatchers.map((w) => {
           const handlePress = () => {
-            navigation.navigate('UserMatchReviews', { matchId, userId: w.userId, username: w.username });
+            if (w.singleReviewId) {
+              navigation.navigate('ReviewDetail', { reviewId: w.singleReviewId });
+            } else {
+              navigation.navigate('UserMatchReviews', { matchId, userId: w.userId, username: w.username });
+            }
           };
 
           return (
@@ -1248,6 +1320,22 @@ function LineupSection({ matchDetail, match, colors, spacing, typography, naviga
           )}
         </View>
       )}
+
+      {/* Referee */}
+      {matchDetail.referee && (
+        <>
+          <View style={{ height: 1, backgroundColor: colors.border, marginVertical: spacing.md, marginHorizontal: -spacing.md }} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.xs + 2, gap: spacing.sm, marginBottom: spacing.md }}>
+            <View style={{ width: 24, alignItems: 'center' }}>
+              <Ionicons name="flag-outline" size={12} color={colors.textSecondary} />
+            </View>
+            {motmWinnerId === REFEREE_MOTM_ID && <Text style={{ fontSize: 13 }}>⭐</Text>}
+            <Text style={{ ...typography.body, color: motmWinnerId === REFEREE_MOTM_ID ? '#f59e0b' : colors.textSecondary, fontSize: 14, fontStyle: 'italic', flex: 1, fontWeight: motmWinnerId === REFEREE_MOTM_ID ? '700' : '400' }}>
+              {matchDetail.referee} (Referee)
+            </Text>
+          </View>
+        </>
+      )}
     </View>
   );
 }
@@ -1335,7 +1423,6 @@ function InfoSection({ matchDetail, match, colors, spacing, typography, borderRa
     { label: 'Kick-off', value: formatMatchTime(match.kickoff) },
     { label: 'Venue', value: match.venue || '—' },
     ...(matchDetail.attendance ? [{ label: 'Attendance', value: matchDetail.attendance.toLocaleString() }] : []),
-    { label: 'Referee', value: matchDetail.referee || '—' },
   ];
 
   return (

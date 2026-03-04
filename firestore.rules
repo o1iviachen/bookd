@@ -67,6 +67,13 @@ service cloud.firestore {
       allow update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
     }
 
+    // ─── Match Discussions ───
+    match /matchDiscussions/{messageId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+
     // ─── Lists ───
     match /lists/{listId} {
       allow read: if true;
@@ -77,6 +84,12 @@ service cloud.firestore {
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likedBy', 'likes'])
       );
       allow delete: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+
+    // ─── Pre-computed aggregates (written by Cloud Functions only) ───
+    match /aggregates/{docId} {
+      allow read: if true;
+      allow write: if false;
     }
 
     // ─── Reports (written by Cloud Function admin SDK only) ───

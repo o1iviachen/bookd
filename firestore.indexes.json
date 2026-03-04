@@ -97,6 +97,14 @@
         { "fieldPath": "playerIds", "arrayConfig": "CONTAINS" },
         { "fieldPath": "kickoff", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "matchDiscussions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "matchId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

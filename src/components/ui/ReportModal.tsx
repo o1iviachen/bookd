@@ -15,7 +15,7 @@ const REASONS = [
 interface ReportModalProps {
   visible: boolean;
   onClose: () => void;
-  contentType: 'review' | 'comment';
+  contentType: 'review' | 'comment' | 'discussion_message';
   contentId: string;
 }
 
@@ -69,7 +69,7 @@ export function ReportModal({ visible, onClose, contentType, contentId }: Report
           <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.border, alignSelf: 'center', marginBottom: spacing.md }} />
 
           <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 17, marginBottom: spacing.xs }}>
-            Report {contentType === 'review' ? 'Review' : 'Comment'}
+            Report {contentType === 'review' ? 'Review' : contentType === 'comment' ? 'Comment' : 'Message'}
           </Text>
           <Text style={{ ...typography.small, color: colors.textSecondary, marginBottom: spacing.lg }}>
             Why are you reporting this?
