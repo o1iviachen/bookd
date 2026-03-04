@@ -1,3 +1,21 @@
+/**
+ * Decode common HTML entities that API-Football may embed in names.
+ * e.g. "O&apos;Reilly" → "O'Reilly", "Ñíguez" stays unchanged.
+ */
+export function decodeHtmlEntities(text: string): string {
+  if (!text || !text.includes('&')) return text;
+  return text
+    .replace(/&apos;/g, "'")
+    .replace(/&#0?39;/g, "'")
+    .replace(/&#x0?27;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&#0?34;/g, '"')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ');
+}
+
 // Name particles (prepositions, articles) that are part of the surname
 const PARTICLES = new Set([
   'de', 'da', 'do', 'dos', 'das', 'di', 'del', 'della', 'degli',
@@ -29,6 +47,7 @@ const SURNAME_FILLERS = new Set([
  */
 export function shortName(fullName: string): string {
   if (!fullName) return fullName;
+  fullName = decodeHtmlEntities(fullName);
 
   const parts = fullName.trim().split(/\s+/);
   if (parts.length <= 2) return fullName.trim();
@@ -71,6 +90,7 @@ export function shortName(fullName: string): string {
  */
 export function lastName(fullName: string): string {
   if (!fullName) return fullName;
+  fullName = decodeHtmlEntities(fullName);
 
   const parts = fullName.trim().split(/\s+/);
   if (parts.length <= 1) return fullName.trim();

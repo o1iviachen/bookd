@@ -9,6 +9,21 @@ import axios from 'axios';
 
 const db = admin.firestore();
 
+/** Decode common HTML entities from API-Football. */
+function decodeEntities(text: string): string {
+  if (!text || !text.includes('&')) return text;
+  return text
+    .replace(/&apos;/g, "'")
+    .replace(/&#0?39;/g, "'")
+    .replace(/&#x0?27;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&#0?34;/g, '"')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ');
+}
+
 // League tier for player popularity ranking (lower = more popular)
 // Players on top-tier teams sort first in search results
 export const LEAGUE_TIER: Record<string, number> = {
@@ -571,8 +586,9 @@ export async function enrichPlayersFromSquads(batchLimit = 50, offset = 0): Prom
         // Fallback: first word of firstname + lastname (avoids middle names leaking in)
         // e.g. firstname="Trent John", lastname="Alexander-Arnold" → "Trent Alexander-Arnold"
         const firstWord = (p.firstname || '').split(/\s+/)[0];
-        const fullName = p.name
+        const rawName = p.name
           || (firstWord && p.lastname ? `${firstWord} ${p.lastname}` : p.firstname || p.lastname || '');
+        const fullName = decodeEntities(rawName);
         // Derive position from statistics if available
         const pos = entry.statistics?.[0]?.games?.position || null;
 

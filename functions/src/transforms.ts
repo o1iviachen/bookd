@@ -1,6 +1,21 @@
 import { ApiFixture, ApiFixtureEvent, ApiFixtureLineup, ApiFixtureStats, ApiStanding } from './apiFootball';
 import { SYNC_LEAGUES } from './config';
 
+/** Decode common HTML entities that API-Football may embed in names. */
+function decodeEntities(text: string): string {
+  if (!text || !text.includes('&')) return text;
+  return text
+    .replace(/&apos;/g, "'")
+    .replace(/&#0?39;/g, "'")
+    .replace(/&#x0?27;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&#0?34;/g, '"')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ');
+}
+
 // ─── Match Status Mapping ───
 // API-Football status codes → our MatchStatus
 const STATUS_MAP: Record<string, string> = {
@@ -145,7 +160,7 @@ export function transformFixtureDetails(
   const mapPlayers = (players: Array<{ player: { id: number; name: string; number: number; pos: string } }>) =>
     players.map((p) => ({
       id: p.player.id,
-      name: p.player.name,
+      name: decodeEntities(p.player.name),
       position: mapPosition(p.player.pos),
       shirtNumber: p.player.number,
     }));
@@ -181,8 +196,8 @@ export function transformFixtureDetails(
     .map((e) => ({
       minute: e.time.elapsed,
       team: { id: e.team.id },
-      scorer: { id: e.player.id, name: e.player.name },
-      assist: e.assist.id ? { id: e.assist.id, name: e.assist.name! } : null,
+      scorer: { id: e.player.id, name: decodeEntities(e.player.name) },
+      assist: e.assist.id ? { id: e.assist.id, name: decodeEntities(e.assist.name!) } : null,
       detail: e.detail, // "Normal Goal", "Own Goal", "Penalty"
     }));
 
@@ -191,7 +206,7 @@ export function transformFixtureDetails(
     .map((e) => ({
       minute: e.time.elapsed,
       team: { id: e.team.id },
-      player: { id: e.player.id, name: e.player.name },
+      player: { id: e.player.id, name: decodeEntities(e.player.name) },
       card: e.detail === 'Yellow Card' ? 'YELLOW' : e.detail === 'Red Card' ? 'RED' : 'YELLOW_RED',
     }));
 
@@ -200,8 +215,8 @@ export function transformFixtureDetails(
     .map((e) => ({
       minute: e.time.elapsed,
       team: { id: e.team.id },
-      playerOut: { id: e.player.id, name: e.player.name },
-      playerIn: { id: e.assist.id || 0, name: e.assist.name || '' },
+      playerOut: { id: e.player.id, name: decodeEntities(e.player.name) },
+      playerIn: { id: e.assist.id || 0, name: decodeEntities(e.assist.name || '') },
     }));
 
   // Full event timeline
@@ -210,9 +225,9 @@ export function transformFixtureDetails(
     extraMinute: e.time.extra,
     teamId: e.team.id,
     playerId: e.player.id,
-    playerName: e.player.name,
+    playerName: decodeEntities(e.player.name),
     assistId: e.assist.id,
-    assistName: e.assist.name,
+    assistName: decodeEntities(e.assist.name || '') || null,
     type: e.type,
     detail: e.detail,
     comments: e.comments,
@@ -248,7 +263,7 @@ export function transformFixtureDetails(
     bookings,
     substitutions,
     events: eventTimeline,
-    referee: fixture.fixture.referee,
+    referee: decodeEntities(fixture.fixture.referee || '') || null,
     halfTimeScore: fixture.score.halftime.home !== null
       ? { home: fixture.score.halftime.home, away: fixture.score.halftime.away }
       : null,
