@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
-import { View, Text, FlatList, ScrollView, useWindowDimensions, ActivityIndicator } from 'react-native';
+import { View, Text, FlatList, ScrollView, Pressable, useWindowDimensions, ActivityIndicator } from 'react-native';
 import PagerView from 'react-native-pager-view';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQueries } from '@tanstack/react-query';
@@ -34,7 +34,7 @@ const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: 'rating_low', label: 'Your Rating (Low)' },
   { value: 'avg_rating_high', label: 'Average Rating (High)' },
   { value: 'avg_rating_low', label: 'Average Rating (Low)' },
-  { value: 'popular', label: 'Most Reviewed' },
+  { value: 'popular', label: 'Most Logged' },
 ];
 
 interface LikedEntry {
@@ -157,7 +157,7 @@ export function LikesScreen({ route, navigation }: any) {
         result.sort((a, b) => a.avgPublicRating - b.avgPublicRating);
         break;
       case 'popular':
-        result.sort((a, b) => b.reviewCount - a.reviewCount);
+        result.sort((a, b) => (b.match.reviewCount || 0) - (a.match.reviewCount || 0));
         break;
     }
 
@@ -185,8 +185,24 @@ export function LikesScreen({ route, navigation }: any) {
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
       <ScreenHeader title="Likes" onBack={() => navigation.goBack()} />
 
+      {/* Counts summary */}
+      <View style={{ flexDirection: 'row', justifyContent: 'center', gap: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.xs }}>
+        <Pressable onPress={() => handleTabPress(0)} style={{ alignItems: 'center' }}>
+          <Text style={{ ...typography.bodyBold, color: activeTabIndex === 0 ? colors.foreground : colors.textSecondary, fontSize: 16 }}>{likedMatchIds.length}</Text>
+          <Text style={{ ...typography.caption, color: colors.textSecondary, fontSize: 11 }}>Matches</Text>
+        </Pressable>
+        <Pressable onPress={() => handleTabPress(1)} style={{ alignItems: 'center' }}>
+          <Text style={{ ...typography.bodyBold, color: activeTabIndex === 1 ? colors.foreground : colors.textSecondary, fontSize: 16 }}>{likedReviews?.length ?? 0}</Text>
+          <Text style={{ ...typography.caption, color: colors.textSecondary, fontSize: 11 }}>Reviews</Text>
+        </Pressable>
+        <Pressable onPress={() => handleTabPress(2)} style={{ alignItems: 'center' }}>
+          <Text style={{ ...typography.bodyBold, color: activeTabIndex === 2 ? colors.foreground : colors.textSecondary, fontSize: 16 }}>{likedLists?.length ?? 0}</Text>
+          <Text style={{ ...typography.caption, color: colors.textSecondary, fontSize: 11 }}>Lists</Text>
+        </Pressable>
+      </View>
+
       {/* Segmented control */}
-      <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.sm }}>
+      <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.xs }}>
         <SegmentedControl tabs={TABS} activeTab={TABS[activeTabIndex]} onTabChange={(tab) => handleTabPress(TABS.indexOf(tab))} />
       </View>
 

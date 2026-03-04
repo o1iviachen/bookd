@@ -483,6 +483,8 @@ export function SearchScreen() {
             onBlur={() => { if (!queryStr) { LayoutAnimation.configureNext(LAYOUT_ANIM); setIsSearching(false); } }}
             autoCapitalize="none"
             autoCorrect={false}
+            textContentType="none"
+            autoComplete="off"
             style={{
               flex: 1,
               paddingLeft: 10,

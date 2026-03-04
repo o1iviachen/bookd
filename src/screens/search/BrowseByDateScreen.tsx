@@ -23,7 +23,7 @@ type SortKey = 'date_asc' | 'date_desc' | 'popular' | 'your_rating_high' | 'your
 const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: 'date_asc', label: 'Date (Earliest)' },
   { value: 'date_desc', label: 'Date (Latest)' },
-  { value: 'popular', label: 'Most Reviewed' },
+  { value: 'popular', label: 'Most Logged' },
   { value: 'your_rating_high', label: 'Your Rating (High)' },
   { value: 'your_rating_low', label: 'Your Rating (Low)' },
   { value: 'avg_rating_high', label: 'Average Rating (High)' },

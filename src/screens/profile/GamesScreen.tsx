@@ -27,7 +27,7 @@ const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: 'rating_low', label: 'Your Rating (Low)' },
   { value: 'avg_rating_high', label: 'Average Rating (High)' },
   { value: 'avg_rating_low', label: 'Average Rating (Low)' },
-  { value: 'popular', label: 'Most Reviewed' },
+  { value: 'popular', label: 'Most Logged' },
 ];
 
 interface MatchEntry {
@@ -149,7 +149,7 @@ export function GamesScreen({ route, navigation }: any) {
         result.sort((a, b) => a.avgPublicRating - b.avgPublicRating);
         break;
       case 'popular':
-        result.sort((a, b) => b.reviewCount - a.reviewCount);
+        result.sort((a, b) => (b.match.reviewCount || 0) - (a.match.reviewCount || 0));
         break;
     }
 

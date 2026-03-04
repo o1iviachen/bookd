@@ -159,7 +159,7 @@ export function MOTMPickerModal({
 
   // Pitch dimensions (fits inside the modal card with small horizontal padding)
   const pitchWidth = screenWidth - spacing.md * 4;
-  const pitchHeight = pitchWidth * 1.7;
+  const pitchHeight = pitchWidth * 1.45;
   const halfHeight = pitchHeight / 2;
 
   const homeFormation = matchDetail.homeFormation ? parseFormation(matchDetail.homeFormation) : [];
@@ -296,7 +296,7 @@ export function MOTMPickerModal({
             </Pressable>
           </View>
 
-          <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
+          <ScrollView bounces={false} showsVerticalScrollIndicator nestedScrollEnabled>
             {/* Formation pitch */}
             {homeRows.length > 0 && awayRows.length > 0 ? (
               <View style={{ alignItems: 'center', paddingVertical: spacing.md }}>

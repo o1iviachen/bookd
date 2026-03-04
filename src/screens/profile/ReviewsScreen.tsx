@@ -28,7 +28,7 @@ const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: 'avg_rating_high', label: 'Average Rating (High)' },
   { value: 'avg_rating_low', label: 'Average Rating (Low)' },
   { value: 'popular_review', label: 'Most Liked Reviews' },
-  { value: 'popular_match', label: 'Most Reviewed Matches' },
+  { value: 'popular_match', label: 'Most Logged Matches' },
 ];
 
 interface ReviewEntry {
@@ -128,7 +128,7 @@ export function ReviewsScreen({ route, navigation }: any) {
         result.sort((a, b) => ((b.review.upvotes || 0) - (b.review.downvotes || 0)) - ((a.review.upvotes || 0) - (a.review.downvotes || 0)));
         break;
       case 'popular_match':
-        result.sort((a, b) => b.matchReviewCount - a.matchReviewCount);
+        result.sort((a, b) => (b.match?.reviewCount || 0) - (a.match?.reviewCount || 0));
         break;
     }
 
