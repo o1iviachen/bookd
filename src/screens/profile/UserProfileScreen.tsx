@@ -133,7 +133,7 @@ export function UserProfileScreen({ route, navigation }: any) {
   if (isLoading || !profile) return <LoadingSpinner />;
 
   // Team crests
-  const followedTeamCrests = (profile?.followedTeamIds || []).map((id: string) => {
+  const followedTeamCrests = (profile?.favoriteTeams || []).map((id: string) => {
     const team = POPULAR_TEAMS.find((t) => t.id === id);
     return team ? { id: team.id, name: team.name, crest: team.crest } : null;
   }).filter(Boolean) as { id: string; name: string; crest: string }[];

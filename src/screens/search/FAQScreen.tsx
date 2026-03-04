@@ -69,20 +69,6 @@ const faqs: FAQItem[] = [
     answer:
       'Yes! Tap on any of your reviews to access edit and delete options. You can update your rating, text, and tags at any time. Deleted reviews are permanently removed.',
   },
-  {
-    id: 'upvotes',
-    category: 'COMMUNITY',
-    question: 'What do upvotes and downvotes mean?',
-    answer:
-      'Upvote reviews you find insightful, well-written, or agree with. Downvotes are for reviews that don\u2019t contribute to the discussion. The net vote count helps surface the most valuable community perspectives on each match.',
-  },
-  {
-    id: 'contact',
-    category: 'HELP AND SUPPORT',
-    question: 'How can I contact support?',
-    answer:
-      'For questions, feedback, or support, reach out to us at support@bookd.com. We typically respond within 24\u201348 hours.',
-  },
 ];
 
 export function FAQScreen() {
@@ -261,11 +247,11 @@ export function FAQScreen() {
                 Still need help? Reach out to us at
               </Text>
               <Pressable
-                onPress={() => Linking.openURL('mailto:support@bookd.app?subject=bookd%20Support%20Request')}
+                onPress={() => Linking.openURL('mailto:olivia@bookd-app.com?subject=Bookd%20Support%20Request')}
                 style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: spacing.sm, backgroundColor: colors.primary, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: borderRadius.md }}
               >
                 <Ionicons name="mail-outline" size={18} color="#14181c" />
-                <Text style={{ ...typography.bodyBold, color: '#14181c' }}>support@bookd.app</Text>
+                <Text style={{ ...typography.bodyBold, color: '#14181c' }}>olivia@bookd-app.com</Text>
               </Pressable>
             </View>
           </>

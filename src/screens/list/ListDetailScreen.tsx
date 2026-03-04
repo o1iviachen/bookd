@@ -145,9 +145,9 @@ export function ListDetailScreen({ route, navigation }: any) {
     })),
   });
   const commentAuthorMap = useMemo(() => {
-    const map = new Map<string, { username: string; displayName: string; avatar: string | null; followedTeamIds: string[] }>();
+    const map = new Map<string, { username: string; displayName: string; avatar: string | null; favoriteTeams: string[] }>();
     commentAuthorQueries.forEach((q) => {
-      if (q.data) map.set(q.data.id, { username: q.data.username, displayName: q.data.displayName || q.data.username, avatar: q.data.avatar, followedTeamIds: q.data.followedTeamIds || [] });
+      if (q.data) map.set(q.data.id, { username: q.data.username, displayName: q.data.displayName || q.data.username, avatar: q.data.avatar, favoriteTeams: q.data.favoriteTeams || [] });
     });
     return map;
   }, [commentAuthorQueries]);
@@ -244,7 +244,7 @@ export function ListDetailScreen({ route, navigation }: any) {
             <Text style={{ ...typography.caption, color: colors.textSecondary }}>by</Text>
             <Text style={{ ...typography.caption, color: colors.foreground, fontWeight: '600' }}>{listAuthorName}</Text>
             <Text style={{ ...typography.caption, color: colors.textSecondary }}>@{listAuthorUsername}</Text>
-            {(listAuthorProfile?.followedTeamIds || []).slice(0, 3).map((id) => {
+            {(listAuthorProfile?.favoriteTeams || []).slice(0, 3).map((id) => {
               const team = POPULAR_TEAMS.find((t) => t.id === String(id));
               return team ? <TeamLogo key={team.id} uri={team.crest} size={14} /> : null;
             })}
@@ -388,7 +388,7 @@ export function ListDetailScreen({ route, navigation }: any) {
               const cDisplayName = cAuthor?.displayName || cAuthor?.username || comment.username;
               const cDisplayUsername = cAuthor?.username || comment.username;
               const cDisplayAvatar = cAuthor?.avatar ?? comment.userAvatar;
-              const cTeamCrests = (cAuthor?.followedTeamIds || []).slice(0, 3).map((id) => {
+              const cTeamCrests = (cAuthor?.favoriteTeams || []).slice(0, 3).map((id) => {
                 const team = POPULAR_TEAMS.find((t) => t.id === String(id));
                 return team ? { id: team.id, crest: team.crest } : null;
               }).filter(Boolean) as { id: string; crest: string }[];
