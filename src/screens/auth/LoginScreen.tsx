@@ -4,11 +4,13 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { TextInput } from '../../components/ui/TextInput';
 import { Button } from '../../components/ui/Button';
 import { GoogleSignInButton } from '../../components/auth/GoogleSignInButton';
+import { AppleSignInButton } from '../../components/auth/AppleSignInButton';
 import { AuthStackParamList } from '../../types/navigation';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Login'>;
@@ -19,6 +21,7 @@ export function LoginScreen({ navigation }: Props) {
   const { theme, isDark } = useTheme();
   const { signIn } = useAuth();
   const { colors, spacing, typography } = theme;
+  const insets = useSafeAreaInsets();
 
   const scrollRef = useRef<ScrollView>(null);
   const passwordRef = useRef<RNTextInput>(null);
@@ -57,50 +60,51 @@ export function LoginScreen({ navigation }: Props) {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={{ flex: 1, backgroundColor: colors.background }}
     >
-      <ScrollView indicatorStyle={isDark ? 'white' : 'default'}
+      <ScrollView
+        indicatorStyle={isDark ? 'white' : 'default'}
         ref={scrollRef}
         bounces={false}
         contentContainerStyle={{ flexGrow: 1 }}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Hero image area */}
-        <View style={{ height: height * 0.38 }}>
+        {/* Photo at top */}
+        <View style={{ height: height * 0.35 }}>
           <Image
             source={require('../../../assets/stadium-background.jpg')}
             style={{ width: '100%', height: '100%' }}
             contentFit="cover"
           />
           <LinearGradient
-            colors={['transparent', `${colors.background}99`, colors.background]}
-            locations={[0.3, 0.7, 1]}
-            style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: '60%' }}
+            colors={['transparent', colors.background]}
+            locations={[0.5, 1]}
+            style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: '50%' }}
           />
-
-          {/* Back button */}
-          <Pressable
-            onPress={() => navigation.goBack()}
-            style={{
-              position: 'absolute',
-              top: height * 0.07,
-              left: spacing.md,
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 4,
-            }}
-          >
-            <Ionicons name="chevron-back" size={24} color={colors.foreground} />
-            <Text style={{ ...typography.body, color: colors.foreground }}>Back</Text>
-          </Pressable>
         </View>
 
-        {/* Form area */}
+        {/* Back button */}
+        <Pressable
+          onPress={() => navigation.goBack()}
+          style={{
+            position: 'absolute',
+            top: height * 0.07,
+            left: spacing.md,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 4,
+            zIndex: 1,
+          }}
+        >
+          <Ionicons name="chevron-back" size={24} color={colors.foreground} />
+          <Text style={{ ...typography.body, color: colors.foreground }}>Back</Text>
+        </Pressable>
+
+        {/* Content pinned to bottom */}
         <View
           style={{
             flex: 1,
-            backgroundColor: colors.background,
+            justifyContent: 'flex-end',
             paddingHorizontal: spacing.xl,
-            paddingTop: spacing.lg,
-            paddingBottom: spacing.xl,
+            paddingBottom: Math.max(insets.bottom, spacing.md),
           }}
         >
           <Text
@@ -167,7 +171,10 @@ export function LoginScreen({ navigation }: Props) {
             <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
           </View>
 
-          <GoogleSignInButton />
+          <View style={{ gap: spacing.sm }}>
+            <GoogleSignInButton />
+            <AppleSignInButton />
+          </View>
 
           <Text
             style={{

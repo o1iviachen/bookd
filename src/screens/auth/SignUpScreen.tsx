@@ -4,11 +4,13 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { TextInput } from '../../components/ui/TextInput';
 import { Button } from '../../components/ui/Button';
 import { GoogleSignInButton } from '../../components/auth/GoogleSignInButton';
+import { AppleSignInButton } from '../../components/auth/AppleSignInButton';
 import { AuthStackParamList } from '../../types/navigation';
 import { isUsernameClean } from '../../utils/moderation';
 import { isUsernameReserved } from '../../utils/reservedUsernames';
@@ -21,6 +23,7 @@ export function SignUpScreen({ navigation }: Props) {
   const { theme, isDark } = useTheme();
   const { signUp } = useAuth();
   const { colors, spacing, typography } = theme;
+  const insets = useSafeAreaInsets();
 
   const scrollRef = useRef<ScrollView>(null);
   const emailRef = useRef<RNTextInput>(null);
@@ -84,13 +87,14 @@ export function SignUpScreen({ navigation }: Props) {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={{ flex: 1, backgroundColor: colors.background }}
     >
-      <ScrollView indicatorStyle={isDark ? 'white' : 'default'}
+      <ScrollView
+        indicatorStyle={isDark ? 'white' : 'default'}
         ref={scrollRef}
         bounces={false}
         contentContainerStyle={{ flexGrow: 1 }}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Hero image area */}
+        {/* Photo at top */}
         <View style={{ height: height * 0.25 }}>
           <Image
             source={require('../../../assets/stadium-background.jpg')}
@@ -98,43 +102,43 @@ export function SignUpScreen({ navigation }: Props) {
             contentFit="cover"
           />
           <LinearGradient
-            colors={['transparent', `${colors.background}99`, colors.background]}
-            locations={[0.3, 0.7, 1]}
-            style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: '60%' }}
+            colors={['transparent', colors.background]}
+            locations={[0.5, 1]}
+            style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: '50%' }}
           />
-
-          {/* Back button */}
-          <Pressable
-            onPress={() => navigation.goBack()}
-            style={{
-              position: 'absolute',
-              top: height * 0.07,
-              left: spacing.md,
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 4,
-            }}
-          >
-            <Ionicons name="chevron-back" size={24} color={colors.foreground} />
-            <Text style={{ ...typography.body, color: colors.foreground }}>Back</Text>
-          </Pressable>
         </View>
 
-        {/* Form area */}
+        {/* Back button */}
+        <Pressable
+          onPress={() => navigation.goBack()}
+          style={{
+            position: 'absolute',
+            top: height * 0.07,
+            left: spacing.md,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 4,
+            zIndex: 1,
+          }}
+        >
+          <Ionicons name="chevron-back" size={24} color={colors.foreground} />
+          <Text style={{ ...typography.body, color: colors.foreground }}>Back</Text>
+        </Pressable>
+
+        {/* Content pinned to bottom */}
         <View
           style={{
             flex: 1,
-            backgroundColor: colors.background,
+            justifyContent: 'flex-end',
             paddingHorizontal: spacing.xl,
-            paddingTop: spacing.lg,
-            paddingBottom: spacing.lg,
+            paddingBottom: Math.max(insets.bottom, spacing.md),
           }}
         >
           <Text
             style={{
               ...typography.h2,
               color: colors.foreground,
-              marginBottom: spacing.lg,
+              marginBottom: spacing.sm,
             }}
           >
             Create Account
@@ -145,7 +149,7 @@ export function SignUpScreen({ navigation }: Props) {
               style={{
                 ...typography.caption,
                 color: colors.error,
-                marginBottom: spacing.md,
+                marginBottom: spacing.sm,
               }}
             >
               {error}
@@ -201,17 +205,20 @@ export function SignUpScreen({ navigation }: Props) {
             onPress={handleSignUp}
             loading={loading}
             size="lg"
-            style={{ marginTop: spacing.sm }}
+            style={{ marginTop: spacing.xs }}
           />
 
           {/* Divider */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: spacing.lg }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: spacing.sm }}>
             <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
             <Text style={{ ...typography.caption, color: colors.textSecondary, marginHorizontal: spacing.md }}>or</Text>
             <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
           </View>
 
-          <GoogleSignInButton />
+          <View style={{ gap: spacing.sm }}>
+            <GoogleSignInButton />
+            <AppleSignInButton />
+          </View>
 
           <Text
             style={{

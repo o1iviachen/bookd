@@ -41,15 +41,14 @@ export function WelcomeScreen({ navigation }: Props) {
       >
         {/* Logo + slogan */}
         <View style={{ alignItems: 'center', marginBottom: spacing.xl }}>
-          <View style={{ marginBottom: -20 }}>
-            <BookdLogo size={96} />
-          </View>
+          <BookdLogo size={96} />
           <Text
             style={{
               fontSize: 36,
               fontWeight: '700',
               color: colors.primary,
               letterSpacing: -1,
+              marginTop: -24,
             }}
           >
             bookd.
