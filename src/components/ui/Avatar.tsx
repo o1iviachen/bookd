@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text } from 'react-native';
 import { Image } from 'expo-image';
 import { useTheme } from '../../context/ThemeContext';
@@ -11,8 +11,9 @@ interface AvatarProps {
 
 export function Avatar({ uri, name, size = 40 }: AvatarProps) {
   const { theme } = useTheme();
+  const [failed, setFailed] = useState(false);
 
-  if (uri) {
+  if (uri && !failed) {
     return (
       <Image
         source={{ uri }}
@@ -23,6 +24,7 @@ export function Avatar({ uri, name, size = 40 }: AvatarProps) {
           backgroundColor: theme.colors.accent,
         }}
         contentFit="cover"
+        onError={() => setFailed(true)}
       />
     );
   }
