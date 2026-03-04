@@ -34,7 +34,7 @@ export function ReviewCard({ review, onPress, commentCount, isLast }: ReviewCard
   const displayUsername = authorProfile?.username || review.username;
   const displayAvatar = authorProfile?.avatar ?? review.userAvatar;
   const reviewerLikedMatch = authorProfile?.likedMatchIds?.some((id) => String(id) === String(review.matchId)) || false;
-  const authorTeamCrests = (authorProfile?.followedTeamIds || []).slice(0, 3).map((id) => {
+  const authorTeamCrests = (authorProfile?.favoriteTeams || []).slice(0, 3).map((id) => {
     const team = POPULAR_TEAMS.find((t) => t.id === String(id));
     return team ? { id: team.id, crest: team.crest } : null;
   }).filter(Boolean) as { id: string; crest: string }[];
@@ -166,6 +166,9 @@ export function ReviewCard({ review, onPress, commentCount, isLast }: ReviewCard
           </>
         )}
 
+        {/* MOTM */}
+        {review.motmPlayerId && <MOTMBadge playerId={review.motmPlayerId} playerName={review.motmPlayerName} size="sm" />}
+
         {/* Tags as pills */}
         {review.tags.length > 0 && (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs + 2, marginBottom: spacing.sm }}>
@@ -184,9 +187,6 @@ export function ReviewCard({ review, onPress, commentCount, isLast }: ReviewCard
             ))}
           </View>
         )}
-
-        {/* MOTM */}
-        {review.motmPlayerId && <MOTMBadge playerId={review.motmPlayerId} size="sm" />}
 
         {/* Action buttons */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.lg }}>

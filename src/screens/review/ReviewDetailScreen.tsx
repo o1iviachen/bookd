@@ -79,9 +79,9 @@ export function ReviewDetailScreen({ route, navigation }: any) {
   });
 
   const commentAuthorMap = useMemo(() => {
-    const map = new Map<string, { username: string; displayName: string; avatar: string | null; followedTeamIds: string[] }>();
+    const map = new Map<string, { username: string; displayName: string; avatar: string | null; favoriteTeams: string[] }>();
     commentAuthorQueries.forEach((q) => {
-      if (q.data) map.set(q.data.id, { username: q.data.username, displayName: q.data.displayName || q.data.username, avatar: q.data.avatar, followedTeamIds: q.data.followedTeamIds || [] });
+      if (q.data) map.set(q.data.id, { username: q.data.username, displayName: q.data.displayName || q.data.username, avatar: q.data.avatar, favoriteTeams: q.data.favoriteTeams || [] });
     });
     return map;
   }, [commentAuthorQueries]);
@@ -288,7 +288,7 @@ export function ReviewDetailScreen({ route, navigation }: any) {
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
                   <Text style={{ ...typography.bodyBold, color: colors.foreground }} numberOfLines={1}>{authorDisplayName}</Text>
                   <Text style={{ ...typography.small, color: colors.textSecondary }} numberOfLines={1}>@{authorUsername}</Text>
-                  {(authorProfile?.followedTeamIds || []).slice(0, 3).map((id) => {
+                  {(authorProfile?.favoriteTeams || []).slice(0, 3).map((id) => {
                     const team = POPULAR_TEAMS.find((t) => t.id === String(id));
                     return team ? <TeamLogo key={team.id} uri={team.crest} size={14} /> : null;
                   })}
@@ -372,6 +372,9 @@ export function ReviewDetailScreen({ route, navigation }: any) {
               </>
             )}
 
+            {/* MOTM */}
+            {review.motmPlayerId && <MOTMBadge playerId={review.motmPlayerId} playerName={review.motmPlayerName} size="md" />}
+
             {/* Tags */}
             {review.tags.length > 0 && (
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs + 2, marginBottom: spacing.md }}>
@@ -390,9 +393,6 @@ export function ReviewDetailScreen({ route, navigation }: any) {
                 ))}
               </View>
             )}
-
-            {/* MOTM */}
-            {review.motmPlayerId && <MOTMBadge playerId={review.motmPlayerId} size="md" />}
 
             {/* Like + comment count row */}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.lg, paddingVertical: spacing.sm }}>
@@ -574,7 +574,7 @@ function CommentRow({
   typography: any;
   isReply: boolean;
   navigation: any;
-  authorMap: Map<string, { username: string; displayName: string; avatar: string | null; followedTeamIds: string[] }>;
+  authorMap: Map<string, { username: string; displayName: string; avatar: string | null; favoriteTeams: string[] }>;
 }) {
   const [showCommentReport, setShowCommentReport] = React.useState(false);
   const isLiked = userId ? comment.likedBy.includes(userId) : false;
@@ -584,7 +584,7 @@ function CommentRow({
   const displayName = currentAuthor?.displayName || currentAuthor?.username || comment.username;
   const displayUsername = currentAuthor?.username || comment.username;
   const displayAvatar = currentAuthor?.avatar ?? comment.userAvatar;
-  const teamCrests = (currentAuthor?.followedTeamIds || []).slice(0, 3).map((id) => {
+  const teamCrests = (currentAuthor?.favoriteTeams || []).slice(0, 3).map((id: string) => {
     const team = POPULAR_TEAMS.find((t) => t.id === String(id));
     return team ? { id: team.id, crest: team.crest } : null;
   }).filter(Boolean) as { id: string; crest: string }[];

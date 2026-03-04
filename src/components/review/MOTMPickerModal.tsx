@@ -12,6 +12,8 @@ import {
   MatchSubstitution,
 } from '../../services/footballApi';
 
+const REFEREE_MOTM_ID = -1;
+
 // ── Helpers (mirrored from MatchDetailScreen) ──────────────────────────────
 
 function parseFormation(formation: string): number[] {
@@ -370,6 +372,39 @@ export function MOTMPickerModal({
                 {renderSubSection(awaySubs, awayTeamName, awayTeamCrest)}
               </View>
             )}
+
+            {/* Referee */}
+            {matchDetail.referee && (() => {
+              const isSelected = selectedPlayerId === REFEREE_MOTM_ID;
+              return (
+                <View style={{ borderTopWidth: 1, borderTopColor: colors.border }}>
+                  <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: spacing.xs }}>
+                    <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1 }}>
+                      Referee
+                    </Text>
+                  </View>
+                  <Pressable
+                    onPress={() => handleSelect(REFEREE_MOTM_ID)}
+                    style={({ pressed }) => ({
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingVertical: spacing.sm,
+                      paddingHorizontal: spacing.md,
+                      backgroundColor: isSelected ? `${colors.primary}22` : pressed ? colors.muted : 'transparent',
+                    })}
+                  >
+                    <Ionicons name="flag-outline" size={14} color={isSelected ? '#f59e0b' : colors.textSecondary} style={{ marginRight: spacing.sm }} />
+                    {isSelected && <Text style={{ fontSize: 13, marginRight: 4 }}>⭐</Text>}
+                    <Text style={{ ...typography.body, color: isSelected ? '#f59e0b' : colors.foreground, flex: 1, fontSize: 14, fontWeight: isSelected ? '700' : '400' }} numberOfLines={1}>
+                      {matchDetail.referee}
+                    </Text>
+                    {isSelected && (
+                      <Ionicons name="checkmark" size={16} color={colors.primary} style={{ marginLeft: 6 }} />
+                    )}
+                  </Pressable>
+                </View>
+              );
+            })()}
 
             <View style={{ height: spacing.md }} />
           </ScrollView>

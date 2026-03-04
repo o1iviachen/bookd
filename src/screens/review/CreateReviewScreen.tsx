@@ -21,6 +21,7 @@ import { TextInput as RNTextInput } from 'react-native';
 import { isTextClean } from '../../utils/moderation';
 import { MentionInput } from '../../components/ui/MentionInput';
 import { shortName } from '../../utils/formatName';
+import { nationalityFlag } from '../../utils/flagEmoji';
 
 interface LocalMedia {
   uri: string;
@@ -28,6 +29,7 @@ interface LocalMedia {
 }
 
 const screenWidth = Dimensions.get('window').width;
+const REFEREE_MOTM_ID = -1;
 
 export function CreateReviewScreen({ route, navigation }: any) {
   const { theme, isDark } = useTheme();
@@ -304,12 +306,17 @@ export function CreateReviewScreen({ route, navigation }: any) {
     ];
 
     const allPlayed = [...homePlayed, ...awayPlayed];
-    const selectedName = motmPlayerId
-      ? (() => {
-          const p = allPlayed.find((pl) => pl.id === motmPlayerId);
-          return p ? shortName(p.name) : null;
-        })()
-      : null;
+    let selectedName: string | null = null;
+    if (motmPlayerId === REFEREE_MOTM_ID) {
+      const refParts = matchDetail.referee ? matchDetail.referee.split(',').map((s: string) => s.trim()) : [];
+      const refName = refParts[0] || null;
+      const refCountry = refParts[1] || null;
+      const flag = nationalityFlag(refCountry);
+      selectedName = refName ? `${refName} ${flag} (Referee)`.trim() : 'Referee';
+    } else if (motmPlayerId !== null) {
+      const p = allPlayed.find((pl) => pl.id === motmPlayerId);
+      selectedName = p ? shortName(p.name) : null;
+    }
 
     return { homePlayed, awayPlayed, selectedName };
   }, [matchDetail, match, motmPlayerId]);
@@ -345,6 +352,7 @@ export function CreateReviewScreen({ route, navigation }: any) {
             media: allMedia,
             isSpoiler,
             motmPlayerId: motmPlayerId ?? null,
+            motmPlayerName: motmData?.selectedName ?? null,
           },
         });
       } else {
@@ -361,7 +369,7 @@ export function CreateReviewScreen({ route, navigation }: any) {
           tags: selectedTags,
           media: allMedia,
           isSpoiler,
-          ...(motmPlayerId !== null && { motmPlayerId }),
+          ...(motmPlayerId !== null && { motmPlayerId, motmPlayerName: motmData?.selectedName }),
         });
       }
 
@@ -436,7 +444,8 @@ export function CreateReviewScreen({ route, navigation }: any) {
             onChangeText={setText}
             placeholder="What did you think of this match?"
             multiline
-            containerStyle={{ marginBottom: spacing.lg, zIndex: 10 }}
+            maxLength={250}
+            containerStyle={{ marginBottom: spacing.xs, zIndex: 10 }}
             inputStyle={{
               backgroundColor: colors.accent,
               borderRadius: borderRadius.md,
@@ -448,6 +457,9 @@ export function CreateReviewScreen({ route, navigation }: any) {
               textAlignVertical: 'top',
             }}
           />
+          <Text style={{ ...typography.small, color: text.length >= 240 ? '#ef4444' : colors.textSecondary, textAlign: 'right', marginBottom: spacing.lg }}>
+            {text.length}/250
+          </Text>
 
           {/* Media attachments */}
           <Text style={{ ...typography.bodyBold, color: colors.foreground, marginBottom: spacing.sm }}>
