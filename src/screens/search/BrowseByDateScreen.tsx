@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { View, Text, Pressable, FlatList, useWindowDimensions } from 'react-native';
+import { View, Text, Pressable, FlatList, useWindowDimensions, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -182,6 +182,9 @@ export function BrowseByDateScreen() {
           removeClippedSubviews
           onEndReached={handleEndReached}
           onEndReachedThreshold={0.3}
+          ListFooterComponent={visibleMatches.length < filteredMatches.length ? (
+            <ActivityIndicator style={{ paddingVertical: spacing.md }} color={colors.primary} />
+          ) : null}
         />
       )}
     </SafeAreaView>

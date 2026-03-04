@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
-import { View, Text, FlatList, ScrollView, useWindowDimensions } from 'react-native';
+import { View, Text, FlatList, ScrollView, useWindowDimensions, ActivityIndicator } from 'react-native';
 import PagerView from 'react-native-pager-view';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQueries } from '@tanstack/react-query';
@@ -235,6 +235,9 @@ export function LikesScreen({ route, navigation }: any) {
               columnWrapperStyle={{ gap: GAP }}
               onEndReached={handleEndReached}
               onEndReachedThreshold={0.3}
+              ListFooterComponent={visibleEntries.length < filtered.length ? (
+                <ActivityIndicator style={{ paddingVertical: spacing.md }} color={colors.primary} />
+              ) : null}
               renderItem={({ item }) => (
                 <MatchPosterCard
                   match={item.match}

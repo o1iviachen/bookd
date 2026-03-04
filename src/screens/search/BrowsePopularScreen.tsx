@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { View, Text, FlatList, Pressable, useWindowDimensions } from 'react-native';
+import { View, Text, FlatList, Pressable, useWindowDimensions, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -118,9 +118,7 @@ export function BrowsePopularScreen() {
           onEndReached={() => setDisplayedCount((c) => Math.min(c + PAGE_SIZE, popularMatches.length))}
           onEndReachedThreshold={0.3}
           ListFooterComponent={isFetchingMore ? (
-            <View style={{ paddingVertical: spacing.md, alignItems: 'center' }}>
-              <LoadingSpinner fullScreen={false} />
-            </View>
+            <ActivityIndicator style={{ paddingVertical: spacing.md }} color={colors.primary} />
           ) : null}
           renderItem={({ item }) => (
             <MatchPosterCardCrest

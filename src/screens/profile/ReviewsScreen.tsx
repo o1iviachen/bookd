@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { View, Text, FlatList, Pressable } from 'react-native';
+import { View, Text, FlatList, Pressable, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQueries } from '@tanstack/react-query';
 import { useTheme } from '../../context/ThemeContext';
@@ -188,6 +188,9 @@ export function ReviewsScreen({ route, navigation }: any) {
           contentContainerStyle={{ paddingBottom: 16 }}
           onEndReached={handleEndReached}
           onEndReachedThreshold={0.3}
+          ListFooterComponent={visibleEntries.length < filtered.length ? (
+            <ActivityIndicator style={{ paddingVertical: spacing.md }} color={colors.primary} />
+          ) : null}
           renderItem={({ item, index }) => (
             <View>
               {/* Match info line */}

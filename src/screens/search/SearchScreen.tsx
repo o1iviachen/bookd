@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { View, Text, ScrollView, FlatList, Pressable, TextInput as RNTextInput, useWindowDimensions, Keyboard, LayoutAnimation, Platform, UIManager } from 'react-native';
+import { View, Text, ScrollView, FlatList, Pressable, TextInput as RNTextInput, useWindowDimensions, Keyboard, LayoutAnimation, Platform, UIManager, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -433,7 +433,7 @@ export function SearchScreen() {
           removeClippedSubviews
           onEndReached={() => { if (hasNextMatchPage && !isFetchingNextMatchPage) fetchNextMatchPage(); }}
           onEndReachedThreshold={0.5}
-          ListFooterComponent={isFetchingNextMatchPage ? <View style={{ paddingVertical: spacing.md }}><LoadingSpinner fullScreen={false} /></View> : null}
+          ListFooterComponent={isFetchingNextMatchPage ? <ActivityIndicator style={{ paddingVertical: spacing.md }} color={colors.primary} /> : null}
         />
       );
     }
@@ -442,7 +442,7 @@ export function SearchScreen() {
       ? () => fetchNextPlayerPage()
       : undefined;
     const footerComponent = activeCategory === 'players' && isFetchingNextPlayerPage
-      ? <View style={{ paddingVertical: spacing.md }}><LoadingSpinner fullScreen={false} /></View>
+      ? <ActivityIndicator style={{ paddingVertical: spacing.md }} color={colors.primary} />
       : null;
 
     return (
