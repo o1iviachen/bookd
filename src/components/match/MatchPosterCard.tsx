@@ -14,9 +14,10 @@ interface MatchPosterCardProps {
   onPress?: () => void;
   width?: number;
   compact?: boolean;
+  selected?: boolean;
 }
 
-export const MatchPosterCard = React.memo(function MatchPosterCard({ match, onPress, width: widthProp, compact }: MatchPosterCardProps) {
+export const MatchPosterCard = React.memo(function MatchPosterCard({ match, onPress, width: widthProp, compact, selected }: MatchPosterCardProps) {
   const { theme } = useTheme();
   const { spacing } = theme;
   const { width: screenWidth } = useWindowDimensions();
@@ -45,8 +46,8 @@ export const MatchPosterCard = React.memo(function MatchPosterCard({ match, onPr
         shadowOpacity: 0.3,
         shadowRadius: 6,
         elevation: 6,
-        borderWidth: isLive ? 1.5 : 0,
-        borderColor: isLive ? '#00e054' : 'transparent',
+        borderWidth: selected ? 1.5 : 0,
+        borderColor: selected ? '#00e054' : 'transparent',
       })}
     >
       {/* Team kit color gradient background */}
@@ -178,8 +179,31 @@ export const MatchPosterCard = React.memo(function MatchPosterCard({ match, onPr
           />
         </View>
 
+        {/* Log count badge — top-right */}
+        {(match.reviewCount ?? 0) > 0 && (
+          <View
+            style={{
+              position: 'absolute',
+              top: spacing.sm,
+              right: spacing.sm,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 2,
+              backgroundColor: 'rgba(0,0,0,0.6)',
+              borderRadius: 8,
+              paddingHorizontal: 5,
+              paddingVertical: 3,
+            }}
+          >
+            <Ionicons name="eye" size={9} color="rgba(255,255,255,0.8)" />
+            <Text style={{ fontSize: 8, fontWeight: '700', color: 'rgba(255,255,255,0.8)' }}>
+              {match.reviewCount}
+            </Text>
+          </View>
+        )}
+
         {/* Upcoming match lock badge */}
-        {isUpcoming && (
+        {isUpcoming && (match.reviewCount ?? 0) === 0 && (
           <View
             style={{
               position: 'absolute',
