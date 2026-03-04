@@ -63,7 +63,7 @@ export function TagMatchesScreen({ route, navigation }: any) {
   const [filters, setFilters] = useState<MatchFilterState>({ league: 'all', team: 'all', season: 'all' });
   const [displayedCount, setDisplayedCount] = useState(PAGE_SIZE);
 
-  const GAP = spacing.sm;
+  const GAP = spacing.md;
   const HORIZONTAL_PADDING = spacing.md;
   const NUM_COLUMNS = 3;
   const CARD_WIDTH = (screenWidth - HORIZONTAL_PADDING * 2 - GAP * (NUM_COLUMNS - 1)) / NUM_COLUMNS;
