@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Pressable, Share } from 'react-native';
+import { View, Text, Pressable, Share, ScrollView } from 'react-native';
 import { useQueries } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
@@ -13,7 +13,6 @@ import { MatchList } from '../../types/list';
 import { Match } from '../../types/match';
 import { POPULAR_TEAMS } from '../../utils/constants';
 
-const PREVIEW_COUNT = 5;
 const POSTER_WIDTH = 70;
 const POSTER_GAP = 6;
 
@@ -39,8 +38,8 @@ export function ListPreviewCard({ list, onPress, onMatchPress }: ListPreviewCard
     return team ? { id: team.id, crest: team.crest } : null;
   }).filter(Boolean) as { id: string; crest: string }[];
 
-  // Fetch first few matches for poster previews
-  const previewIds = list.matchIds.slice(0, PREVIEW_COUNT);
+  // Fetch matches for poster previews
+  const previewIds = list.matchIds;
   const matchQueries = useQueries({
     queries: previewIds.map((id) => ({
       queryKey: ['match', id],
@@ -95,9 +94,14 @@ export function ListPreviewCard({ list, onPress, onMatchPress }: ListPreviewCard
         </View>
       </Pressable>
 
-      {/* Poster row — each poster taps to that match */}
+      {/* Poster row — horizontally scrollable */}
       {previewMatches.length > 0 && (
-        <View style={{ flexDirection: 'row', gap: POSTER_GAP, marginTop: spacing.sm }}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={{ marginTop: spacing.sm, marginHorizontal: -spacing.md }}
+          contentContainerStyle={{ paddingHorizontal: spacing.md, gap: POSTER_GAP }}
+        >
           {previewMatches.map((match) => (
             <MatchPosterCard
               key={match.id}
@@ -107,7 +111,7 @@ export function ListPreviewCard({ list, onPress, onMatchPress }: ListPreviewCard
               onPress={onMatchPress ? () => onMatchPress(match.id) : undefined}
             />
           ))}
-        </View>
+        </ScrollView>
       )}
 
       {/* Likes & comments */}
