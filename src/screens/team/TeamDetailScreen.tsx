@@ -1,10 +1,8 @@
-import React, { useState, useMemo, useRef } from 'react';
-import { View, Text, ScrollView, Pressable, FlatList, useWindowDimensions } from 'react-native';
+import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
+import { View, Text, ScrollView, Pressable, useWindowDimensions, NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import PagerView from 'react-native-pager-view';
-import { useQuery } from '@tanstack/react-query';
 import { useTheme } from '../../context/ThemeContext';
 import { useTeamDetail, useTeamMatches } from '../../hooks/useTeams';
 import { MatchPosterCard } from '../../components/match/MatchPosterCard';
@@ -15,8 +13,6 @@ import { EmptyState } from '../../components/ui/EmptyState';
 import { shortName } from '../../utils/formatName';
 import { nationalityFlag } from '../../utils/flagEmoji';
 import { RatingChart } from '../../components/profile/RatingChart';
-import { useReviewsForMatches } from '../../hooks/useReviews';
-import { getFollowedTeamIdsForUsers } from '../../services/firestore/users';
 
 type SortKey = 'recent_played' | 'oldest';
 
@@ -36,24 +32,33 @@ export function TeamDetailScreen({ route, navigation }: any) {
   const { colors, spacing, typography, borderRadius } = theme;
   const { teamId, teamName, teamCrest } = route.params;
   const [activeTabIndex, setActiveTabIndex] = useState(0);
-  const pagerRef = useRef<PagerView>(null);
+  const horizontalRef = useRef<ScrollView>(null);
   const { width: screenWidth } = useWindowDimensions();
+
+  const handleTabPress = useCallback((index: number) => {
+    setActiveTabIndex(index);
+    horizontalRef.current?.scrollTo({ x: index * screenWidth, animated: true });
+  }, [screenWidth]);
+
+  const handleHorizontalScroll = useCallback((e: any) => {
+    const page = Math.round(e.nativeEvent.contentOffset.x / screenWidth);
+    setActiveTabIndex(page);
+  }, [screenWidth]);
 
   const { data: teamDetail, isLoading: detailLoading } = useTeamDetail(teamId);
   const { data: matches, isLoading: matchesLoading } = useTeamMatches(teamId);
 
+  const PAGE_SIZE = 30;
   const [sort, setSort] = useState<SortKey>('recent_played');
   const [filters, setFilters] = useState<MatchFilterState>({ league: 'all', team: 'all', season: 'all' });
-  const [chartSeason, setChartSeason] = useState('2025/26');
+  const [chartSeason, setChartSeason] = useState('all');
+  const [displayedCount, setDisplayedCount] = useState(PAGE_SIZE);
 
   const GAP = spacing.sm;
   const COLUMNS = 3;
   const POSTER_WIDTH = (screenWidth - spacing.md * 2 - GAP * (COLUMNS - 1)) / COLUMNS;
 
   const allMatches = useMemo(() => matches || [], [matches]);
-
-  const matchIds = useMemo(() => allMatches.map((m) => m.id), [allMatches]);
-  const { data: teamReviews } = useReviewsForMatches(matchIds);
 
   // Map matchId → season string for chart filtering
   const matchSeasonMap = useMemo(() => {
@@ -74,20 +79,19 @@ export function TeamDetailScreen({ route, navigation }: any) {
     return Array.from(set).sort().reverse();
   }, [matchSeasonMap]);
 
-  const chartReviews = useMemo(() => {
-    if (!teamReviews) return [];
-    if (chartSeason === 'all') return teamReviews;
-    return teamReviews.filter((r) => matchSeasonMap.get(r.matchId) === chartSeason);
-  }, [teamReviews, chartSeason, matchSeasonMap]);
-
-  // Fetch reviewer team allegiances for fan filter
-  const reviewerUserIds = useMemo(() => [...new Set((teamReviews || []).map((r) => r.userId))], [teamReviews]);
-  const { data: reviewerTeamMap } = useQuery({
-    queryKey: ['reviewerTeams', ...reviewerUserIds],
-    queryFn: () => getFollowedTeamIdsForUsers(reviewerUserIds),
-    enabled: reviewerUserIds.length > 0,
-    staleTime: 5 * 60 * 1000,
-  });
+  // O(1) path: aggregate ratingBuckets from already-loaded match docs — no extra reads.
+  // Each match doc has per-bucket counts maintained by Cloud Function triggers.
+  const teamRatingBuckets = useMemo(() => {
+    const buckets: Record<string, number> = {};
+    for (const m of allMatches) {
+      if (!m.ratingBuckets) continue;
+      if (chartSeason !== 'all' && matchSeasonMap.get(m.id) !== chartSeason) continue;
+      for (const [key, count] of Object.entries(m.ratingBuckets)) {
+        buckets[key] = (buckets[key] || 0) + count;
+      }
+    }
+    return buckets;
+  }, [allMatches, chartSeason, matchSeasonMap]);
 
   // Apply filters and sort
   const filteredMatches = useMemo(() => {
@@ -101,6 +105,17 @@ export function TeamDetailScreen({ route, navigation }: any) {
 
     return result;
   }, [allMatches, filters, sort]);
+
+  useEffect(() => { setDisplayedCount(PAGE_SIZE); }, [sort, filters]);
+
+  const visibleMatches = useMemo(() => filteredMatches.slice(0, displayedCount), [filteredMatches, displayedCount]);
+
+  const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
+    if (layoutMeasurement.height + contentOffset.y >= contentSize.height - 500) {
+      setDisplayedCount(prev => Math.min(prev + PAGE_SIZE, filteredMatches.length));
+    }
+  }, [filteredMatches.length]);
 
   // Group squad by position
   const squadByPosition = useMemo(() => {
@@ -138,114 +153,131 @@ export function TeamDetailScreen({ route, navigation }: any) {
         <View style={{ width: 22 }} />
       </View>
 
-      {/* Hero — team crest + name */}
-      <View style={{ alignItems: 'center', paddingVertical: spacing.lg }}>
-        <Image
-          source={{ uri: teamCrest }}
-          style={{ width: 100, height: 100, marginBottom: spacing.md }}
-          contentFit="contain"
-        />
-        <Text style={{ ...typography.h3, color: colors.foreground }}>
-          {teamName}
-        </Text>
-      </View>
-
-      {/* Tab bar */}
-      <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: colors.border }}>
-        {TABS.map((tab, i) => {
-          const isActive = activeTabIndex === i;
-          return (
-            <Pressable
-              key={tab.key}
-              onPress={() => { setActiveTabIndex(i); pagerRef.current?.setPage(i); }}
-              style={{
-                flex: 1,
-                alignItems: 'center',
-                paddingVertical: spacing.sm + 2,
-                borderBottomWidth: 2,
-                borderBottomColor: isActive ? colors.primary : 'transparent',
-              }}
-            >
-              <Text style={{
-                ...typography.body,
-                fontWeight: isActive ? '600' : '400',
-                color: isActive ? colors.foreground : colors.textSecondary,
-                fontSize: 15,
-              }}>
-                {tab.label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-
-      {/* Swipeable tab content */}
-      <PagerView
-        ref={pagerRef}
+      {/* ─── Single ScrollView with hero + tabs ─── */}
+      <ScrollView
         style={{ flex: 1 }}
-        initialPage={0}
-        onPageSelected={(e: any) => setActiveTabIndex(e.nativeEvent.position)}
+        indicatorStyle={isDark ? 'white' : 'default'}
+        contentContainerStyle={{ paddingBottom: 40 }}
+        onScroll={handleScroll}
+        scrollEventThrottle={400}
       >
-        {/* ─── Matches Tab ─── */}
-        <View key="matches" style={{ flex: 1 }}>
-          <FlatList
-            data={filteredMatches}
-            keyExtractor={(item) => String(item.id)}
-            numColumns={COLUMNS}
-            indicatorStyle={isDark ? 'white' : 'default'}
-            contentContainerStyle={{ paddingBottom: 40 }}
-            columnWrapperStyle={{ gap: GAP, paddingHorizontal: spacing.md }}
-            ItemSeparatorComponent={() => <View style={{ height: GAP }} />}
-            ListHeaderComponent={
-              <>
-                {/* Filters */}
-                <MatchFilters
-                  filters={filters}
-                  onFiltersChange={setFilters}
-                  matches={allMatches}
-                  showMinLogs={false}
-                />
-
-                {/* Sort + count row */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingVertical: spacing.sm }}>
-                  <Text style={{ ...typography.caption, color: colors.textSecondary }}>
-                    {filteredMatches.length} {filteredMatches.length === 1 ? 'match' : 'matches'}
-                  </Text>
-                  <View style={{ width: 140 }}>
-                    <Select
-                      value={sort}
-                      onValueChange={(v) => setSort(v as SortKey)}
-                      title="Sort By"
-                      options={SORT_OPTIONS}
-                    />
-                  </View>
-                </View>
-              </>
-            }
-            ListEmptyComponent={
-              matchesLoading ? (
-                <View style={{ paddingVertical: spacing.xxl }}><LoadingSpinner fullScreen={false} /></View>
-              ) : (
-                <EmptyState
-                  icon="football-outline"
-                  title="No matches found"
-                  subtitle="Try adjusting your filters"
-                />
-              )
-            }
-            renderItem={({ item }) => (
-              <MatchPosterCard
-                match={item}
-                width={POSTER_WIDTH}
-                onPress={() => navigation.navigate('MatchDetail', { matchId: item.id })}
-              />
-            )}
+        {/* Hero — team crest + name */}
+        <View style={{ alignItems: 'center', paddingVertical: spacing.lg }}>
+          <Image
+            source={{ uri: teamCrest }}
+            style={{ width: 100, height: 100, marginBottom: spacing.md }}
+            contentFit="contain"
           />
+          <Text style={{ ...typography.h3, color: colors.foreground }}>
+            {teamName}
+          </Text>
         </View>
 
-        {/* ─── Squad Tab ─── */}
-        <View key="squad" style={{ flex: 1 }}>
-          <ScrollView style={{ flex: 1 }} indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: 40 }} nestedScrollEnabled>
+        {/* Ratings section — O(1): reads from pre-computed ratingBuckets on match docs */}
+        <RatingChart
+          reviews={[]}
+          ratingBuckets={teamRatingBuckets}
+          showStats
+          season={chartSeason}
+          seasonOptions={[
+            { value: 'all', label: 'All Seasons' },
+            ...availableSeasons.map((s) => ({ value: s, label: s })),
+          ]}
+          onSeasonChange={setChartSeason}
+          loading={matchesLoading}
+        />
+
+        {/* Tab bar */}
+        <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: colors.border, marginTop: spacing.md }}>
+          {TABS.map((tab, i) => {
+            const isActive = activeTabIndex === i;
+            return (
+              <Pressable
+                key={tab.key}
+                onPress={() => handleTabPress(i)}
+                style={{
+                  flex: 1,
+                  alignItems: 'center',
+                  paddingVertical: spacing.sm + 2,
+                  borderBottomWidth: 2,
+                  borderBottomColor: isActive ? colors.primary : 'transparent',
+                }}
+              >
+                <Text style={{
+                  ...typography.body,
+                  fontWeight: isActive ? '600' : '400',
+                  color: isActive ? colors.foreground : colors.textSecondary,
+                  fontSize: 15,
+                }}>
+                  {tab.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {/* Horizontal paging for tab content */}
+        <ScrollView
+          ref={horizontalRef}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          nestedScrollEnabled
+          onScroll={handleHorizontalScroll}
+          scrollEventThrottle={16}
+        >
+          {/* ─── Matches Tab ─── */}
+          <View style={{ width: screenWidth }}>
+            {/* Filters */}
+            <MatchFilters
+              filters={filters}
+              onFiltersChange={setFilters}
+              matches={allMatches}
+              showMinLogs={false}
+            />
+
+            {/* Sort + count row */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingVertical: spacing.sm }}>
+              <Text style={{ ...typography.caption, color: colors.textSecondary }}>
+                {filteredMatches.length} {filteredMatches.length === 1 ? 'match' : 'matches'}
+              </Text>
+              <View style={{ width: 140 }}>
+                <Select
+                  value={sort}
+                  onValueChange={(v) => setSort(v as SortKey)}
+                  title="Sort By"
+                  options={SORT_OPTIONS}
+                />
+              </View>
+            </View>
+
+            {/* Match grid */}
+            {matchesLoading ? (
+              <View style={{ paddingVertical: spacing.xxl }}><LoadingSpinner fullScreen={false} /></View>
+            ) : filteredMatches.length === 0 ? (
+              <EmptyState
+                icon="football-outline"
+                title="No matches found"
+                subtitle="Try adjusting your filters"
+              />
+            ) : (
+              <>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: spacing.md, gap: GAP }}>
+                  {visibleMatches.map((item) => (
+                    <MatchPosterCard
+                      key={item.id}
+                      match={item}
+                      width={POSTER_WIDTH}
+                      onPress={() => navigation.navigate('MatchDetail', { matchId: item.id })}
+                    />
+                  ))}
+                </View>
+              </>
+            )}
+          </View>
+
+          {/* ─── Squad Tab ─── */}
+          <View style={{ width: screenWidth }}>
             <View style={{ padding: spacing.md }}>
               {detailLoading ? (
                 <View style={{ paddingVertical: spacing.xxl }}><LoadingSpinner fullScreen={false} /></View>
@@ -283,117 +315,90 @@ export function TeamDetailScreen({ route, navigation }: any) {
                 ))
               )}
             </View>
-          </ScrollView>
-        </View>
+          </View>
 
-        {/* ─── Info Tab ─── */}
-        <View key="info" style={{ flex: 1 }}>
-          <ScrollView style={{ flex: 1 }} indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: 40 }} nestedScrollEnabled>
+          {/* ─── Info Tab ─── */}
+          <View style={{ width: screenWidth }}>
             <View style={{ padding: spacing.md }}>
               {detailLoading ? (
                 <View style={{ paddingVertical: spacing.xxl }}><LoadingSpinner fullScreen={false} /></View>
-              ) : teamDetail ? (
-                <View style={{ gap: spacing.md }}>
-                  {/* Rating chart with season filter */}
-                  <View style={{ marginHorizontal: -spacing.md }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingBottom: spacing.xs }}>
-                      <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1 }}>
-                        Match Ratings
-                      </Text>
-                      {availableSeasons.length > 0 && (
-                        <View style={{ width: 130 }}>
-                          <Select
-                            value={chartSeason}
-                            onValueChange={setChartSeason}
-                            title="Season"
-                            options={[
-                              { value: 'all', label: 'All Seasons' },
-                              ...availableSeasons.map((s) => ({ value: s, label: s })),
-                            ]}
-                          />
-                        </View>
-                      )}
-                    </View>
-                    <RatingChart
-                      reviews={chartReviews}
-                      showStats
-                      homeTeamName={teamName}
-                      reviewerTeamMap={reviewerTeamMap}
-                    />
-                  </View>
+              ) : (
+                <View style={{ backgroundColor: colors.card, borderRadius: borderRadius.lg, borderWidth: 1, borderColor: colors.border, marginBottom: spacing.md, overflow: 'hidden' }}>
+                  <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 15, paddingHorizontal: spacing.md, paddingTop: spacing.md, paddingBottom: spacing.sm }}>
+                    Team Information
+                  </Text>
 
-                  {/* Coach */}
-                  {teamDetail.coach && (
+                  {/* Manager */}
+                  {teamDetail?.coach ? (
                     <Pressable
                       onPress={() => navigation.navigate('PersonDetail', { personId: teamDetail.coach!.id, personName: shortName(teamDetail.coach!.name), role: 'manager' as const })}
-                      style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+                      style={({ pressed }) => ({
+                        flexDirection: 'row',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        paddingHorizontal: spacing.md,
+                        paddingVertical: spacing.sm,
+                        borderTopWidth: 1,
+                        borderTopColor: colors.border,
+                        opacity: pressed ? 0.7 : 1,
+                      })}
                     >
-                      <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
-                        Manager
-                      </Text>
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <Text style={{ ...typography.body, color: colors.foreground, flex: 1 }}>{shortName(teamDetail.coach.name)}</Text>
+                      <Text style={{ ...typography.body, color: colors.textSecondary, fontSize: 14 }}>Manager</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+                        <Text style={{ ...typography.body, color: colors.primary, fontSize: 14, fontWeight: '500' }}>{shortName(teamDetail.coach.name)}</Text>
                         <Ionicons name="chevron-forward" size={14} color={colors.textSecondary} />
                       </View>
                     </Pressable>
+                  ) : (
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border }}>
+                      <Text style={{ ...typography.body, color: colors.textSecondary, fontSize: 14 }}>Manager</Text>
+                      <Text style={{ ...typography.body, color: colors.foreground, fontSize: 14, fontWeight: '500' }}>—</Text>
+                    </View>
                   )}
 
                   {/* Founded */}
-                  {teamDetail.founded && (
-                    <View>
-                      <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
-                        Founded
-                      </Text>
-                      <Text style={{ ...typography.body, color: colors.foreground }}>{teamDetail.founded}</Text>
-                    </View>
-                  )}
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border }}>
+                    <Text style={{ ...typography.body, color: colors.textSecondary, fontSize: 14 }}>Founded</Text>
+                    <Text style={{ ...typography.body, color: colors.foreground, fontSize: 14, fontWeight: '500' }}>{teamDetail?.founded ?? '—'}</Text>
+                  </View>
 
                   {/* Venue */}
-                  {teamDetail.venue && (
-                    <View>
-                      <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
-                        Venue
-                      </Text>
-                      <Text style={{ ...typography.body, color: colors.foreground }}>{teamDetail.venue}</Text>
-                    </View>
-                  )}
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border }}>
+                    <Text style={{ ...typography.body, color: colors.textSecondary, fontSize: 14 }}>Stadium</Text>
+                    <Text style={{ ...typography.body, color: colors.foreground, fontSize: 14, fontWeight: '500', flex: 1, textAlign: 'right', marginLeft: spacing.md }}>{teamDetail?.venue || '—'}</Text>
+                  </View>
 
-                  {/* Club Colors */}
-                  {teamDetail.clubColors && (
-                    <View>
-                      <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
-                        Club Colors
-                      </Text>
-                      <Text style={{ ...typography.body, color: colors.foreground }}>{teamDetail.clubColors}</Text>
-                    </View>
-                  )}
+                  {/* Team Colours */}
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border }}>
+                    <Text style={{ ...typography.body, color: colors.textSecondary, fontSize: 14 }}>Team Colours</Text>
+                    <Text style={{ ...typography.body, color: colors.foreground, fontSize: 14, fontWeight: '500', flex: 1, textAlign: 'right', marginLeft: spacing.md }}>{teamDetail?.clubColors || '—'}</Text>
+                  </View>
 
-                  {/* Active Competitions */}
-                  {teamDetail.activeCompetitions.length > 0 && (
-                    <View>
-                      <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: spacing.sm }}>
-                        Competitions
-                      </Text>
-                      {teamDetail.activeCompetitions.map((comp) => (
-                        <View key={comp.id} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.xs }}>
-                          <View style={{ backgroundColor: '#fff', borderRadius: 4, padding: 2 }}>
-                            <Image source={{ uri: comp.emblem }} style={{ width: 20, height: 20 }} contentFit="contain" />
+                  {/* Competitions */}
+                  {teamDetail && teamDetail.activeCompetitions.length > 0 ? (
+                    teamDetail.activeCompetitions.map((comp, i) => (
+                      <View key={comp.id} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border }}>
+                        <Text style={{ ...typography.body, color: colors.textSecondary, fontSize: 14 }}>{i === 0 ? 'Competitions' : ''}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+                          <View style={{ backgroundColor: '#fff', borderRadius: 3, padding: 2 }}>
+                            <Image source={{ uri: comp.emblem }} style={{ width: 16, height: 16 }} contentFit="contain" />
                           </View>
-                          <Text style={{ ...typography.body, color: colors.foreground }}>{comp.name}</Text>
+                          <Text style={{ ...typography.body, color: colors.foreground, fontSize: 14, fontWeight: '500' }}>{comp.name}</Text>
                         </View>
-                      ))}
+                      </View>
+                    ))
+                  ) : (
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border }}>
+                      <Text style={{ ...typography.body, color: colors.textSecondary, fontSize: 14 }}>Competitions</Text>
+                      <Text style={{ ...typography.body, color: colors.foreground, fontSize: 14, fontWeight: '500' }}>—</Text>
                     </View>
                   )}
-                </View>
-              ) : (
-                <View style={{ alignItems: 'center', paddingVertical: spacing.xxl }}>
-                  <Text style={{ ...typography.body, color: colors.textSecondary }}>Unable to load team info</Text>
                 </View>
               )}
             </View>
-          </ScrollView>
-        </View>
-      </PagerView>
+          </View>
+        </ScrollView>
+      </ScrollView>
     </SafeAreaView>
   );
 }
