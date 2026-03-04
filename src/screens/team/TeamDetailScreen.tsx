@@ -40,7 +40,7 @@ export function TeamDetailScreen({ route, navigation }: any) {
     horizontalRef.current?.scrollTo({ x: index * screenWidth, animated: true });
   }, [screenWidth]);
 
-  const handleHorizontalScroll = useCallback((e: any) => {
+  const handleHorizontalScrollEnd = useCallback((e: any) => {
     const page = Math.round(e.nativeEvent.contentOffset.x / screenWidth);
     setActiveTabIndex(page);
   }, [screenWidth]);
@@ -157,7 +157,7 @@ export function TeamDetailScreen({ route, navigation }: any) {
       <ScrollView
         style={{ flex: 1 }}
         indicatorStyle={isDark ? 'white' : 'default'}
-        contentContainerStyle={{ paddingBottom: 40 }}
+        contentContainerStyle={{ paddingBottom: 16 }}
         onScroll={handleScroll}
         scrollEventThrottle={400}
       >
@@ -223,8 +223,7 @@ export function TeamDetailScreen({ route, navigation }: any) {
           pagingEnabled
           showsHorizontalScrollIndicator={false}
           nestedScrollEnabled
-          onScroll={handleHorizontalScroll}
-          scrollEventThrottle={16}
+          onMomentumScrollEnd={handleHorizontalScrollEnd}
         >
           {/* ─── Matches Tab ─── */}
           <View style={{ width: screenWidth }}>
@@ -284,8 +283,8 @@ export function TeamDetailScreen({ route, navigation }: any) {
               ) : squadByPosition.size === 0 ? (
                 <EmptyState icon="people-outline" title="No squad data available" />
               ) : (
-                Array.from(squadByPosition.entries()).map(([position, players]) => (
-                  <View key={position} style={{ marginBottom: spacing.lg }}>
+                Array.from(squadByPosition.entries()).map(([position, players], idx, arr) => (
+                  <View key={position} style={{ marginBottom: idx < arr.length - 1 ? spacing.lg : 0 }}>
                     <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: spacing.sm }}>
                       {positionLabel(position)}
                     </Text>
