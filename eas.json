@@ -15,17 +15,7 @@
       "distribution": "internal"
     },
     "production": {
-      "autoIncrement": true,
-      "env": {
-        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyCYhwZBhITwW5cKC3aHbxuLYtxsFGlbA_8",
-        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "bookd-ff19a.firebaseapp.com",
-        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "bookd-ff19a",
-        "EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET": "bookd-ff19a.firebasestorage.app",
-        "EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID": "575551569436",
-        "EXPO_PUBLIC_FIREBASE_APP_ID": "1:575551569436:web:0d56971e179fbed2bb69d9",
-        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "575551569436-oc1db0741cu6bpjeqa7jprce9ubi31am.apps.googleusercontent.com",
-        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "575551569436-ql49383la7pghehu807cl6c1acptcj5o.apps.googleusercontent.com"
-      }
+      "autoIncrement": true
     }
   },
   "submit": {
