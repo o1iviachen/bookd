@@ -1,18 +1,15 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, ScrollView, FlatList, Pressable, TextInput as RNTextInput, Modal, useWindowDimensions } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, ScrollView, Pressable, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { subDays } from 'date-fns';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useUserProfile } from '../../hooks/useUser';
-import { useMatchesRange } from '../../hooks/useMatches';
 import { updateUserProfile } from '../../services/firestore/users';
 import { getMatchById } from '../../services/matchService';
 import { MatchPosterCard } from '../../components/match/MatchPosterCard';
-import { MatchFilters, MatchFilterState, applyMatchFilters } from '../../components/match/MatchFilters';
-import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
+import { MatchPickerModal } from '../../components/match/MatchPickerModal';
 import { Match } from '../../types/match';
 import { useQueryClient, useQueries } from '@tanstack/react-query';
 
@@ -21,7 +18,7 @@ const NUM_COLUMNS = 3;
 
 export function FavouriteMatchesScreen() {
   const { theme, isDark } = useTheme();
-  const { colors, spacing, typography, borderRadius } = theme;
+  const { colors, spacing, typography } = theme;
   const navigation = useNavigation();
   const { user } = useAuth();
   const { data: profile } = useUserProfile(user?.uid || '');
@@ -34,19 +31,14 @@ export function FavouriteMatchesScreen() {
 
   const [selected, setSelected] = useState<number[]>([]);
   const [showPicker, setShowPicker] = useState(false);
-  const [pickerSearch, setPickerSearch] = useState('');
-  const [filters, setFilters] = useState<MatchFilterState>({ league: 'all', team: 'all', season: 'all' });
 
-  // Load recent matches for the picker
-  const today = new Date();
-  const weekAgo = subDays(today, 7);
-  const { data: recentMatches, isLoading: matchesLoading } = useMatchesRange(weekAgo, today);
-
+  const [initialized, setInitialized] = useState(false);
   useEffect(() => {
-    if (profile?.favoriteMatchIds) {
+    if (!initialized && profile?.favoriteMatchIds) {
       setSelected(profile.favoriteMatchIds);
+      setInitialized(true);
     }
-  }, [profile?.favoriteMatchIds]);
+  }, [profile?.favoriteMatchIds, initialized]);
 
   const save = async () => {
     if (!user) return;
@@ -59,40 +51,11 @@ export function FavouriteMatchesScreen() {
     if (selected.length >= MAX_FAVOURITES) return;
     setSelected((prev) => [...prev, matchId]);
     setShowPicker(false);
-    setPickerSearch('');
-    setFilters({ league: 'all', team: 'all', season: 'all' });
   };
 
   const removeMatch = (matchId: number) => {
     setSelected((prev) => prev.filter((id) => id !== matchId));
   };
-
-  // Filter and sort picker matches
-  const pickerMatches = useMemo(() => {
-    if (!recentMatches) return [];
-    let filtered = recentMatches.filter((m) => !selected.includes(m.id));
-
-    // Apply dropdown filters (league, team, season)
-    filtered = applyMatchFilters(filtered, filters);
-
-    // Apply search
-    if (pickerSearch.trim()) {
-      const q = pickerSearch.toLowerCase();
-      filtered = filtered.filter(
-        (m) =>
-          m.homeTeam.name.toLowerCase().includes(q) ||
-          m.awayTeam.name.toLowerCase().includes(q) ||
-          m.homeTeam.shortName.toLowerCase().includes(q) ||
-          m.awayTeam.shortName.toLowerCase().includes(q) ||
-          m.competition.name.toLowerCase().includes(q)
-      );
-    }
-
-    // Sort by newest
-    filtered.sort((a, b) => new Date(b.kickoff).getTime() - new Date(a.kickoff).getTime());
-
-    return filtered.slice(0, 60);
-  }, [recentMatches, selected, pickerSearch, filters]);
 
   // Fetch each selected match independently so removing one doesn't flash the rest
   const matchQueries = useQueries({
@@ -128,7 +91,7 @@ export function FavouriteMatchesScreen() {
         <View style={{ paddingHorizontal: HORIZONTAL_PADDING, marginBottom: spacing.lg }}>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: GAP }}>
             {selectedMatches.map((match) => (
-              <View key={match.id}>
+              <View key={match.id} style={{ width: CARD_WIDTH }}>
                 <MatchPosterCard
                   match={match}
                   width={CARD_WIDTH}
@@ -136,14 +99,15 @@ export function FavouriteMatchesScreen() {
                 <Pressable
                   onPress={() => removeMatch(match.id)}
                   style={{
-                    position: 'absolute',
-                    top: -4,
-                    right: -4,
-                    backgroundColor: colors.background,
-                    borderRadius: 12,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 4,
+                    paddingVertical: spacing.xs + 2,
                   }}
                 >
-                  <Ionicons name="close-circle" size={22} color={colors.textSecondary} />
+                  <Ionicons name="close-circle" size={14} color={colors.error} />
+                  <Text style={{ ...typography.small, color: colors.error, fontWeight: '600' }}>Remove</Text>
                 </Pressable>
               </View>
             ))}
@@ -173,78 +137,14 @@ export function FavouriteMatchesScreen() {
         </View>
       </ScrollView>
 
-      {/* Match Picker Modal */}
-      <Modal visible={showPicker} animationType="slide" presentationStyle="pageSheet">
-        <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border }}>
-            <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 17 }}>Select a Match</Text>
-            <Pressable onPress={() => { setShowPicker(false); setPickerSearch(''); setFilters({ league: 'all', team: 'all', season: 'all' }); }}>
-              <Text style={{ color: colors.primary, fontSize: 16 }}>Cancel</Text>
-            </Pressable>
-          </View>
-
-          {/* Search bar */}
-          <View style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.muted, borderRadius: borderRadius.md, paddingHorizontal: 12 }}>
-              <Ionicons name="search" size={18} color={colors.textSecondary} />
-              <RNTextInput
-                placeholder="Search by team or league..."
-                placeholderTextColor={colors.textSecondary}
-                value={pickerSearch}
-                onChangeText={setPickerSearch}
-                autoCapitalize="none"
-                autoCorrect={false}
-                style={{
-                  flex: 1,
-                  paddingLeft: 10,
-                  paddingVertical: 10,
-                  color: colors.foreground,
-                  fontSize: 14,
-                }}
-              />
-              {pickerSearch.length > 0 && (
-                <Pressable onPress={() => setPickerSearch('')}>
-                  <Ionicons name="close" size={18} color={colors.textSecondary} />
-                </Pressable>
-              )}
-            </View>
-          </View>
-
-          {/* Filters (League, Team, Season dropdowns — no minimum logs) */}
-          <MatchFilters
-            filters={filters}
-            onFiltersChange={setFilters}
-            matches={recentMatches || []}
-            showMinLogs={false}
-          />
-
-          {/* Match grid */}
-          {matchesLoading ? (
-            <View style={{ flex: 1, justifyContent: 'center' }}><LoadingSpinner fullScreen={false} /></View>
-          ) : pickerMatches.length === 0 ? (
-            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ ...typography.body, color: colors.textSecondary }}>No matches found</Text>
-            </View>
-          ) : (
-            <FlatList indicatorStyle={isDark ? 'white' : 'default'}
-              style={{ flex: 1 }}
-              data={pickerMatches}
-              numColumns={NUM_COLUMNS}
-              keyExtractor={(item) => item.id.toString()}
-              keyboardShouldPersistTaps="handled"
-              contentContainerStyle={{ paddingHorizontal: HORIZONTAL_PADDING, paddingTop: spacing.sm, paddingBottom: 40 }}
-              columnWrapperStyle={{ gap: GAP, marginBottom: GAP }}
-              renderItem={({ item }) => (
-                <MatchPosterCard
-                  match={item}
-                  onPress={() => addMatch(item.id)}
-                  width={CARD_WIDTH}
-                />
-              )}
-            />
-          )}
-        </SafeAreaView>
-      </Modal>
+      <MatchPickerModal
+        visible={showPicker}
+        onClose={() => setShowPicker(false)}
+        onAddMatches={(ids) => { addMatch(ids[0]); }}
+        excludeMatchIds={selected}
+        singleSelect
+        finishedOnly
+      />
     </SafeAreaView>
   );
 }
