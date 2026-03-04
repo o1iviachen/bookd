@@ -188,11 +188,15 @@ export function MatchDetailScreen({ route, navigation }: Props) {
 
   const stadiumUrl = getStadiumImageUrl(match.homeTeam.id);
 
-  const handleShare = () => {
+  const handleShare = async () => {
     const label = (isFinished || isLive)
       ? `${match.homeTeam.shortName} ${match.homeScore} - ${match.awayScore} ${match.awayTeam.shortName} · ${match.competition.name} on bookd`
       : `${match.homeTeam.shortName} vs ${match.awayTeam.shortName} · ${match.competition.name} on bookd`;
-    Share.share({ message: `${label}: bookd://match/${matchId}` });
+    try {
+      await Share.share({ message: label, url: `bookd://match/${matchId}` });
+    } catch (err) {
+      // User cancelled or share failed — ignore
+    }
   };
 
   const stickyScoreText = (isFinished || isLive)
@@ -1471,7 +1475,7 @@ function InfoSection({ matchDetail, match, colors, spacing, typography, borderRa
       )}
 
       {/* Match Information */}
-      <View style={{ backgroundColor: colors.card, borderRadius: borderRadius.lg, padding: spacing.md, borderWidth: 1, borderColor: colors.border, marginBottom: spacing.lg }}>
+      <View style={{ backgroundColor: colors.card, borderRadius: borderRadius.lg, padding: spacing.md, borderWidth: 1, borderColor: colors.border }}>
         <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 15, textAlign: 'center', marginBottom: spacing.md }}>
           Match Information
         </Text>
