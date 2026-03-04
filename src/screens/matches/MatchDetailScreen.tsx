@@ -71,7 +71,7 @@ export function MatchDetailScreen({ route, navigation }: Props) {
     horizontalRef.current?.scrollTo({ x: index * screenWidth, animated: true });
   }, [screenWidth]);
 
-  const handleHorizontalScroll = useCallback((e: any) => {
+  const handleHorizontalScrollEnd = useCallback((e: any) => {
     const page = Math.round(e.nativeEvent.contentOffset.x / screenWidth);
     setActiveTabIndex(page);
   }, [screenWidth]);
@@ -404,8 +404,7 @@ export function MatchDetailScreen({ route, navigation }: Props) {
           showsHorizontalScrollIndicator={false}
           nestedScrollEnabled
           scrollEnabled={!barChartActive}
-          onScroll={handleHorizontalScroll}
-          scrollEventThrottle={16}
+          onMomentumScrollEnd={handleHorizontalScrollEnd}
         >
           {/* ─── Reviews tab ─── */}
           <View style={{ width: screenWidth }}>
