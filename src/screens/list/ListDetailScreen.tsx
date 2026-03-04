@@ -217,9 +217,15 @@ export function ListDetailScreen({ route, navigation }: any) {
       userAvatar: profile.avatar,
       text: commentText.trim(),
       parentId: replyingTo?.id || null,
+    }, {
+      onSuccess: () => {
+        setCommentText('');
+        setReplyingTo(null);
+      },
+      onError: () => {
+        Alert.alert('Error', 'Failed to post comment. Please try again.');
+      },
     });
-    setCommentText('');
-    setReplyingTo(null);
   };
 
   const handleDeleteComment = (commentId: string) => {
@@ -425,17 +431,17 @@ export function ListDetailScreen({ route, navigation }: any) {
             </View>
           </View>
         )}
-        {/* ---- Replies ---- */}
+        {/* ---- Comments ---- */}
         <View style={{ borderTopWidth: 1, borderTopColor: colors.border, marginTop: spacing.lg }}>
           <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 15, marginBottom: spacing.md, paddingTop: spacing.lg, paddingHorizontal: spacing.md }}>
-            Replies
+            Comments
           </Text>
         </View>
 
         {sortedComments.length === 0 ? (
           <EmptyState
             icon="chatbubbles-outline"
-            title="No replies yet. Start the conversation!"
+            title="No comments yet. Start the conversation!"
           />
         ) : (
           (() => {
