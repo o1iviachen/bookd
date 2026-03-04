@@ -242,12 +242,11 @@ async function buildPlayersAndEnrichTeams() {
     var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l;
     const playersMap = new Map();
     const teamCoaches = new Map();
-    const teamSquads = new Map();
-    // Determine current season — only use these matches for squad building
+    // Determine current season — only use these matches for coach assignment
     const now = new Date();
     const month = now.getMonth() + 1;
     const currentSeason = month >= 7 ? now.getFullYear() : now.getFullYear() - 1;
-    console.log(`[buildPlayers] Current season for squads: ${currentSeason}`);
+    console.log(`[buildPlayers] Current season: ${currentSeason}`);
     // Read all matchDetails in batches, collecting matchIds we need
     const detailsList = [];
     const matchIdsNeeded = new Set();
@@ -338,27 +337,11 @@ async function buildPlayersAndEnrichTeams() {
         const homeAllPlayers = [...(d.homeLineup || []), ...(d.homeBench || [])];
         for (const p of homeAllPlayers) {
             upsertPlayer(p, homeTeamId, homeTeamName, homeTeamCrest, competitionCode);
-            if (isCurrentSeason && homeTeamId && p.id) {
-                if (!teamSquads.has(homeTeamId))
-                    teamSquads.set(homeTeamId, new Map());
-                const squad = teamSquads.get(homeTeamId);
-                if (!squad.has(p.id)) {
-                    squad.set(p.id, { id: p.id, name: p.name, position: p.position || null, nationality: null });
-                }
-            }
         }
         // Process away lineup + bench
         const awayAllPlayers = [...(d.awayLineup || []), ...(d.awayBench || [])];
         for (const p of awayAllPlayers) {
             upsertPlayer(p, awayTeamId, awayTeamName, awayTeamCrest, competitionCode);
-            if (isCurrentSeason && awayTeamId && p.id) {
-                if (!teamSquads.has(awayTeamId))
-                    teamSquads.set(awayTeamId, new Map());
-                const squad = teamSquads.get(awayTeamId);
-                if (!squad.has(p.id)) {
-                    squad.set(p.id, { id: p.id, name: p.name, position: p.position || null, nationality: null });
-                }
-            }
         }
         // Coaches — only from current season for team enrichment
         if (isCurrentSeason) {
@@ -377,7 +360,7 @@ async function buildPlayersAndEnrichTeams() {
             upsertPlayer({ id: d.awayCoach.id, name: d.awayCoach.name, position: 'Coach' }, awayTeamId, awayTeamName, awayTeamCrest, competitionCode);
         }
     }
-    console.log(`[buildPlayers] Processed all details: ${playersMap.size} players, ${teamSquads.size} teams with squads`);
+    console.log(`[buildPlayers] Processed all details: ${playersMap.size} players`);
     // Write players to Firestore — only set name fields if the doc doesn't already have an enriched name
     const players = Array.from(playersMap.values());
     for (let i = 0; i < players.length; i += config_1.FIRESTORE_BATCH_SIZE) {
@@ -409,31 +392,22 @@ async function buildPlayersAndEnrichTeams() {
         await batch.commit();
     }
     console.log(`[buildPlayers] Created/updated ${players.length} player documents`);
-    // Enrich teams with coach and squad data
+    // Enrich teams with coach data (squad is now handled by enrichPlayersFromSquads)
     let teamsUpdated = 0;
-    const teamIds = new Set([...teamCoaches.keys(), ...teamSquads.keys()]);
-    const teamUpdates = Array.from(teamIds);
+    const teamUpdates = Array.from(teamCoaches.keys());
     for (let i = 0; i < teamUpdates.length; i += config_1.FIRESTORE_BATCH_SIZE) {
         const chunk = teamUpdates.slice(i, i + config_1.FIRESTORE_BATCH_SIZE);
         const batch = db.batch();
         for (const teamId of chunk) {
-            const update = {
-                syncedAt: admin.firestore.FieldValue.serverTimestamp(),
-            };
             const coach = teamCoaches.get(teamId);
             if (coach) {
-                update.coach = coach;
+                batch.set(db.collection(config_1.COLLECTIONS.TEAMS).doc(String(teamId)), { coach, syncedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+                teamsUpdated++;
             }
-            const squad = teamSquads.get(teamId);
-            if (squad) {
-                update.squad = Array.from(squad.values());
-            }
-            batch.set(db.collection(config_1.COLLECTIONS.TEAMS).doc(String(teamId)), update, { merge: true });
-            teamsUpdated++;
         }
         await batch.commit();
     }
-    console.log(`[buildPlayers] Enriched ${teamsUpdated} teams with coach/squad data`);
+    console.log(`[buildPlayers] Enriched ${teamsUpdated} teams with coach data`);
     return { players: players.length, teams: teamsUpdated };
 }
 /**
@@ -533,7 +507,67 @@ async function enrichPlayersFromSquads(batchLimit = 50, offset = 0) {
         const teamCrest = teamData.crest;
         const teamTier = getLeagueTier(teamData.competitionCodes);
         try {
-            // Fetch all pages of players for this team+season
+            // ─── Phase 1: Fetch current squad via /players/squads ───
+            apiCalls++;
+            const squadResponse = await (0, apiFootball_1.getTeamSquad)(teamId);
+            const currentSquad = [];
+            if (squadResponse === null || squadResponse === void 0 ? void 0 : squadResponse.players) {
+                for (const sp of squadResponse.players) {
+                    if (!sp.id)
+                        continue;
+                    currentSquad.push({
+                        id: sp.id,
+                        name: decodeEntities(sp.name),
+                        position: mapSquadPosition(sp.position),
+                        nationality: null, // backfilled in Phase 3
+                    });
+                }
+            }
+            // Write squad to team doc
+            if (currentSquad.length > 0) {
+                await db.collection(config_1.COLLECTIONS.TEAMS).doc(String(teamId)).set({ squad: currentSquad, squadSyncedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+                // Create stub player docs for squad members not yet in Firestore
+                const squadPlayerRefs = currentSquad.map(p => db.collection(config_1.COLLECTIONS.PLAYERS).doc(String(p.id)));
+                const existingIds = new Set();
+                for (let i = 0; i < squadPlayerRefs.length; i += 100) {
+                    const chunk = squadPlayerRefs.slice(i, i + 100);
+                    const docs = await db.getAll(...chunk);
+                    for (const d of docs) {
+                        if (d.exists)
+                            existingIds.add(Number(d.id));
+                    }
+                }
+                let stubBatch = db.batch();
+                let stubCount = 0;
+                for (const sp of currentSquad) {
+                    if (!existingIds.has(sp.id)) {
+                        const ref = db.collection(config_1.COLLECTIONS.PLAYERS).doc(String(sp.id));
+                        stubBatch.set(ref, {
+                            id: sp.id,
+                            name: sp.name,
+                            nameLower: sp.name.toLowerCase(),
+                            searchName: extractSearchName(sp.name),
+                            searchPrefixes: generateSearchPrefixes(sp.name),
+                            position: sp.position,
+                            photo: null,
+                            nationality: null,
+                            dateOfBirth: null,
+                            currentTeam: { id: teamId, name: teamName, crest: teamCrest },
+                            leagueTier: teamTier,
+                            syncedAt: admin.firestore.FieldValue.serverTimestamp(),
+                        }, { merge: true });
+                        stubCount++;
+                        if (stubCount >= 450) {
+                            await stubBatch.commit();
+                            stubBatch = db.batch();
+                            stubCount = 0;
+                        }
+                    }
+                }
+                if (stubCount > 0)
+                    await stubBatch.commit();
+            }
+            // ─── Phase 2: Enrich player docs via /players?team&season ───
             const allPlayers = [];
             let page = 1;
             let totalPages = 1;
@@ -548,61 +582,72 @@ async function enrichPlayersFromSquads(batchLimit = 50, offset = 0) {
                 const data = response.data;
                 const players = (data === null || data === void 0 ? void 0 : data.response) || [];
                 allPlayers.push(...players);
-                // API-Football returns paging info
                 totalPages = ((_a = data === null || data === void 0 ? void 0 : data.paging) === null || _a === void 0 ? void 0 : _a.total) || 1;
                 page++;
             }
-            if (allPlayers.length === 0) {
-                teamsProcessed++;
-                continue;
-            }
-            // Batch-update player docs with full name data
-            let batch = db.batch();
-            let batchCount = 0;
-            for (const entry of allPlayers) {
-                const p = entry.player;
-                if (!(p === null || p === void 0 ? void 0 : p.id))
-                    continue;
-                // Prefer p.name — it's the common/display name from API-Football (e.g. "Cristiano Ronaldo")
-                // Fallback: first word of firstname + lastname (avoids middle names leaking in)
-                // e.g. firstname="Trent John", lastname="Alexander-Arnold" → "Trent Alexander-Arnold"
-                const firstWord = (p.firstname || '').split(/\s+/)[0];
-                const rawName = p.name
-                    || (firstWord && p.lastname ? `${firstWord} ${p.lastname}` : p.firstname || p.lastname || '');
-                const fullName = decodeEntities(rawName);
-                // Derive position from statistics if available
-                const pos = ((_d = (_c = (_b = entry.statistics) === null || _b === void 0 ? void 0 : _b[0]) === null || _c === void 0 ? void 0 : _c.games) === null || _d === void 0 ? void 0 : _d.position) || null;
-                const playerRef = db.collection(config_1.COLLECTIONS.PLAYERS).doc(String(p.id));
-                // Always extract searchName from the display name (handles particles properly)
-                const searchName = extractSearchName(fullName);
-                batch.set(playerRef, {
-                    id: p.id,
-                    name: fullName,
-                    nameLower: fullName.toLowerCase(),
-                    searchName,
-                    searchPrefixes: generateSearchPrefixes(fullName),
-                    photo: p.photo || null,
-                    nationality: p.nationality || null,
-                    dateOfBirth: ((_e = p.birth) === null || _e === void 0 ? void 0 : _e.date) || null,
-                    position: pos ? mapSquadPosition(pos) : undefined,
-                    currentTeam: { id: teamId, name: teamName, crest: teamCrest },
-                    leagueTier: teamTier,
-                    syncedAt: admin.firestore.FieldValue.serverTimestamp(),
-                }, { merge: true });
-                batchCount++;
-                playersEnriched++;
-                // Firestore batch limit is 500
-                if (batchCount >= 450) {
+            if (allPlayers.length > 0) {
+                let batch = db.batch();
+                let batchCount = 0;
+                for (const entry of allPlayers) {
+                    const p = entry.player;
+                    if (!(p === null || p === void 0 ? void 0 : p.id))
+                        continue;
+                    const firstWord = (p.firstname || '').split(/\s+/)[0];
+                    const rawName = p.name
+                        || (firstWord && p.lastname ? `${firstWord} ${p.lastname}` : p.firstname || p.lastname || '');
+                    const fullName = decodeEntities(rawName);
+                    const pos = ((_d = (_c = (_b = entry.statistics) === null || _b === void 0 ? void 0 : _b[0]) === null || _c === void 0 ? void 0 : _c.games) === null || _d === void 0 ? void 0 : _d.position) || null;
+                    const playerRef = db.collection(config_1.COLLECTIONS.PLAYERS).doc(String(p.id));
+                    const searchName = extractSearchName(fullName);
+                    batch.set(playerRef, {
+                        id: p.id,
+                        name: fullName,
+                        nameLower: fullName.toLowerCase(),
+                        searchName,
+                        searchPrefixes: generateSearchPrefixes(fullName),
+                        photo: p.photo || null,
+                        nationality: p.nationality || null,
+                        dateOfBirth: ((_e = p.birth) === null || _e === void 0 ? void 0 : _e.date) || null,
+                        position: pos ? mapSquadPosition(pos) : undefined,
+                        currentTeam: { id: teamId, name: teamName, crest: teamCrest },
+                        leagueTier: teamTier,
+                        syncedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    }, { merge: true });
+                    batchCount++;
+                    playersEnriched++;
+                    if (batchCount >= 450) {
+                        await batch.commit();
+                        batch = db.batch();
+                        batchCount = 0;
+                    }
+                }
+                if (batchCount > 0) {
                     await batch.commit();
-                    batch = db.batch();
-                    batchCount = 0;
                 }
             }
-            if (batchCount > 0) {
-                await batch.commit();
+            // ─── Phase 3: Backfill nationality into squad array ───
+            if (currentSquad.length > 0 && allPlayers.length > 0) {
+                const nationalityMap = new Map();
+                for (const entry of allPlayers) {
+                    const p = entry.player;
+                    if ((p === null || p === void 0 ? void 0 : p.id) && (p === null || p === void 0 ? void 0 : p.nationality)) {
+                        nationalityMap.set(p.id, p.nationality);
+                    }
+                }
+                let squadUpdated = false;
+                for (const sp of currentSquad) {
+                    const nat = nationalityMap.get(sp.id);
+                    if (nat) {
+                        sp.nationality = nat;
+                        squadUpdated = true;
+                    }
+                }
+                if (squadUpdated) {
+                    await db.collection(config_1.COLLECTIONS.TEAMS).doc(String(teamId)).set({ squad: currentSquad }, { merge: true });
+                }
             }
             teamsProcessed++;
-            console.log(`[enrichPlayers] Team ${teamId} (${teamName}): ${allPlayers.length} players, ${page - 1} API calls`);
+            console.log(`[enrichPlayers] Team ${teamId} (${teamName}): squad=${currentSquad.length}, enriched=${allPlayers.length}, apiCalls=${page}`);
         }
         catch (err) {
             console.error(`[enrichPlayers] Error for team ${teamId}:`, err.message);
@@ -715,7 +760,8 @@ function mapSquadPosition(pos) {
         case 'Goalkeeper': return 'Goalkeeper';
         case 'Defender': return 'Defender';
         case 'Midfielder': return 'Midfielder';
-        case 'Attacker': return 'Forward';
+        case 'Attacker': return 'Attacker';
+        case 'Forward': return 'Attacker'; // normalize legacy
         default: return pos || 'Unknown';
     }
 }

@@ -11,6 +11,7 @@ exports.getFixtureStats = getFixtureStats;
 exports.getStandings = getStandings;
 exports.getPlayerById = getPlayerById;
 exports.getLiveFixtures = getLiveFixtures;
+exports.getTeamSquad = getTeamSquad;
 const axios_1 = __importDefault(require("axios"));
 const config_1 = require("./config");
 // API-Football HTTP client with built-in rate limiting
@@ -80,5 +81,11 @@ async function getLiveFixtures() {
     await rateLimit();
     const response = await client.get('/fixtures', { params: { live: 'all' } });
     return response.data.response || [];
+}
+async function getTeamSquad(teamId) {
+    await rateLimit();
+    const response = await client.get('/players/squads', { params: { team: teamId } });
+    const squads = response.data.response || [];
+    return squads[0] || null;
 }
 //# sourceMappingURL=apiFootball.js.map

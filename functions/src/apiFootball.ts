@@ -198,3 +198,26 @@ export async function getLiveFixtures(): Promise<ApiFixture[]> {
   const response = await client.get('/fixtures', { params: { live: 'all' } });
   return response.data.response || [];
 }
+
+// ─── Squad ───
+
+export interface ApiSquadPlayer {
+  id: number;
+  name: string;
+  age: number | null;
+  number: number | null;
+  position: string; // "Goalkeeper", "Defender", "Midfielder", "Attacker"
+  photo: string;
+}
+
+export interface ApiSquadResponse {
+  team: { id: number; name: string; logo: string };
+  players: ApiSquadPlayer[];
+}
+
+export async function getTeamSquad(teamId: number): Promise<ApiSquadResponse | null> {
+  await rateLimit();
+  const response = await client.get('/players/squads', { params: { team: teamId } });
+  const squads = response.data.response || [];
+  return squads[0] || null;
+}
