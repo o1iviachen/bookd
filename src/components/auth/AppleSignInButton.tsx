@@ -1,30 +1,31 @@
-import React, { useEffect, useState } from 'react';
-import { Pressable, Text, ActivityIndicator } from 'react-native';
+import React, { useState } from 'react';
+import { Platform, Pressable, Text, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
-import { useAuth } from '../../context/AuthContext';
-import { useGoogleAuth } from '../../services/googleAuth';
+import { firebaseAppleSignIn } from '../../services/appleAuth';
 
-export function GoogleSignInButton({ compact = false }: { compact?: boolean } = {}) {
+export function AppleSignInButton({ compact = false }: { compact?: boolean } = {}) {
   const { theme } = useTheme();
   const { colors, spacing, borderRadius } = theme;
-  const { signInWithGoogle } = useAuth();
-  const { request, response, promptAsync } = useGoogleAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    if (response?.type === 'success') {
-      const { id_token } = response.params;
-      setLoading(true);
-      setError('');
-      signInWithGoogle(id_token)
-        .catch((err) => {
-          setError(err.message || 'Google sign-in failed');
-        })
-        .finally(() => setLoading(false));
+  if (Platform.OS !== 'ios') return null;
+
+  const handlePress = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      await firebaseAppleSignIn();
+      // onAuthStateChanged handles profile check and routing
+    } catch (err: any) {
+      if (err.code !== 'ERR_REQUEST_CANCELED') {
+        setError(err.message || 'Apple sign-in failed');
+      }
+    } finally {
+      setLoading(false);
     }
-  }, [response]);
+  };
 
   return (
     <>
@@ -34,8 +35,8 @@ export function GoogleSignInButton({ compact = false }: { compact?: boolean } = 
         </Text>
       ) : null}
       <Pressable
-        disabled={!request || loading}
-        onPress={() => promptAsync()}
+        disabled={loading}
+        onPress={handlePress}
         style={({ pressed }) => ({
           flexDirection: 'row',
           alignItems: 'center',
@@ -46,17 +47,17 @@ export function GoogleSignInButton({ compact = false }: { compact?: boolean } = 
           borderRadius: borderRadius.sm,
           paddingVertical: compact ? 10 : spacing.md,
           paddingHorizontal: spacing.xl,
-          opacity: pressed ? 0.8 : (!request || loading) ? 0.5 : 1,
+          opacity: pressed ? 0.8 : loading ? 0.5 : 1,
           gap: compact ? 8 : 12,
         })}
       >
         {loading ? (
           <ActivityIndicator color={colors.foreground} size="small" />
         ) : (
-          <Ionicons name="logo-google" size={compact ? 17 : 20} color={colors.foreground} />
+          <Ionicons name="logo-apple" size={compact ? 17 : 20} color={colors.foreground} />
         )}
         <Text style={{ color: colors.foreground, fontSize: compact ? 15 : 17, fontWeight: '600' }}>
-          Continue with Google
+          Continue with Apple
         </Text>
       </Pressable>
     </>
