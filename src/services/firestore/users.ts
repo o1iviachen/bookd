@@ -28,6 +28,7 @@ function docToUser(docSnap: any): User {
     location: data.location || '',
     website: data.website || '',
     favoriteTeams: data.favoriteTeams || [],
+    favoriteCountry: data.favoriteCountry || null,
     clubAffiliations: data.clubAffiliations || [],
     followedLeagues: data.followedLeagues || [],
     followedTeamIds: (data.followedTeamIds || []).map(String),
@@ -68,6 +69,7 @@ export async function createUserProfile(
     location: '',
     website: '',
     favoriteTeams: [],
+    favoriteCountry: null,
     clubAffiliations: [],
     followedLeagues: ['PL', 'BL1', 'PD', 'SA', 'FL1'],
     followedTeamIds: [],
@@ -114,7 +116,7 @@ export async function getFollowedTeamIdsForUsers(userIds: string[]): Promise<Map
 
 export async function updateUserProfile(
   uid: string,
-  updates: Partial<Pick<User, 'username' | 'displayName' | 'bio' | 'location' | 'website' | 'avatar' | 'favoriteTeams' | 'clubAffiliations' | 'followedLeagues' | 'followedTeamIds' | 'favoriteMatchIds' | 'watchedMatchIds' | 'likedMatchIds' | 'customTags' | 'expoPushToken' | 'notificationPreferences'>>
+  updates: Partial<Pick<User, 'username' | 'displayName' | 'bio' | 'location' | 'website' | 'avatar' | 'favoriteTeams' | 'favoriteCountry' | 'clubAffiliations' | 'followedLeagues' | 'followedTeamIds' | 'favoriteMatchIds' | 'watchedMatchIds' | 'likedMatchIds' | 'customTags' | 'expoPushToken' | 'notificationPreferences'>>
 ): Promise<void> {
   const userRef = doc(db, 'users', uid);
   await updateDoc(userRef, updates);

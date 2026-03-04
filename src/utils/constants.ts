@@ -67,12 +67,13 @@ export interface TeamInfo {
 }
 
 export const POPULAR_TEAMS: TeamInfo[] = [
-  // Premier League
+  // Premier League (2025-26)
   { id: '42', name: 'Arsenal', league: 'Premier League', crest: 'https://media.api-sports.io/football/teams/42.png' },
   { id: '66', name: 'Aston Villa', league: 'Premier League', crest: 'https://media.api-sports.io/football/teams/66.png' },
   { id: '35', name: 'Bournemouth', league: 'Premier League', crest: 'https://media.api-sports.io/football/teams/35.png' },
   { id: '55', name: 'Brentford', league: 'Premier League', crest: 'https://media.api-sports.io/football/teams/55.png' },
   { id: '51', name: 'Brighton', league: 'Premier League', crest: 'https://media.api-sports.io/football/teams/51.png' },
+  { id: '44', name: 'Burnley', league: 'Premier League', crest: 'https://media.api-sports.io/football/teams/44.png' },
   { id: '49', name: 'Chelsea', league: 'Premier League', crest: 'https://media.api-sports.io/football/teams/49.png' },
   { id: '52', name: 'Crystal Palace', league: 'Premier League', crest: 'https://media.api-sports.io/football/teams/52.png' },
   { id: '45', name: 'Everton', league: 'Premier League', crest: 'https://media.api-sports.io/football/teams/45.png' },
@@ -83,12 +84,11 @@ export const POPULAR_TEAMS: TeamInfo[] = [
   { id: '33', name: 'Manchester United', league: 'Premier League', crest: 'https://media.api-sports.io/football/teams/33.png' },
   { id: '34', name: 'Newcastle United', league: 'Premier League', crest: 'https://media.api-sports.io/football/teams/34.png' },
   { id: '65', name: 'Nottingham Forest', league: 'Premier League', crest: 'https://media.api-sports.io/football/teams/65.png' },
-  { id: '41', name: 'Tottenham', league: 'Premier League', crest: 'https://media.api-sports.io/football/teams/41.png' },
+  { id: '746', name: 'Sunderland', league: 'Premier League', crest: 'https://media.api-sports.io/football/teams/746.png' },
+  { id: '47', name: 'Tottenham', league: 'Premier League', crest: 'https://media.api-sports.io/football/teams/47.png' },
   { id: '48', name: 'West Ham', league: 'Premier League', crest: 'https://media.api-sports.io/football/teams/48.png' },
   { id: '39', name: 'Wolves', league: 'Premier League', crest: 'https://media.api-sports.io/football/teams/39.png' },
-  { id: '57', name: 'Ipswich Town', league: 'Premier League', crest: 'https://media.api-sports.io/football/teams/57.png' },
-  { id: '46', name: 'Leicester City', league: 'Premier League', crest: 'https://media.api-sports.io/football/teams/46.png' },
-  // La Liga
+  // La Liga (2025-26)
   { id: '531', name: 'Athletic Bilbao', league: 'La Liga', crest: 'https://media.api-sports.io/football/teams/531.png' },
   { id: '530', name: 'Atletico Madrid', league: 'La Liga', crest: 'https://media.api-sports.io/football/teams/530.png' },
   { id: '529', name: 'Barcelona', league: 'La Liga', crest: 'https://media.api-sports.io/football/teams/529.png' },
@@ -99,7 +99,7 @@ export const POPULAR_TEAMS: TeamInfo[] = [
   { id: '532', name: 'Valencia', league: 'La Liga', crest: 'https://media.api-sports.io/football/teams/532.png' },
   { id: '533', name: 'Villarreal', league: 'La Liga', crest: 'https://media.api-sports.io/football/teams/533.png' },
   { id: '543', name: 'Real Betis', league: 'La Liga', crest: 'https://media.api-sports.io/football/teams/543.png' },
-  // Bundesliga
+  // Bundesliga (2025-26)
   { id: '157', name: 'Bayern Munich', league: 'Bundesliga', crest: 'https://media.api-sports.io/football/teams/157.png' },
   { id: '168', name: 'Bayer Leverkusen', league: 'Bundesliga', crest: 'https://media.api-sports.io/football/teams/168.png' },
   { id: '165', name: 'Borussia Dortmund', league: 'Bundesliga', crest: 'https://media.api-sports.io/football/teams/165.png' },
@@ -108,7 +108,7 @@ export const POPULAR_TEAMS: TeamInfo[] = [
   { id: '172', name: 'VfB Stuttgart', league: 'Bundesliga', crest: 'https://media.api-sports.io/football/teams/172.png' },
   { id: '160', name: 'SC Freiburg', league: 'Bundesliga', crest: 'https://media.api-sports.io/football/teams/160.png' },
   { id: '161', name: 'Wolfsburg', league: 'Bundesliga', crest: 'https://media.api-sports.io/football/teams/161.png' },
-  // Serie A
+  // Serie A (2025-26)
   { id: '505', name: 'Inter Milan', league: 'Serie A', crest: 'https://media.api-sports.io/football/teams/505.png' },
   { id: '489', name: 'AC Milan', league: 'Serie A', crest: 'https://media.api-sports.io/football/teams/489.png' },
   { id: '496', name: 'Juventus', league: 'Serie A', crest: 'https://media.api-sports.io/football/teams/496.png' },
@@ -117,10 +117,11 @@ export const POPULAR_TEAMS: TeamInfo[] = [
   { id: '487', name: 'Lazio', league: 'Serie A', crest: 'https://media.api-sports.io/football/teams/487.png' },
   { id: '499', name: 'Atalanta', league: 'Serie A', crest: 'https://media.api-sports.io/football/teams/499.png' },
   { id: '502', name: 'Fiorentina', league: 'Serie A', crest: 'https://media.api-sports.io/football/teams/502.png' },
-  // Ligue 1
+  // Ligue 1 (2025-26)
   { id: '85', name: 'Paris Saint-Germain', league: 'Ligue 1', crest: 'https://media.api-sports.io/football/teams/85.png' },
   { id: '81', name: 'Marseille', league: 'Ligue 1', crest: 'https://media.api-sports.io/football/teams/81.png' },
   { id: '91', name: 'Monaco', league: 'Ligue 1', crest: 'https://media.api-sports.io/football/teams/91.png' },
   { id: '79', name: 'Lille', league: 'Ligue 1', crest: 'https://media.api-sports.io/football/teams/79.png' },
   { id: '80', name: 'Lyon', league: 'Ligue 1', crest: 'https://media.api-sports.io/football/teams/80.png' },
+  { id: '116', name: 'Lens', league: 'Ligue 1', crest: 'https://media.api-sports.io/football/teams/116.png' },
 ];

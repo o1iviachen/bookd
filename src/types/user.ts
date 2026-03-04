@@ -19,6 +19,7 @@ export interface User {
   location: string;
   website: string;
   favoriteTeams: string[];
+  favoriteCountry: string | null;
   clubAffiliations: string[];
   followedLeagues: string[];
   followedTeamIds: string[];

@@ -18,6 +18,7 @@ import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { ScreenHeader } from '../../components/ui/ScreenHeader';
 import { RatingChart } from '../../components/profile/RatingChart';
 import { POPULAR_TEAMS } from '../../utils/constants';
+import { nationalityFlag } from '../../utils/flagEmoji';
 import { Match } from '../../types/match';
 
 export function UserProfileScreen({ route, navigation }: any) {
@@ -163,9 +164,12 @@ export function UserProfileScreen({ route, navigation }: any) {
           </Text>
         </View>
 
-        {/* Favourite team badges */}
-        {followedTeamCrests.length > 0 && (
-          <View style={{ flexDirection: 'row', justifyContent: 'center', gap: spacing.sm, marginTop: spacing.sm }}>
+        {/* Favourite team & country badges */}
+        {(followedTeamCrests.length > 0 || profile?.favoriteCountry) && (
+          <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm }}>
+            {profile?.favoriteCountry && (
+              <Text style={{ fontSize: 22 }}>{nationalityFlag(profile.favoriteCountry)}</Text>
+            )}
             {followedTeamCrests.map((club) => (
               <Pressable
                 key={club.id}
@@ -281,9 +285,7 @@ export function UserProfileScreen({ route, navigation }: any) {
                   const hasMedia = review.media && review.media.length > 0;
                   const reviewCount = (reviews || []).filter((r) => Number(r.matchId) === Number(review.matchId)).length;
                   const isLog = review.rating === 0 && !review.text?.trim() && !review.tags?.length && !review.media?.length;
-                  const handlePress = () => reviewCount > 1
-                    ? navigation.navigate('UserMatchReviews', { matchId: Number(review.matchId), userId, username: profile?.username || '' })
-                    : isLog
+                  const handlePress = () => isLog
                       ? navigation.navigate('MatchDetail', { matchId: Number(review.matchId) })
                       : navigation.navigate('ReviewDetail', { reviewId: review.id });
                   return match ? (
