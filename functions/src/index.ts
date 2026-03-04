@@ -7,7 +7,7 @@ import { syncMatchesForDateRange } from './sync/syncMatches';
 import { syncAllStandings } from './sync/syncStandings';
 import { syncMissingDetails, syncMatchDetails } from './sync/syncDetails';
 import { syncLiveMatches } from './sync/syncLive';
-import { runBackfill, buildTeamsFromMatches, buildPlayersAndEnrichTeams, fetchTeamColors, enrichPlayersFromSquads, backfillPlayerNameLower, generateSearchPrefixes, getLeagueTier } from './sync/backfill';
+import { runBackfill, buildTeamsFromMatches, buildPlayersAndEnrichTeams, fetchTeamColors, enrichPlayersFromSquads, refreshSquadsOnly, backfillPlayerNameLower, generateSearchPrefixes, getLeagueTier } from './sync/backfill';
 
 // ─── Push Notifications ───
 export { sendPushNotification } from './notifications';
@@ -612,6 +612,92 @@ export const enrichPlayers = functions
       console.error('[enrichPlayers] Error:', err);
       res.status(500).json({ error: err.message });
     }
+  });
+
+/**
+ * Manual trigger for squad-only refresh (Phases 1-3).
+ *   GET /triggerSquadRefresh?limit=200
+ * Uses cursor stored in aggregates/squadRefreshCursor.
+ */
+export const triggerSquadRefresh = functions
+  .runWith({ timeoutSeconds: 540, memory: '512MB' })
+  .https.onRequest(async (req, res) => {
+    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 200;
+    try {
+      const db = admin.firestore();
+      const cursorDoc = await db.collection('aggregates').doc('squadRefreshCursor').get();
+      const lastTeamId = cursorDoc.exists ? (cursorDoc.data()?.lastTeamId ?? 0) : 0;
+
+      const result = await refreshSquadsOnly(limit, lastTeamId);
+
+      if (result.teamsProcessed < limit) {
+        // Completed full cycle — reset cursor
+        await db.collection('aggregates').doc('squadRefreshCursor').set({
+          lastTeamId: 0,
+          lastCompletedCycle: admin.firestore.FieldValue.serverTimestamp(),
+          lastRunAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      } else {
+        await db.collection('aggregates').doc('squadRefreshCursor').set({
+          lastTeamId: result.lastProcessedTeamId,
+          lastRunAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+      }
+
+      res.json({ success: true, ...result, cursorReset: result.teamsProcessed < limit });
+    } catch (err: any) {
+      console.error('[triggerSquadRefresh] Error:', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+/**
+ * Scheduled squad refresh — runs daily at 04:00 UTC.
+ * During transfer windows (Jan, Jun-Aug): runs every day.
+ * Outside transfer windows: runs Mondays only.
+ * Processes 200 teams per invocation using cursor-based batching.
+ */
+export const squadRefresh = functions
+  .runWith({ timeoutSeconds: 540, memory: '512MB' })
+  .pubsub.schedule('0 4 * * *')
+  .timeZone('UTC')
+  .onRun(async () => {
+    const now = new Date();
+    const month = now.getMonth() + 1;
+    const dayOfWeek = now.getDay(); // 0=Sunday, 1=Monday
+
+    const isTransferWindow = (month >= 6 && month <= 8) || month === 1;
+
+    if (!isTransferWindow && dayOfWeek !== 1) {
+      console.log('[squadRefresh] Skipping — not a transfer window and not Monday');
+      return;
+    }
+
+    const BATCH_SIZE = 200;
+    const db = admin.firestore();
+    const cursorDoc = await db.collection('aggregates').doc('squadRefreshCursor').get();
+    const lastTeamId = cursorDoc.exists ? (cursorDoc.data()?.lastTeamId ?? 0) : 0;
+
+    console.log(`[squadRefresh] Starting at cursor=${lastTeamId}, transferWindow=${isTransferWindow}`);
+
+    const result = await refreshSquadsOnly(BATCH_SIZE, lastTeamId);
+
+    if (result.teamsProcessed < BATCH_SIZE) {
+      await db.collection('aggregates').doc('squadRefreshCursor').set({
+        lastTeamId: 0,
+        lastCompletedCycle: admin.firestore.FieldValue.serverTimestamp(),
+        lastRunAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      console.log('[squadRefresh] Completed full cycle. Cursor reset to 0.');
+    } else {
+      await db.collection('aggregates').doc('squadRefreshCursor').set({
+        lastTeamId: result.lastProcessedTeamId,
+        lastRunAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+      console.log(`[squadRefresh] Next cursor: ${result.lastProcessedTeamId}`);
+    }
+
+    console.log(`[squadRefresh] Done: ${result.teamsProcessed} teams, ${result.playersEnriched} players, ${result.apiCalls} API calls`);
   });
 
 /**
