@@ -469,8 +469,8 @@ export async function getTeamDetail(teamId: number): Promise<TeamDetail> {
     crest: data.crest ?? '',
     venue: data.venue || null,
     founded: data.founded || null,
-    clubColors: null,
-    coach: null,
+    clubColors: data.clubColors || null,
+    coach: data.coach || null,
     squad,
     activeCompetitions: data.activeCompetitions || [],
   };

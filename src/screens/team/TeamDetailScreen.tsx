@@ -122,7 +122,7 @@ export function TeamDetailScreen({ route, navigation }: any) {
     type Squad = { id: number; name: string; position: string; nationality: string }[];
     if (!teamDetail?.squad) return new Map<string, Squad>();
     const groups = new Map<string, Squad>();
-    const order = ['Goalkeeper', 'Defence', 'Midfield', 'Offence', 'Unknown'];
+    const order = ['Goalkeeper', 'Defender', 'Midfielder', 'Attacker', 'Unknown'];
     for (const pos of order) {
       const players = teamDetail.squad.filter((p) => p.position === pos);
       if (players.length > 0) groups.set(pos, players);
@@ -133,9 +133,9 @@ export function TeamDetailScreen({ route, navigation }: any) {
   const positionLabel = (pos: string) => {
     switch (pos) {
       case 'Goalkeeper': return 'Goalkeepers';
-      case 'Defence': return 'Defenders';
-      case 'Midfield': return 'Midfielders';
-      case 'Offence': return 'Forwards';
+      case 'Defender': return 'Defenders';
+      case 'Midfielder': return 'Midfielders';
+      case 'Attacker': return 'Forwards';
       default: return pos;
     }
   };
