@@ -28,6 +28,7 @@ import { getStadiumImageUrl } from '../../utils/stadiumImages';
 import { MatchesStackParamList } from '../../types/navigation';
 import { MatchDetail, MatchPlayer, MatchGoal, MatchBooking, MatchSubstitution } from '../../services/footballApi';
 import { shortName, lastName } from '../../utils/formatName';
+import { nationalityFlag } from '../../utils/flagEmoji';
 import { MatchPosterCard } from '../../components/match/MatchPosterCard';
 import { DiscussionSection, DiscussionInputBar } from '../../components/discussion/DiscussionSection';
 import { useDiscussion } from '../../hooks/useDiscussion';
@@ -53,12 +54,8 @@ export function MatchDetailScreen({ route, navigation }: Props) {
   const [showListModal, setShowListModal] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [activeTabIndex, setActiveTabIndex] = useState(0);
-  const [barChartActive, setBarChartActive] = useState(false);
   const scrollY = useRef(new Animated.Value(0)).current;
-  const horizontalRef = useRef<ScrollView>(null);
   const insets = useSafeAreaInsets();
-  const { width: screenWidth } = useWindowDimensions();
-
   const MATCH_TABS: { key: MatchTab; label: string }[] = [
     { key: 'reviews', label: 'Reviews' },
     { key: 'discussion', label: 'Discussion' },
@@ -68,13 +65,8 @@ export function MatchDetailScreen({ route, navigation }: Props) {
 
   const handleTabPress = useCallback((index: number) => {
     setActiveTabIndex(index);
-    horizontalRef.current?.scrollTo({ x: index * screenWidth, animated: true });
-  }, [screenWidth]);
+  }, []);
 
-  const handleHorizontalScrollEnd = useCallback((e: any) => {
-    const page = Math.round(e.nativeEvent.contentOffset.x / screenWidth);
-    setActiveTabIndex(page);
-  }, [screenWidth]);
 
   const handleScroll = useMemo(
     () => Animated.event(
@@ -406,18 +398,9 @@ export function MatchDetailScreen({ route, navigation }: Props) {
       >
         {renderMatchHeader()}
 
-        {/* ─── Horizontal paging for tab content ─── */}
-        <ScrollView
-          ref={horizontalRef}
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          nestedScrollEnabled
-          scrollEnabled={!barChartActive}
-          onMomentumScrollEnd={handleHorizontalScrollEnd}
-        >
-          {/* ─── Reviews tab ─── */}
-          <View style={{ width: screenWidth }}>
+        {/* ─── Active tab content ─── */}
+        {activeTabIndex === 0 && (
+          <View>
             {/* Stats row */}
             {isFinished && reviews && reviews.length > 0 && (
               <View style={{ flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.md, marginTop: spacing.sm, marginBottom: spacing.md }}>
@@ -448,8 +431,6 @@ export function MatchDetailScreen({ route, navigation }: Props) {
                 homeTeamName={match.homeTeam.name}
                 awayTeamName={match.awayTeam.name}
                 reviewerTeamMap={reviewerTeamMap}
-                onTouchStart={() => setBarChartActive(true)}
-                onTouchEnd={() => setBarChartActive(false)}
               />
             )}
 
@@ -519,35 +500,32 @@ export function MatchDetailScreen({ route, navigation }: Props) {
               <ReviewsSection reviews={reviews || []} userId={user?.uid} profile={profile} colors={colors} spacing={spacing} typography={typography} borderRadius={borderRadius} navigation={navigation} />
             )}
           </View>
+        )}
 
-          {/* ─── Discussion tab ─── */}
-          <View style={{ width: screenWidth }}>
-            <DiscussionSection
-              matchId={matchId}
-              messages={discussionMessages}
-              isLoading={discussionLoading}
-              isOpen={isDiscussionOpen}
-              isReadable={isDiscussionReadable}
-              isFinished={isFinished}
-              userId={user?.uid || null}
-              colors={colors}
-              spacing={spacing}
-              typography={typography}
-              borderRadius={borderRadius}
-              navigation={navigation}
-            />
-          </View>
+        {activeTabIndex === 1 && (
+          <DiscussionSection
+            matchId={matchId}
+            messages={discussionMessages}
+            isLoading={discussionLoading}
+            isOpen={isDiscussionOpen}
+            isReadable={isDiscussionReadable}
+            isFinished={isFinished}
+            userId={user?.uid || null}
+            colors={colors}
+            spacing={spacing}
+            typography={typography}
+            borderRadius={borderRadius}
+            navigation={navigation}
+          />
+        )}
 
-          {/* ─── Lineup tab ─── */}
-          <View style={{ width: screenWidth }}>
-            <LineupSection matchDetail={matchDetail || null} match={match} colors={colors} spacing={spacing} typography={typography} navigation={navigation} motmWinnerId={motmWinnerId} />
-          </View>
+        {activeTabIndex === 2 && (
+          <LineupSection matchDetail={matchDetail || null} match={match} colors={colors} spacing={spacing} typography={typography} navigation={navigation} motmWinnerId={motmWinnerId} />
+        )}
 
-          {/* ─── Info tab ─── */}
-          <View style={{ width: screenWidth }}>
-            <InfoSection matchDetail={matchDetail || null} match={match} colors={colors} spacing={spacing} typography={typography} borderRadius={borderRadius} navigation={navigation} />
-          </View>
-        </ScrollView>
+        {activeTabIndex === 3 && (
+          <InfoSection matchDetail={matchDetail || null} match={match} colors={colors} spacing={spacing} typography={typography} borderRadius={borderRadius} navigation={navigation} />
+        )}
       </Animated.ScrollView>
 
       {/* ─── Discussion input bar — only when discussion tab active & writable ─── */}
@@ -1331,20 +1309,26 @@ function LineupSection({ matchDetail, match, colors, spacing, typography, naviga
       )}
 
       {/* Referee */}
-      {matchDetail.referee && (
-        <>
-          <View style={{ height: 1, backgroundColor: colors.border, marginVertical: spacing.md, marginHorizontal: -spacing.md }} />
-          <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.xs + 2, gap: spacing.sm, marginBottom: spacing.md }}>
-            <View style={{ width: 24, alignItems: 'center' }}>
-              <Ionicons name="flag-outline" size={12} color={colors.textSecondary} />
+      {matchDetail.referee && (() => {
+        const parts = matchDetail.referee.split(',');
+        const refCountry = parts.length > 1 ? parts.pop()!.trim() : null;
+        const refName = parts.join(',').trim();
+        const refFlag = nationalityFlag(refCountry);
+        return (
+          <>
+            <View style={{ height: 1, backgroundColor: colors.border, marginVertical: spacing.md, marginHorizontal: -spacing.md }} />
+            <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.xs + 2, gap: spacing.sm, marginBottom: spacing.md }}>
+              <View style={{ width: 24, alignItems: 'center' }}>
+                {refFlag ? <Text style={{ fontSize: 14 }}>{refFlag}</Text> : <Ionicons name="flag-outline" size={12} color={colors.textSecondary} />}
+              </View>
+              {motmWinnerId === REFEREE_MOTM_ID && <Text style={{ fontSize: 13 }}>⭐</Text>}
+              <Text style={{ ...typography.body, color: motmWinnerId === REFEREE_MOTM_ID ? '#f59e0b' : colors.textSecondary, fontSize: 14, fontStyle: 'italic', flex: 1, fontWeight: motmWinnerId === REFEREE_MOTM_ID ? '700' : '400' }}>
+                {refName} (Referee)
+              </Text>
             </View>
-            {motmWinnerId === REFEREE_MOTM_ID && <Text style={{ fontSize: 13 }}>⭐</Text>}
-            <Text style={{ ...typography.body, color: motmWinnerId === REFEREE_MOTM_ID ? '#f59e0b' : colors.textSecondary, fontSize: 14, fontStyle: 'italic', flex: 1, fontWeight: motmWinnerId === REFEREE_MOTM_ID ? '700' : '400' }}>
-              {matchDetail.referee} (Referee)
-            </Text>
-          </View>
-        </>
-      )}
+          </>
+        );
+      })()}
     </View>
   );
 }
