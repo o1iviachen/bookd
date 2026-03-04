@@ -277,7 +277,7 @@ export function TeamDetailScreen({ route, navigation }: any) {
 
           {/* ─── Squad Tab ─── */}
           <View style={{ width: screenWidth }}>
-            <View style={{ padding: spacing.md }}>
+            <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.md, paddingBottom: spacing.xs }}>
               {detailLoading ? (
                 <View style={{ paddingVertical: spacing.xxl }}><LoadingSpinner fullScreen={false} /></View>
               ) : squadByPosition.size === 0 ? (
@@ -367,29 +367,18 @@ export function TeamDetailScreen({ route, navigation }: any) {
                     <Text style={{ ...typography.body, color: colors.foreground, fontSize: 14, fontWeight: '500', flex: 1, textAlign: 'right', marginLeft: spacing.md }}>{teamDetail?.venue || '—'}</Text>
                   </View>
 
-                  {/* Team Colours */}
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border }}>
-                    <Text style={{ ...typography.body, color: colors.textSecondary, fontSize: 14 }}>Team Colours</Text>
-                    <Text style={{ ...typography.body, color: colors.foreground, fontSize: 14, fontWeight: '500', flex: 1, textAlign: 'right', marginLeft: spacing.md }}>{teamDetail?.clubColors || '—'}</Text>
-                  </View>
-
                   {/* Competitions */}
-                  {teamDetail && teamDetail.activeCompetitions.length > 0 ? (
-                    teamDetail.activeCompetitions.map((comp, i) => (
-                      <View key={comp.id} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border }}>
-                        <Text style={{ ...typography.body, color: colors.textSecondary, fontSize: 14 }}>{i === 0 ? 'Competitions' : ''}</Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
-                          <View style={{ backgroundColor: '#fff', borderRadius: 3, padding: 2 }}>
-                            <Image source={{ uri: comp.emblem }} style={{ width: 16, height: 16 }} contentFit="contain" />
+                  {teamDetail && teamDetail.activeCompetitions.length > 0 && (
+                    <View style={{ flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border }}>
+                      <Text style={{ ...typography.body, color: colors.textSecondary, fontSize: 14, width: 100 }}>Competitions</Text>
+                      <View style={{ flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, justifyContent: 'flex-end' }}>
+                        {teamDetail.activeCompetitions.map((comp) => (
+                          <View key={comp.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                            <Image source={{ uri: comp.emblem }} style={{ width: 14, height: 14 }} contentFit="contain" />
+                            <Text style={{ ...typography.caption, color: colors.foreground, fontWeight: '500' }}>{comp.name}</Text>
                           </View>
-                          <Text style={{ ...typography.body, color: colors.foreground, fontSize: 14, fontWeight: '500' }}>{comp.name}</Text>
-                        </View>
+                        ))}
                       </View>
-                    ))
-                  ) : (
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border }}>
-                      <Text style={{ ...typography.body, color: colors.textSecondary, fontSize: 14 }}>Competitions</Text>
-                      <Text style={{ ...typography.body, color: colors.foreground, fontSize: 14, fontWeight: '500' }}>—</Text>
                     </View>
                   )}
                 </View>
