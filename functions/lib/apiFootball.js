@@ -100,7 +100,15 @@ async function getTeamCoach(teamId) {
     await rateLimit();
     const response = await client.get('/coachs', { params: { team: teamId } });
     const coaches = response.data.response || [];
-    // Return the most recent (last) coach entry — API returns career history
-    return coaches.length > 0 ? coaches[coaches.length - 1] : null;
+    if (coaches.length === 0)
+        return null;
+    // Find the coach whose career has this team with no end date (= current)
+    for (const coach of coaches) {
+        const current = (coach.career || []).find((c) => { var _a; return ((_a = c.team) === null || _a === void 0 ? void 0 : _a.id) === teamId && !c.end; });
+        if (current)
+            return coach;
+    }
+    // Fallback: return the last coach entry
+    return coaches[coaches.length - 1];
 }
 //# sourceMappingURL=apiFootball.js.map

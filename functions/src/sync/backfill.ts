@@ -702,14 +702,16 @@ export async function enrichPlayersFromSquads(batchLimit = 50, offset = 0): Prom
       apiCalls++;
       const coachResponse = await getTeamCoach(teamId);
       if (coachResponse) {
-        const firstWord = (coachResponse.firstname || '').split(/\s+/)[0];
+        // Prefer firstname + lastname for full name (name field is often abbreviated like "P. Guardiola")
+        const firstName = (coachResponse.firstname || '').trim();
+        const lastName = (coachResponse.lastname || '').trim();
         const coachName = decodeEntities(
-          coachResponse.name
-            || (firstWord && coachResponse.lastname ? `${firstWord} ${coachResponse.lastname}` : coachResponse.firstname || coachResponse.lastname || '')
+          firstName && lastName ? `${firstName} ${lastName}`
+            : firstName || lastName || coachResponse.name || ''
         );
         teamUpdate.coach = { id: coachResponse.id, name: coachName };
 
-        // Also update the coach's player doc with full name + photo
+        // Also update the coach's player doc with full name + photo + DOB
         const coachRef = db.collection(COLLECTIONS.PLAYERS).doc(String(coachResponse.id));
         await coachRef.set({
           id: coachResponse.id,
@@ -719,6 +721,7 @@ export async function enrichPlayersFromSquads(batchLimit = 50, offset = 0): Prom
           searchPrefixes: generateSearchPrefixes(coachName),
           photo: coachResponse.photo || null,
           nationality: coachResponse.nationality || null,
+          dateOfBirth: coachResponse.birth?.date || null,
           position: 'Coach',
           currentTeam: { id: teamId, name: teamName, crest: teamCrest },
           leagueTier: teamTier,

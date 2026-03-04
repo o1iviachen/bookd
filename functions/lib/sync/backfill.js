@@ -486,7 +486,7 @@ async function fetchTeamColors(batchLimit = 100) {
  *   ?offset=0 — skip this many teams (for resuming)
  */
 async function enrichPlayersFromSquads(batchLimit = 50, offset = 0) {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l;
     // Determine current season
     const now = new Date();
     const month = now.getMonth() + 1;
@@ -668,11 +668,13 @@ async function enrichPlayersFromSquads(batchLimit = 50, offset = 0) {
             apiCalls++;
             const coachResponse = await (0, apiFootball_1.getTeamCoach)(teamId);
             if (coachResponse) {
-                const firstWord = (coachResponse.firstname || '').split(/\s+/)[0];
-                const coachName = decodeEntities(coachResponse.name
-                    || (firstWord && coachResponse.lastname ? `${firstWord} ${coachResponse.lastname}` : coachResponse.firstname || coachResponse.lastname || ''));
+                // Prefer firstname + lastname for full name (name field is often abbreviated like "P. Guardiola")
+                const firstName = (coachResponse.firstname || '').trim();
+                const lastName = (coachResponse.lastname || '').trim();
+                const coachName = decodeEntities(firstName && lastName ? `${firstName} ${lastName}`
+                    : firstName || lastName || coachResponse.name || '');
                 teamUpdate.coach = { id: coachResponse.id, name: coachName };
-                // Also update the coach's player doc with full name + photo
+                // Also update the coach's player doc with full name + photo + DOB
                 const coachRef = db.collection(config_1.COLLECTIONS.PLAYERS).doc(String(coachResponse.id));
                 await coachRef.set({
                     id: coachResponse.id,
@@ -682,6 +684,7 @@ async function enrichPlayersFromSquads(batchLimit = 50, offset = 0) {
                     searchPrefixes: generateSearchPrefixes(coachName),
                     photo: coachResponse.photo || null,
                     nationality: coachResponse.nationality || null,
+                    dateOfBirth: ((_l = coachResponse.birth) === null || _l === void 0 ? void 0 : _l.date) || null,
                     position: 'Coach',
                     currentTeam: { id: teamId, name: teamName, crest: teamCrest },
                     leagueTier: teamTier,

@@ -259,12 +259,27 @@ export interface ApiCoach {
   lastname: string;
   nationality: string | null;
   photo: string;
+  birth: { date: string | null; place: string | null; country: string | null };
+  career: Array<{
+    team: { id: number; name: string; logo: string };
+    start: string | null;
+    end: string | null;
+  }>;
 }
 
 export async function getTeamCoach(teamId: number): Promise<ApiCoach | null> {
   await rateLimit();
   const response = await client.get('/coachs', { params: { team: teamId } });
-  const coaches = response.data.response || [];
-  // Return the most recent (last) coach entry — API returns career history
-  return coaches.length > 0 ? coaches[coaches.length - 1] : null;
+  const coaches: ApiCoach[] = response.data.response || [];
+  if (coaches.length === 0) return null;
+
+  // Find the coach whose career has this team with no end date (= current)
+  for (const coach of coaches) {
+    const current = (coach.career || []).find(
+      (c) => c.team?.id === teamId && !c.end
+    );
+    if (current) return coach;
+  }
+  // Fallback: return the last coach entry
+  return coaches[coaches.length - 1];
 }
