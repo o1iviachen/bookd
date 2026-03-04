@@ -8,6 +8,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { TextInput } from '../../components/ui/TextInput';
 import { Button } from '../../components/ui/Button';
+import { GoogleSignInButton } from '../../components/auth/GoogleSignInButton';
 import { AuthStackParamList } from '../../types/navigation';
 import { isUsernameClean } from '../../utils/moderation';
 import { isUsernameReserved } from '../../utils/reservedUsernames';
@@ -90,7 +91,7 @@ export function SignUpScreen({ navigation }: Props) {
         keyboardShouldPersistTaps="handled"
       >
         {/* Hero image area */}
-        <View style={{ height: height * 0.35 }}>
+        <View style={{ height: height * 0.25 }}>
           <Image
             source={require('../../../assets/stadium-background.jpg')}
             style={{ width: '100%', height: '100%' }}
@@ -126,7 +127,7 @@ export function SignUpScreen({ navigation }: Props) {
             backgroundColor: colors.background,
             paddingHorizontal: spacing.xl,
             paddingTop: spacing.lg,
-            paddingBottom: height * 0.05,
+            paddingBottom: spacing.lg,
           }}
         >
           <Text
@@ -202,6 +203,15 @@ export function SignUpScreen({ navigation }: Props) {
             size="lg"
             style={{ marginTop: spacing.sm }}
           />
+
+          {/* Divider */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: spacing.lg }}>
+            <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
+            <Text style={{ ...typography.caption, color: colors.textSecondary, marginHorizontal: spacing.md }}>or</Text>
+            <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
+          </View>
+
+          <GoogleSignInButton />
 
           <Text
             style={{

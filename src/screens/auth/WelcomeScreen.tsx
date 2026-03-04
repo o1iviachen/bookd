@@ -77,6 +77,7 @@ export function WelcomeScreen({ navigation }: Props) {
             variant="outline"
             size="lg"
           />
+
         </View>
       </View>
     </View>

@@ -8,6 +8,7 @@ import { OnboardingStack } from './OnboardingStack';
 import { MainTabs } from './MainTabs';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { navigationRef } from './navigationRef';
+import { CreateUsernameScreen } from '../screens/auth/CreateUsernameScreen';
 
 const prefix = Linking.createURL('/');
 
@@ -34,7 +35,7 @@ const linking = {
 };
 
 export function RootNavigator() {
-  const { user, loading, needsOnboarding } = useAuth();
+  const { user, loading, needsOnboarding, needsUsername } = useAuth();
   const { theme, isDark } = useTheme();
 
   if (loading) {
@@ -43,6 +44,7 @@ export function RootNavigator() {
 
   const getContent = () => {
     if (!user) return <AuthStack />;
+    if (needsUsername) return <CreateUsernameScreen />;
     if (needsOnboarding) return <OnboardingStack />;
     return <MainTabs />;
   };
