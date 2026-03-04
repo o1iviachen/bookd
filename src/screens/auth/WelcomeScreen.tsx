@@ -62,7 +62,7 @@ export function WelcomeScreen({ navigation }: Props) {
               marginTop: spacing.xs,
             }}
           >
-            Book it.
+            The beautiful game, remembered.
           </Text>
         </View>
 

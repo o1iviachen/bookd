@@ -238,7 +238,7 @@ export function FeedScreen() {
       {/* Sticky header */}
       <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }}>
         <Text style={{ fontSize: 24, fontWeight: '700', color: colors.primary, letterSpacing: -0.5, textAlign: 'center' }}>
-          bookd
+          bookd.
         </Text>
 
         {/* Pill-style tabs */}
