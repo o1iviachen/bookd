@@ -44,18 +44,37 @@ export function PersonDetailScreen({ route, navigation }: any) {
   const POSTER_WIDTH = (screenWidth - spacing.md * 2 - POSTER_GAP * (COLUMNS - 1)) / COLUMNS;
 
   // Dual-role detection: split matches into coaching vs playing appearances
-  // Only trust coach appearances when the Firestore record supports it
-  // (prevents API data errors like a player ID appearing as coach on wrong matches)
+  // Detects API data clashes where a coach ID incorrectly matches a player ID
   const { coachAppearances, playerAppearances, isDualRole } = useMemo(() => {
     if (!personMatches) return { coachAppearances: [], playerAppearances: [], isDualRole: false };
     const coach = personMatches.filter((a) => a.role === 'coach');
     const player = personMatches.filter((a) => a.role !== 'coach');
+
+    if (coach.length === 0) {
+      return { coachAppearances: [], playerAppearances: player, isDualRole: false };
+    }
+
     const personIsCoach = person?.position === 'Coach' || !!person?.formerPosition;
     const trustCoachRole = role === 'manager' || personIsCoach;
-    if (!trustCoachRole && coach.length > 0) {
+
+    if (!trustCoachRole) {
       // Discard spurious coach appearances for known players
       return { coachAppearances: [], playerAppearances: player, isDualRole: false };
     }
+
+    // Detect data clash: player and coach appearances in overlapping time periods
+    // (e.g., active player whose ID clashes with a coach in API data)
+    // Real player-turned-managers have a gap between playing and coaching careers
+    if (player.length > 0) {
+      const ONE_YEAR = 365 * 24 * 60 * 60 * 1000;
+      const latestPlayer = Math.max(...player.map((a) => new Date(a.match.kickoff).getTime()));
+      const earliestCoach = Math.min(...coach.map((a) => new Date(a.match.kickoff).getTime()));
+      if (earliestCoach < latestPlayer + ONE_YEAR) {
+        // Overlapping careers = data clash, discard coach appearances
+        return { coachAppearances: [], playerAppearances: player, isDualRole: false };
+      }
+    }
+
     return { coachAppearances: coach, playerAppearances: player, isDualRole: coach.length > 0 && player.length > 0 };
   }, [personMatches, person, role]);
 
@@ -145,7 +164,7 @@ export function PersonDetailScreen({ route, navigation }: any) {
     }
   };
 
-  const isManager = role === 'manager';
+
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
@@ -178,17 +197,21 @@ export function PersonDetailScreen({ route, navigation }: any) {
 
                 {/* Badges row */}
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginBottom: spacing.sm }}>
-                  {(isManager || isDualRole || person.position === 'Coach') && (
+                  {coachAppearances.length > 0 && (
                     <View style={{ backgroundColor: colors.primary, paddingHorizontal: 10, paddingVertical: 3, borderRadius: borderRadius.full }}>
                       <Text style={{ fontSize: 11, fontWeight: '700', color: '#14181c' }}>Manager</Text>
                     </View>
                   )}
-                  {/* Show playing position badge: formerPosition for dual-role managers, or position for players */}
-                  {(person.formerPosition || (!isManager && person.position && person.position !== 'Coach')) && (
-                    <View style={{ backgroundColor: colors.primary, paddingHorizontal: 10, paddingVertical: 3, borderRadius: borderRadius.full }}>
-                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#14181c' }}>{positionLabel(person.formerPosition || person.position)}</Text>
-                    </View>
-                  )}
+                  {/* Show playing position badge: formerPosition for dual-role/corrupted managers, or position for players */}
+                  {(() => {
+                    const showAsManager = coachAppearances.length > 0;
+                    const pos = showAsManager ? person.formerPosition : (person.position === 'Coach' ? person.formerPosition : person.position);
+                    return pos ? (
+                      <View style={{ backgroundColor: colors.primary, paddingHorizontal: 10, paddingVertical: 3, borderRadius: borderRadius.full }}>
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#14181c' }}>{positionLabel(pos)}</Text>
+                      </View>
+                    ) : null;
+                  })()}
                   {person.nationality && (
                     <View style={{ backgroundColor: colors.muted, paddingHorizontal: 10, paddingVertical: 3, borderRadius: borderRadius.full }}>
                       <Text style={{ fontSize: 11, fontWeight: '500', color: colors.foreground }}>
@@ -196,7 +219,7 @@ export function PersonDetailScreen({ route, navigation }: any) {
                       </Text>
                     </View>
                   )}
-                  {!isManager && person.shirtNumber != null && (
+                  {coachAppearances.length === 0 && person.shirtNumber != null && (
                     <View style={{ backgroundColor: colors.muted, paddingHorizontal: 10, paddingVertical: 3, borderRadius: borderRadius.full }}>
                       <Text style={{ fontSize: 11, fontWeight: '500', color: colors.foreground }}>#{person.shirtNumber}</Text>
                     </View>

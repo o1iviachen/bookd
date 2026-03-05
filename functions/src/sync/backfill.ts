@@ -312,26 +312,26 @@ export async function buildPlayersAndEnrichTeams(): Promise<{ players: number; t
         teamCoaches.set(awayTeamId, { id: d.awayCoach.id, name: d.awayCoach.name });
       }
     }
-    // Coaches as player docs — preserve formerPosition if they were a player
+    // Coaches as player docs — only create if the ID doesn't already exist as a
+    // lineup/bench player (API data sometimes has coach ID clashes with player IDs).
+    // Real coaches are handled correctly by the enrichment step via getTeamCoach().
     if (d.homeCoach?.id) {
       const existing = playersMap.get(d.homeCoach.id);
-      if (existing && existing.position && existing.position !== 'Coach') {
-        existing.formerPosition = existing.position;
+      if (!existing || existing.position === 'Coach' || !existing.position) {
+        upsertPlayer(
+          { id: d.homeCoach.id, name: d.homeCoach.name, position: 'Coach' },
+          homeTeamId, homeTeamName, homeTeamCrest, competitionCode
+        );
       }
-      upsertPlayer(
-        { id: d.homeCoach.id, name: d.homeCoach.name, position: 'Coach' },
-        homeTeamId, homeTeamName, homeTeamCrest, competitionCode
-      );
     }
     if (d.awayCoach?.id) {
       const existing = playersMap.get(d.awayCoach.id);
-      if (existing && existing.position && existing.position !== 'Coach') {
-        existing.formerPosition = existing.position;
+      if (!existing || existing.position === 'Coach' || !existing.position) {
+        upsertPlayer(
+          { id: d.awayCoach.id, name: d.awayCoach.name, position: 'Coach' },
+          awayTeamId, awayTeamName, awayTeamCrest, competitionCode
+        );
       }
-      upsertPlayer(
-        { id: d.awayCoach.id, name: d.awayCoach.name, position: 'Coach' },
-        awayTeamId, awayTeamName, awayTeamCrest, competitionCode
-      );
     }
   }
   console.log(`[buildPlayers] Processed all details: ${playersMap.size} players`);
