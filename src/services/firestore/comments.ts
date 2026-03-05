@@ -23,6 +23,7 @@ export interface Comment {
   username: string;
   userAvatar: string | null;
   text: string;
+  gifUrl: string | null;
   likes: number;
   likedBy: string[];
   createdAt: Date;
@@ -38,6 +39,7 @@ function docToComment(docSnap: any): Comment {
     username: data.username || 'Anonymous',
     userAvatar: data.userAvatar || null,
     text: data.text || '',
+    gifUrl: data.gifUrl || null,
     likes: data.likes || 0,
     likedBy: data.likedBy || [],
     createdAt: data.createdAt?.toDate() || new Date(),
@@ -51,6 +53,7 @@ export async function createComment(
   userAvatar: string | null,
   text: string,
   parentId: string | null = null,
+  gifUrl: string | null = null,
 ): Promise<string> {
   const ref = await addDoc(collection(db, 'comments'), {
     reviewId,
@@ -59,6 +62,7 @@ export async function createComment(
     username,
     userAvatar,
     text,
+    gifUrl,
     likes: 0,
     likedBy: [],
     createdAt: serverTimestamp(),

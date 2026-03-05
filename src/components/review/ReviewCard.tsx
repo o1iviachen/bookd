@@ -134,7 +134,7 @@ export function ReviewCard({ review, onPress, commentCount: commentCountProp, is
 
             {/* Media gallery */}
             {review.media && review.media.length > 0 && (
-              <ScrollView
+              <ScrollView showsVerticalScrollIndicator={false}
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 style={{ marginBottom: spacing.sm }}
@@ -153,13 +153,14 @@ export function ReviewCard({ review, onPress, commentCount: commentCountProp, is
                     }}
                   >
                     <Image
-                      source={{ uri: item.type === 'video' && item.thumbnailUrl ? item.thumbnailUrl : item.url }}
+                      source={{ uri: item.url }}
                       style={{ width: 120, height: 120 }}
                       contentFit="cover"
+                      autoplay={item.type === 'gif'}
                     />
-                    {item.type === 'video' && (
+                    {item.type === 'gif' && (
                       <View style={{ position: 'absolute', bottom: 4, left: 4, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1 }}>
-                        <Ionicons name="videocam" size={10} color="#fff" />
+                        <Text style={{ color: '#fff', fontSize: 9, fontWeight: '700' }}>GIF</Text>
                       </View>
                     )}
                   </Pressable>

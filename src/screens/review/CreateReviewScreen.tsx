@@ -22,10 +22,12 @@ import { isTextClean } from '../../utils/moderation';
 import { MentionInput } from '../../components/ui/MentionInput';
 import { shortName } from '../../utils/formatName';
 import { nationalityFlag } from '../../utils/flagEmoji';
+import { GifPickerModal } from '../../components/ui/GifPickerModal';
+import { TenorGif } from '../../services/tenor';
 
 interface LocalMedia {
   uri: string;
-  type: 'image';
+  type: 'image' | 'gif';
 }
 
 const screenWidth = Dimensions.get('window').width;
@@ -64,6 +66,7 @@ export function CreateReviewScreen({ route, navigation }: any) {
   const [previewImageUri, setPreviewImageUri] = useState<string | null>(null);
   const [motmPlayerId, setMotmPlayerId] = useState<number | null>(null);
   const [showMotmModal, setShowMotmModal] = useState(false);
+  const [showGifPicker, setShowGifPicker] = useState(false);
 
   const isWatched = profile?.watchedMatchIds?.some((id) => String(id) === String(matchId)) || rating > 0 || text.trim().length > 0;
 
@@ -156,6 +159,13 @@ export function CreateReviewScreen({ route, navigation }: any) {
       console.error('Pick media error:', err);
       Alert.alert('Error', 'Failed to pick photo. Please try again.');
     }
+  };
+
+  const handleGifSelect = (gif: TenorGif) => {
+    setShowGifPicker(false);
+    const totalMedia = mediaItems.length + existingMedia.length;
+    if (totalMedia >= 4) return;
+    setMediaItems((prev) => [...prev, { uri: gif.url, type: 'gif' as const }]);
   };
 
   const removeMedia = (index: number) => {
@@ -339,13 +349,17 @@ export function CreateReviewScreen({ route, navigation }: any) {
 
     setUploading(true);
     try {
-      // Upload new media files to Firebase Storage
+      // Upload new media files to Firebase Storage (skip GIFs — use Tenor URL directly)
       const uploadedMedia: ReviewMedia[] = [];
       const tempReviewId = reviewId || `${Date.now()}`;
       for (let i = 0; i < mediaItems.length; i++) {
         const item = mediaItems[i];
-        const url = await uploadReviewMedia(user.uid, tempReviewId, item.uri, item.type, i);
-        uploadedMedia.push({ url, type: item.type });
+        if (item.type === 'gif') {
+          uploadedMedia.push({ url: item.uri, type: 'gif' });
+        } else {
+          const url = await uploadReviewMedia(user.uid, tempReviewId, item.uri, item.type, i);
+          uploadedMedia.push({ url, type: item.type });
+        }
       }
 
       const allMedia = [...existingMedia, ...uploadedMedia];
@@ -411,7 +425,7 @@ export function CreateReviewScreen({ route, navigation }: any) {
           <View style={{ width: 24 }} />
         </View>
 
-        <ScrollView indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ padding: spacing.md, paddingBottom: spacing.md }}>
+        <ScrollView showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ padding: spacing.md, paddingBottom: spacing.md }}>
           {/* Match info */}
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, marginBottom: spacing.lg }}>
             <TeamLogo uri={match.homeTeam.crest} size={28} />
@@ -474,7 +488,7 @@ export function CreateReviewScreen({ route, navigation }: any) {
 
           {/* Media attachments */}
           <Text style={{ ...typography.bodyBold, color: colors.foreground, marginBottom: spacing.sm }}>
-            Photos
+            Media
           </Text>
           <View
             ref={mediaContainerRef}
@@ -491,6 +505,7 @@ export function CreateReviewScreen({ route, navigation }: any) {
               const existingItem = isExisting ? existingMedia[meta.index] : null;
               const newItem = !isExisting ? mediaItems[meta.index] : null;
               const thumbnailUri = isExisting ? existingItem!.url : newItem!.uri;
+              const isGif = isExisting ? existingItem!.type === 'gif' : newItem!.type === 'gif';
               const isDragging = dragIdx === globalIndex;
 
               const handleRemove = () => {
@@ -519,6 +534,11 @@ export function CreateReviewScreen({ route, navigation }: any) {
                       style={{ width: 80, height: 80 }}
                       contentFit="cover"
                     />
+                    {isGif && (
+                      <View style={{ position: 'absolute', bottom: 4, left: 4, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1 }}>
+                        <Text style={{ color: '#fff', fontSize: 9, fontWeight: '700' }}>GIF</Text>
+                      </View>
+                    )}
                     <Pressable
                       onPress={handleRemove}
                       style={{
@@ -574,22 +594,39 @@ export function CreateReviewScreen({ route, navigation }: any) {
               );
             })()}
             {totalMediaCount < 4 && (
-              <Pressable
-                onPress={handlePickMedia}
-                style={{
-                  width: 80,
-                  height: 80,
-                  borderRadius: borderRadius.md,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  borderStyle: 'dashed',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Ionicons name="camera-outline" size={24} color={colors.textSecondary} />
-                <Text style={{ ...typography.small, color: colors.textSecondary, marginTop: 2 }}>Add</Text>
-              </Pressable>
+              <>
+                <Pressable
+                  onPress={handlePickMedia}
+                  style={{
+                    width: 80,
+                    height: 80,
+                    borderRadius: borderRadius.md,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    borderStyle: 'dashed',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Ionicons name="camera-outline" size={24} color={colors.textSecondary} />
+                  <Text style={{ ...typography.small, color: colors.textSecondary, marginTop: 2 }}>Photo</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => setShowGifPicker(true)}
+                  style={{
+                    width: 80,
+                    height: 80,
+                    borderRadius: borderRadius.md,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    borderStyle: 'dashed',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Text style={{ fontSize: 18, fontWeight: '800', color: colors.textSecondary }}>GIF</Text>
+                </Pressable>
+              </>
             )}
           </View>
 
@@ -802,6 +839,12 @@ export function CreateReviewScreen({ route, navigation }: any) {
           )}
         </Pressable>
       </Modal>
+
+      <GifPickerModal
+        visible={showGifPicker}
+        onClose={() => setShowGifPicker(false)}
+        onSelect={handleGifSelect}
+      />
 
     </SafeAreaView>
   );

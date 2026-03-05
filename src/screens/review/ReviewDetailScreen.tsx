@@ -29,6 +29,8 @@ import { isTextClean } from '../../utils/moderation';
 import { buildReplyMap } from '../../utils/comments';
 import { MOTMBadge } from '../../components/review/MOTMBadge';
 import { Comment } from '../../services/firestore/comments';
+import { GifPickerModal } from '../../components/ui/GifPickerModal';
+import { TenorGif } from '../../services/tenor';
 import { User } from '../../types/user';
 
 export function ReviewDetailScreen({ route, navigation }: any) {
@@ -45,6 +47,8 @@ export function ReviewDetailScreen({ route, navigation }: any) {
   const deleteReview = useDeleteReview();
   const deleteCommentMutation = useDeleteComment();
   const [commentText, setCommentText] = useState('');
+  const [commentGif, setCommentGif] = useState<TenorGif | null>(null);
+  const [showGifPicker, setShowGifPicker] = useState(false);
   const [replyingTo, setReplyingTo] = useState<{ id: string; username: string } | null>(null);
   const [showMenu, setShowMenu] = useState(false);
   const [showLikes, setShowLikes] = useState(false);
@@ -133,15 +137,17 @@ export function ReviewDetailScreen({ route, navigation }: any) {
     Share.share({ message: `${line1}\nbookd://review/${review.id}` });
   };
 
-  const handleReply = (_commentId: string, username: string) => {
-    setReplyingTo({ id: _commentId, username });
+  const handleReply = (_commentId: string, username: string, parentId?: string | null) => {
+    // Always reply to the top-level comment so replies stay flat (1 level deep)
+    const topLevelId = parentId || _commentId;
+    setReplyingTo({ id: topLevelId, username });
     setCommentText(`@${username} `);
     inputRef.current?.focus();
   };
 
   const handleSubmitComment = async () => {
-    if (!user || !commentText.trim()) return;
-    if (!isTextClean(commentText)) {
+    if (!user || (!commentText.trim() && !commentGif)) return;
+    if (commentText.trim() && !isTextClean(commentText)) {
       Alert.alert('Content Warning', 'Your comment contains inappropriate language. Please revise.');
       return;
     }
@@ -153,8 +159,10 @@ export function ReviewDetailScreen({ route, navigation }: any) {
         userAvatar: profile?.avatar || null,
         text: commentText.trim(),
         parentId: replyingTo?.id || null,
+        gifUrl: commentGif?.url || null,
       });
       setCommentText('');
+      setCommentGif(null);
       setReplyingTo(null);
       setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 200);
     } catch {}
@@ -268,7 +276,7 @@ export function ReviewDetailScreen({ route, navigation }: any) {
           }}
         />
 
-        <ScrollView indicatorStyle={isDark ? 'white' : 'default'}
+        <ScrollView showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'}
           ref={scrollRef}
           contentContainerStyle={{ paddingBottom: spacing.md }}
           keyboardShouldPersistTaps="handled"
@@ -338,7 +346,7 @@ export function ReviewDetailScreen({ route, navigation }: any) {
 
             {/* Media gallery */}
             {review.media && review.media.length > 0 && (
-              <ScrollView
+              <ScrollView showsVerticalScrollIndicator={false}
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 style={{ marginBottom: spacing.md }}
@@ -357,13 +365,14 @@ export function ReviewDetailScreen({ route, navigation }: any) {
                     }}
                   >
                     <Image
-                      source={{ uri: item.type === 'video' && item.thumbnailUrl ? item.thumbnailUrl : item.url }}
+                      source={{ uri: item.url }}
                       style={{ width: 200, height: 200 }}
                       contentFit="cover"
+                      autoplay={item.type === 'gif'}
                     />
-                    {item.type === 'video' && (
+                    {item.type === 'gif' && (
                       <View style={{ position: 'absolute', bottom: 6, left: 6, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
-                        <Ionicons name="videocam" size={12} color="#fff" />
+                        <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>GIF</Text>
                       </View>
                     )}
                   </Pressable>
@@ -493,6 +502,20 @@ export function ReviewDetailScreen({ route, navigation }: any) {
                 </Pressable>
               </View>
             )}
+            {/* GIF preview */}
+            {commentGif && (
+              <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.sm }}>
+                <View style={{ width: 80, height: 80, borderRadius: borderRadius.md, overflow: 'hidden' }}>
+                  <Image source={{ uri: commentGif.previewUrl }} style={{ width: 80, height: 80 }} contentFit="cover" autoplay />
+                  <Pressable
+                    onPress={() => setCommentGif(null)}
+                    style={{ position: 'absolute', top: 2, right: 2, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 8, width: 16, height: 16, alignItems: 'center', justifyContent: 'center' }}
+                  >
+                    <Ionicons name="close" size={10} color="#fff" />
+                  </Pressable>
+                </View>
+              </View>
+            )}
             <View style={{
               flexDirection: 'row',
               alignItems: 'center',
@@ -501,29 +524,36 @@ export function ReviewDetailScreen({ route, navigation }: any) {
               gap: spacing.sm,
             }}>
               <Avatar uri={profile?.avatar || null} name={profile?.displayName || 'You'} size={28} />
-              <MentionInput
-                inputRef={inputRef}
-                value={commentText}
-                onChangeText={setCommentText}
-                placeholder={replyingTo ? `Reply to @${replyingTo.username}...` : 'Add a comment...'}
-                maxLength={500}
-                containerStyle={{ flex: 1 }}
-                inputStyle={{
-                  backgroundColor: colors.muted,
-                  borderRadius: borderRadius.full,
-                  paddingHorizontal: spacing.md,
-                  paddingVertical: spacing.sm,
-                }}
-              />
+              <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: colors.muted, borderRadius: borderRadius.full, paddingRight: spacing.sm }}>
+                <MentionInput
+                  inputRef={inputRef}
+                  value={commentText}
+                  onChangeText={setCommentText}
+                  placeholder={replyingTo ? `Reply to @${replyingTo.username}...` : 'Add a comment...'}
+                  maxLength={500}
+                  containerStyle={{ flex: 1 }}
+                  inputStyle={{
+                    paddingHorizontal: spacing.md,
+                    paddingVertical: spacing.sm,
+                  }}
+                />
+                <Pressable
+                  onPress={() => setShowGifPicker(true)}
+                  style={{ opacity: commentGif ? 0.4 : 1, paddingLeft: 4 }}
+                  disabled={!!commentGif}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: '800', color: colors.textSecondary }}>GIF</Text>
+                </Pressable>
+              </View>
               <Pressable
                 onPress={handleSubmitComment}
-                disabled={!commentText.trim() || createComment.isPending}
-                style={{ opacity: commentText.trim() ? 1 : 0.4 }}
+                disabled={(!commentText.trim() && !commentGif) || createComment.isPending}
+                style={{ opacity: (commentText.trim() || commentGif) ? 1 : 0.4 }}
               >
                 <Ionicons
                   name="send"
                   size={22}
-                  color={commentText.trim() ? colors.primary : colors.textSecondary}
+                  color={(commentText.trim() || commentGif) ? colors.primary : colors.textSecondary}
                 />
               </Pressable>
             </View>
@@ -538,6 +568,12 @@ export function ReviewDetailScreen({ route, navigation }: any) {
           onClose={() => setMediaViewerIndex(-1)}
         />
       )}
+
+      <GifPickerModal
+        visible={showGifPicker}
+        onClose={() => setShowGifPicker(false)}
+        onSelect={(gif) => { setCommentGif(gif); setShowGifPicker(false); }}
+      />
 
     </SafeAreaView>
   );
@@ -561,7 +597,7 @@ function CommentRow({
   comment: Comment;
   userId: string | null;
   onLike: (id: string) => void;
-  onReply: (id: string, username: string) => void;
+  onReply: (id: string, username: string, parentId?: string | null) => void;
   onDelete: (id: string) => void;
   colors: any;
   spacing: any;
@@ -612,7 +648,13 @@ function CommentRow({
             {formatRelativeTime(comment.createdAt)}
           </Text>
         </View>
-        <MentionText text={comment.text} fontSize={isReply ? 14 : 15} style={{ marginTop: 2 }} />
+        {comment.text ? <MentionText text={comment.text} fontSize={isReply ? 14 : 15} style={{ marginTop: 2 }} /> : null}
+        {comment.gifUrl && (
+          <View style={{ marginTop: 4 }}>
+            <Image source={{ uri: comment.gifUrl }} style={{ width: 200, height: 150, borderRadius: 8 }} contentFit="cover" autoplay />
+            <Text style={{ fontSize: 8, color: colors.textSecondary, marginTop: 2 }}>via Klipy</Text>
+          </View>
+        )}
 
         {/* Like + Reply + Delete actions */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: 6 }}>
@@ -633,7 +675,7 @@ function CommentRow({
           </Pressable>
 
           <Pressable
-            onPress={() => onReply(comment.id, displayName)}
+            onPress={() => onReply(comment.id, displayName, comment.parentId)}
             style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}
           >
             <Ionicons name="chatbubble-outline" size={13} color={colors.textSecondary} />

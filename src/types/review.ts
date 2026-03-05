@@ -1,6 +1,6 @@
 export interface ReviewMedia {
   url: string;
-  type: 'image' | 'video';
+  type: 'image' | 'gif';
   thumbnailUrl?: string;
 }
 
