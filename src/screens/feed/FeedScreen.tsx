@@ -32,15 +32,16 @@ const TAB_INDICES = { Matches: 0, Reviews: 1, Lists: 2 } as const;
 import { Review } from '../../types/review';
 
 /** Separate component so useUserProfile hook fires per-item and triggers re-render when profile loads */
-function FriendReviewCard({ item, match, onPress, colors, spacing }: {
+function FriendReviewCard({ item, match, onPress, colors, spacing, viewerLikedMatchIds }: {
   item: Review;
   match: Match | undefined;
   onPress: () => void;
   colors: any;
   spacing: any;
+  viewerLikedMatchIds?: number[];
 }) {
   const { data: authorProfile } = useUserProfile(item.userId);
-  const isLiked = authorProfile?.likedMatchIds?.some((id) => String(id) === String(item.matchId)) || false;
+  const isLiked = viewerLikedMatchIds?.some((id) => Number(id) === Number(item.matchId)) || false;
   const hasText = item.text?.trim().length > 0;
   const hasMedia = item.media && item.media.length > 0;
 
@@ -286,7 +287,7 @@ export function FeedScreen() {
       >
         {/* ─── Matches Page ─── */}
         <View key="matches" style={{ flex: 1 }}>
-          <ScrollView indicatorStyle={isDark ? 'white' : 'default'}
+          <ScrollView showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'}
             style={{ flex: 1 }}
             nestedScrollEnabled
             contentContainerStyle={{ paddingTop: spacing.sm, paddingBottom: 0 }}
@@ -300,7 +301,7 @@ export function FeedScreen() {
                 <View style={{ paddingTop: spacing.sm, paddingBottom: spacing.sm }}>
                   {renderSectionHeader('Popular this week')}
                   {popularMatches.length > 0 ? (
-                    <FlatList
+                    <FlatList showsVerticalScrollIndicator={false}
                       horizontal
                       data={popularMatches}
                       keyExtractor={(item) => item.id.toString()}
@@ -321,7 +322,7 @@ export function FeedScreen() {
                 <View style={{ paddingTop: spacing.sm, paddingBottom: spacing.sm }}>
                   {renderSectionHeader('New from friends')}
                   {friendReviews.length > 0 ? (
-                    <FlatList
+                    <FlatList showsVerticalScrollIndicator={false}
                       horizontal
                       data={friendReviews}
                       keyExtractor={(item) => item.id}
@@ -334,6 +335,7 @@ export function FeedScreen() {
                           onPress={() => navigation.navigate('ReviewDetail', { reviewId: item.id })}
                           colors={colors}
                           spacing={spacing}
+                          viewerLikedMatchIds={profile?.likedMatchIds}
                         />
                       )}
                     />
@@ -390,7 +392,7 @@ export function FeedScreen() {
           {reviewsLoading ? (
             <View style={{ flex: 1, justifyContent: 'center' }}><LoadingSpinner fullScreen={false} /></View>
           ) : reviews.filter((r) => r.userId !== user?.uid).length === 0 ? (
-            <ScrollView
+            <ScrollView showsVerticalScrollIndicator={false}
               contentContainerStyle={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: spacing.xl }}
               refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#fff" colors={['#fff']} />}
             >
@@ -400,7 +402,7 @@ export function FeedScreen() {
               </Text>
             </ScrollView>
           ) : (
-            <FlatList
+            <FlatList showsVerticalScrollIndicator={false}
               data={reviews.filter((r) => r.userId !== user?.uid)}
               keyExtractor={(item) => item.id}
               renderItem={({ item, index }) => {
@@ -465,7 +467,7 @@ export function FeedScreen() {
           {listsLoading ? (
             <View style={{ flex: 1, justifyContent: 'center' }}><LoadingSpinner fullScreen={false} /></View>
           ) : lists.length === 0 ? (
-            <ScrollView
+            <ScrollView showsVerticalScrollIndicator={false}
               contentContainerStyle={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: spacing.xl }}
               refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#fff" colors={['#fff']} />}
             >
@@ -475,7 +477,7 @@ export function FeedScreen() {
               </Text>
             </ScrollView>
           ) : (
-            <FlatList
+            <FlatList showsVerticalScrollIndicator={false}
               data={lists}
               keyExtractor={(item) => item.id}
               renderItem={({ item }) => (
