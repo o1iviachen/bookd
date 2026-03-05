@@ -139,7 +139,7 @@ export function WatchedByScreen({ route, navigation }: any) {
                   title={tabIdx === 1 ? 'No friends have watched yet' : 'No one has watched yet'}
                 />
               ) : (
-                <FlatList
+                <FlatList showsVerticalScrollIndicator={false}
                   indicatorStyle={isDark ? 'white' : 'default'}
                   data={tabWatchers}
                   keyExtractor={(item) => item.userId}

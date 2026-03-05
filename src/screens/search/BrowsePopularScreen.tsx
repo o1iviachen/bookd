@@ -108,7 +108,7 @@ export function BrowsePopularScreen() {
           </Text>
         </View>
       ) : (
-        <FlatList
+        <FlatList showsVerticalScrollIndicator={false}
           indicatorStyle={isDark ? 'white' : 'default'}
           data={visibleMatches}
           numColumns={NUM_COLUMNS}

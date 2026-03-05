@@ -47,7 +47,7 @@ export function TagsScreen({ route, navigation }: any) {
           subtitle="Add tags when reviewing matches"
         />
       ) : (
-        <FlatList indicatorStyle={isDark ? 'white' : 'default'}
+        <FlatList showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'}
           data={tags}
           keyExtractor={(item) => item.tag}
           contentContainerStyle={{ paddingBottom: spacing.sm }}

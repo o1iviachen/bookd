@@ -179,7 +179,7 @@ export function PersonDetailScreen({ route, navigation }: any) {
         <View style={{ width: 22 }} />
       </View>
 
-      <ScrollView style={{ flex: 1 }} indicatorStyle={isDark ? 'white' : 'default'} onScroll={handleScroll} scrollEventThrottle={400}>
+      <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }} indicatorStyle={isDark ? 'white' : 'default'} onScroll={handleScroll} scrollEventThrottle={400}>
         {/* Person info */}
         <View style={{ padding: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }}>
           {personLoading ? (

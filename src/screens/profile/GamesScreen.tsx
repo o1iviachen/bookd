@@ -214,7 +214,7 @@ export function GamesScreen({ route, navigation }: any) {
           subtitle={entries.length === 0 ? 'Start reviewing matches to build your collection' : 'Try adjusting your filters'}
         />
       ) : (
-        <FlatList indicatorStyle={isDark ? 'white' : 'default'}
+        <FlatList showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'}
           data={visibleEntries}
           keyExtractor={(item) => String(item.matchId)}
           numColumns={NUM_COLUMNS}

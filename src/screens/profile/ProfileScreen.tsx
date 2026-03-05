@@ -118,7 +118,7 @@ export function ProfileScreen() {
         </Pressable>
       </View>
 
-      <ScrollView indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: spacing.md }}>
+      <ScrollView showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: spacing.md }}>
         {/* Avatar + name */}
         <View style={{ alignItems: 'center', paddingTop: spacing.lg, paddingHorizontal: spacing.md }}>
           <Avatar uri={profile?.avatar || null} name={profile?.displayName || 'User'} size={96} />

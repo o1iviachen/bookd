@@ -3,6 +3,7 @@ import { View, Text, KeyboardAvoidingView, Platform, ScrollView, Dimensions, Pre
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
+import { getAuthErrorMessage } from '../../utils/authErrors';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { resetPassword } from '../../services/auth';
@@ -34,7 +35,7 @@ export function ForgotPasswordScreen({ navigation }: Props) {
       await resetPassword(email);
       setSent(true);
     } catch (e: any) {
-      setError(e.message || 'Failed to send reset email');
+      setError(getAuthErrorMessage(e));
     } finally {
       setLoading(false);
     }
@@ -45,7 +46,7 @@ export function ForgotPasswordScreen({ navigation }: Props) {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={{ flex: 1, backgroundColor: colors.background }}
     >
-      <ScrollView
+      <ScrollView showsVerticalScrollIndicator={false}
         indicatorStyle={isDark ? 'white' : 'default'}
         bounces={false}
         contentContainerStyle={{ flexGrow: 1 }}

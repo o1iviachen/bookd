@@ -66,7 +66,7 @@ export function NewHereScreen() {
         <View style={{ width: 60 }} />
       </View>
 
-      <ScrollView indicatorStyle={isDark ? 'white' : 'default'}
+      <ScrollView showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'}
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: 40 }}
       >

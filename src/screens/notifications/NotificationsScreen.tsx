@@ -120,7 +120,7 @@ export function NotificationsScreen({ navigation }: any) {
       </View>
 
       {!notifications || notifications.length === 0 ? (
-        <ScrollView
+        <ScrollView showsVerticalScrollIndicator={false}
           contentContainerStyle={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
         >
@@ -133,7 +133,7 @@ export function NotificationsScreen({ navigation }: any) {
           </Text>
         </ScrollView>
       ) : (
-        <FlatList indicatorStyle={isDark ? 'white' : 'default'}
+        <FlatList showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
           data={notifications}
           keyExtractor={(item) => item.id}

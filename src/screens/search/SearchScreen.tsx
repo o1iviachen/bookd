@@ -274,7 +274,7 @@ export function SearchScreen() {
   const renderNonResultContent = () => {
     if (!isSearching) {
       return (
-        <ScrollView indicatorStyle={isDark ? 'white' : 'default'} style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 0 }} keyboardShouldPersistTaps="always" keyboardDismissMode="on-drag">
+        <ScrollView showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'} style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 0 }} keyboardShouldPersistTaps="always" keyboardDismissMode="on-drag">
           <View style={{ paddingVertical: spacing.lg, paddingHorizontal: spacing.md }}>
             <Text style={{ ...typography.h4, color: colors.foreground, marginBottom: spacing.md }}>
               Browse By
@@ -334,7 +334,7 @@ export function SearchScreen() {
     // Searching but no query yet — show recent searches
     if (!queryStr) {
       return (
-        <ScrollView indicatorStyle={isDark ? 'white' : 'default'} style={{ flex: 1 }} keyboardShouldPersistTaps="always" keyboardDismissMode="on-drag">
+        <ScrollView showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'} style={{ flex: 1 }} keyboardShouldPersistTaps="always" keyboardDismissMode="on-drag">
           {recentSearches.length > 0 ? (
             <View style={{ paddingTop: spacing.md }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm, paddingHorizontal: spacing.md }}>
@@ -419,7 +419,7 @@ export function SearchScreen() {
 
     if (activeCategory === 'matches') {
       return (
-        <FlatList
+        <FlatList showsVerticalScrollIndicator={false}
           key="matches-grid"
           data={currentResults}
           keyExtractor={keyExtractor}
@@ -446,7 +446,7 @@ export function SearchScreen() {
       : null;
 
     return (
-      <FlatList
+      <FlatList showsVerticalScrollIndicator={false}
         key="list"
         data={currentResults}
         keyExtractor={keyExtractor}
@@ -508,7 +508,7 @@ export function SearchScreen() {
 
         {/* Category tabs */}
         {isSearching && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="always" style={{ marginBottom: spacing.sm }}>
+          <ScrollView showsVerticalScrollIndicator={false} horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="always" style={{ marginBottom: spacing.sm }}>
             <View style={{ flexDirection: 'row', gap: spacing.sm }}>
               {CATEGORIES.map((cat) => (
                 <Pressable

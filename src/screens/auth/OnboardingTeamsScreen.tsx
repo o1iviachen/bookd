@@ -132,7 +132,7 @@ export function OnboardingTeamsScreen() {
         </View>
       </View>
 
-      <ScrollView indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: 120 }}>
+      <ScrollView showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: 120 }}>
         {/* Clubs section header */}
         {leagues.length > 0 && (
           <View style={{ paddingHorizontal: spacing.md, marginTop: spacing.sm, marginBottom: -spacing.sm }}>

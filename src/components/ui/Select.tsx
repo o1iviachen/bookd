@@ -136,7 +136,7 @@ export function Select({
             </View>
 
             {/* Options list */}
-            <ScrollView bounces={false}>
+            <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
               {options.map((item) => {
                 const isSelected = item.value === value;
                 return (

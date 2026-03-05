@@ -82,7 +82,7 @@ export function FavouriteMatchesScreen() {
         </Pressable>
       </View>
 
-      <ScrollView indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: 40, paddingTop: spacing.md }}>
+      <ScrollView showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: 40, paddingTop: spacing.md }}>
         <Text style={{ ...typography.caption, color: colors.textSecondary, paddingHorizontal: spacing.md, marginBottom: spacing.md }}>
           Select up to {MAX_FAVOURITES} favourite matches. These will appear on your profile.
         </Text>

@@ -83,7 +83,7 @@ export function NotificationSettingsScreen() {
         <View style={{ width: 60 }} />
       </View>
 
-      <ScrollView indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: 40 }}>
         {/* Email */}
         <View style={{ marginTop: spacing.lg, paddingHorizontal: spacing.md }}>
           <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: spacing.sm, marginLeft: spacing.xs }}>

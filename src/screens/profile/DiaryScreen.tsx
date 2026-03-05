@@ -80,7 +80,7 @@ export function DiaryScreen({ route, navigation }: any) {
           subtitle="Start logging matches to build your diary"
         />
       ) : (
-        <SectionList
+        <SectionList showsVerticalScrollIndicator={false}
           indicatorStyle={isDark ? 'white' : 'default'}
           sections={sections}
           keyExtractor={(item) => item.id}

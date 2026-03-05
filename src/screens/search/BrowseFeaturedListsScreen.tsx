@@ -29,7 +29,7 @@ export function BrowseFeaturedListsScreen() {
         <View style={{ width: 60 }} />
       </View>
 
-      <ScrollView indicatorStyle={isDark ? 'white' : 'default'} style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 100 }}>
+      <ScrollView showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'} style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 100 }}>
         {isLoading ? (
           <View style={{ marginTop: spacing.xxl }}><LoadingSpinner fullScreen={false} /></View>
         ) : !lists || lists.length === 0 ? (

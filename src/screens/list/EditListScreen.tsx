@@ -181,7 +181,7 @@ export function EditListScreen({ route, navigation }: any) {
         <View style={{ width: 24 }} />
       </View>
 
-      <ScrollView
+      <ScrollView showsVerticalScrollIndicator={false}
         indicatorStyle={isDark ? 'white' : 'default'}
         contentContainerStyle={{ paddingBottom: 100 }}
         keyboardShouldPersistTaps="handled"

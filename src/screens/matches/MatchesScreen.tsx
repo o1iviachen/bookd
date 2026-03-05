@@ -102,7 +102,7 @@ const MatchDayPage = React.memo(function MatchDayPage({
   }, [filteredMatches, favouriteMatches, followedLeagues]);
 
   return (
-    <ScrollView
+    <ScrollView showsVerticalScrollIndicator={false}
       indicatorStyle={isDark ? 'white' : 'default'}
       style={{ flex: 1 }}
       nestedScrollEnabled

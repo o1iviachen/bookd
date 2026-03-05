@@ -215,7 +215,7 @@ export function LeagueDetailScreen({ route, navigation }: any) {
       hasScrolled.current = true;
       const y = event.nativeEvent.layout.y;
       setTimeout(() => {
-        fixturesScrollRef.current?.scrollTo({ y: Math.max(y - 8, 0), animated: false });
+        fixturesScrollRef.current?.scrollTo({ y: Math.max(y + 16, 0), animated: false });
       }, 100);
     }
   }, [currentMatchday]);
@@ -244,9 +244,7 @@ export function LeagueDetailScreen({ route, navigation }: any) {
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: spacing.md,
-        paddingVertical: spacing.md,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border,
+        paddingVertical: spacing.sm + 2,
         opacity: pressed ? 0.7 : 1,
       })}
     >
@@ -310,7 +308,7 @@ export function LeagueDetailScreen({ route, navigation }: any) {
       );
     }
     return (
-      <ScrollView indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: 60 }} nestedScrollEnabled>
+      <ScrollView showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: 60 }} nestedScrollEnabled>
         {/* Table header */}
         <View style={{
           flexDirection: 'row',
@@ -394,25 +392,20 @@ export function LeagueDetailScreen({ route, navigation }: any) {
       );
     }
     return (
-      <ScrollView ref={fixturesScrollRef} indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: 60 }} nestedScrollEnabled>
+      <ScrollView showsVerticalScrollIndicator={false} ref={fixturesScrollRef} indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: 60 }} nestedScrollEnabled>
         {Array.from(fixturesByMatchday.entries())
           .sort(([a], [b]) => a - b)
           .map(([matchday, mdMatches]) => (
             <View key={matchday} onLayout={(e) => handleMatchdayLayout(matchday, e)}>
               {/* Matchday header */}
               <View style={{
-                flexDirection: 'row',
-                alignItems: 'center',
                 paddingHorizontal: spacing.md,
-                paddingTop: spacing.lg,
+                paddingTop: spacing.xl,
                 paddingBottom: spacing.sm,
-                gap: spacing.sm,
               }}>
-                <View style={{ height: 1, flex: 1, backgroundColor: colors.border }} />
-                <Text style={{ ...typography.caption, color: colors.textSecondary, fontWeight: '600', letterSpacing: 0.5 }}>
-                  MATCHDAY {matchday}
+                <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1 }}>
+                  Matchday {matchday}
                 </Text>
-                <View style={{ height: 1, flex: 1, backgroundColor: colors.border }} />
               </View>
 
               {mdMatches.map(renderFixtureRow)}
@@ -714,9 +707,9 @@ export function LeagueDetailScreen({ route, navigation }: any) {
             );
 
             return (
-              <ScrollView indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingTop: spacing.md, paddingBottom: 60 }} nestedScrollEnabled>
+              <ScrollView showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingTop: spacing.md, paddingBottom: 60 }} nestedScrollEnabled>
                 {needsHScroll ? (
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} nestedScrollEnabled>
+                  <ScrollView showsVerticalScrollIndicator={false} horizontal showsHorizontalScrollIndicator={false} nestedScrollEnabled>
                     {bracketContent}
                   </ScrollView>
                 ) : bracketContent}

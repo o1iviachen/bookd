@@ -96,7 +96,7 @@ export function ListPreviewCard({ list, onPress, onMatchPress }: ListPreviewCard
 
       {/* Poster row — horizontally scrollable */}
       {previewMatches.length > 0 && (
-        <ScrollView
+        <ScrollView showsVerticalScrollIndicator={false}
           horizontal
           showsHorizontalScrollIndicator={false}
           style={{ marginTop: spacing.sm, marginHorizontal: -spacing.md }}

@@ -57,7 +57,7 @@ export function OnboardingLeaguesScreen() {
         </Text>
       </View>
 
-      <ScrollView
+      <ScrollView showsVerticalScrollIndicator={false}
         indicatorStyle={isDark ? 'white' : 'default'}
         contentContainerStyle={{ padding: spacing.md, paddingBottom: 120, gap: spacing.sm }}
       >

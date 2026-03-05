@@ -171,7 +171,7 @@ export function BrowseByDateScreen() {
           </Text>
         </View>
       ) : (
-        <FlatList
+        <FlatList showsVerticalScrollIndicator={false}
           data={visibleMatches}
           renderItem={renderItem}
           keyExtractor={keyExtractor}

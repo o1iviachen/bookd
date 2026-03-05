@@ -18,9 +18,10 @@ interface AddToListModalProps {
   visible: boolean;
   onClose: () => void;
   matchId: number;
+  navigation?: any;
 }
 
-export function AddToListModal({ visible, onClose, matchId }: AddToListModalProps) {
+export function AddToListModal({ visible, onClose, matchId, navigation }: AddToListModalProps) {
   const { theme } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
   const { user } = useAuth();
@@ -33,6 +34,16 @@ export function AddToListModal({ visible, onClose, matchId }: AddToListModalProp
 
   const [showNewList, setShowNewList] = useState(false);
   const [newListName, setNewListName] = useState('');
+
+  const handleListPress = (listId: string, isInList: boolean) => {
+    if (!isInList) {
+      addMatch.mutate({ listId, matchId });
+    }
+    onClose();
+    if (navigation) {
+      setTimeout(() => navigation.navigate('EditList', { listId }), 300);
+    }
+  };
 
   const toggleMatch = (listId: string, isInList: boolean) => {
     if (isInList) {
@@ -115,7 +126,7 @@ export function AddToListModal({ visible, onClose, matchId }: AddToListModalProp
             </Pressable>
           </View>
 
-          <ScrollView bounces={false}>
+          <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
             {/* List rows */}
             {lists && lists.length > 0 ? (
               lists.map((list) => {
@@ -123,7 +134,7 @@ export function AddToListModal({ visible, onClose, matchId }: AddToListModalProp
                 return (
                   <Pressable
                     key={list.id}
-                    onPress={() => toggleMatch(list.id, isInList)}
+                    onPress={() => navigation ? handleListPress(list.id, isInList) : toggleMatch(list.id, isInList)}
                     style={({ pressed }) => ({
                       flexDirection: 'row',
                       alignItems: 'center',
@@ -146,11 +157,18 @@ export function AddToListModal({ visible, onClose, matchId }: AddToListModalProp
                         {list.matchIds.length} {list.matchIds.length === 1 ? 'match' : 'matches'}
                       </Text>
                     </View>
-                    <Ionicons
-                      name={isInList ? 'checkbox' : 'square-outline'}
-                      size={22}
-                      color={isInList ? colors.primary : colors.textSecondary}
-                    />
+                    {navigation ? (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        {isInList && <Ionicons name="checkmark-circle" size={18} color={colors.primary} />}
+                        <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+                      </View>
+                    ) : (
+                      <Ionicons
+                        name={isInList ? 'checkbox' : 'square-outline'}
+                        size={22}
+                        color={isInList ? colors.primary : colors.textSecondary}
+                      />
+                    )}
                   </Pressable>
                 );
               })

@@ -182,7 +182,7 @@ export function ReviewsScreen({ route, navigation }: any) {
           subtitle={(reviews || []).length === 0 ? 'Start reviewing matches to see them here' : 'Try adjusting your filters'}
         />
       ) : (
-        <FlatList indicatorStyle={isDark ? 'white' : 'default'}
+        <FlatList showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'}
           data={visibleEntries}
           keyExtractor={(item) => item.review.id}
           contentContainerStyle={{ paddingBottom: 16 }}

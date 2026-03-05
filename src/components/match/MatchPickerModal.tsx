@@ -188,7 +188,7 @@ export function MatchPickerModal({ visible, onClose, onAddMatches, excludeMatchI
             <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.md }}>No matches found</Text>
           </Pressable>
         ) : (
-          <FlatList
+          <FlatList showsVerticalScrollIndicator={false}
             indicatorStyle={isDark ? 'white' : 'default'}
             style={{ flex: 1 }}
             data={filtered}

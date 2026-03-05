@@ -287,7 +287,7 @@ export function ListDetailScreen({ route, navigation }: any) {
         }}
       />
 
-      <ScrollView
+      <ScrollView showsVerticalScrollIndicator={false}
         ref={scrollViewRef}
         indicatorStyle={isDark ? 'white' : 'default'}
         contentContainerStyle={{ paddingBottom: 100 }}

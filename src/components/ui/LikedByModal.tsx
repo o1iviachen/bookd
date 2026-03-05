@@ -44,7 +44,7 @@ export function LikedByModal({ visible, onClose, likers, isLoading, following, o
               Liked by
             </Text>
           </View>
-          <ScrollView bounces={false} style={{ maxHeight: 340 }}>
+          <ScrollView showsVerticalScrollIndicator={false} bounces={false} style={{ maxHeight: 340 }}>
             {isLoading ? (
               <View style={{ paddingVertical: spacing.xl, alignItems: 'center' }}>
                 <Text style={{ ...typography.body, color: colors.textSecondary }}>Loading...</Text>

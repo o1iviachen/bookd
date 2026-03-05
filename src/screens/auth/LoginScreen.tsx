@@ -3,6 +3,7 @@ import { View, Text, KeyboardAvoidingView, Platform, ScrollView, Dimensions, Pre
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
+import { getAuthErrorMessage } from '../../utils/authErrors';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
@@ -49,7 +50,7 @@ export function LoginScreen({ navigation }: Props) {
     try {
       await signIn(email, password);
     } catch (e: any) {
-      setError(e.message || 'Failed to sign in');
+      setError(getAuthErrorMessage(e));
     } finally {
       setLoading(false);
     }
@@ -60,7 +61,7 @@ export function LoginScreen({ navigation }: Props) {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={{ flex: 1, backgroundColor: colors.background }}
     >
-      <ScrollView
+      <ScrollView showsVerticalScrollIndicator={false}
         indicatorStyle={isDark ? 'white' : 'default'}
         ref={scrollRef}
         bounces={false}

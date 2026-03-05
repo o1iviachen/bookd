@@ -121,7 +121,7 @@ export function SettingsScreen() {
         <View style={{ width: 60 }} />
       </View>
 
-      <ScrollView indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: 0 }}>
+      <ScrollView showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: 0 }}>
         {sections.map((section) => (
           <View key={section.title} style={{ marginTop: spacing.lg, paddingHorizontal: spacing.md }}>
             <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: spacing.sm, marginLeft: spacing.xs }}>

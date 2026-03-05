@@ -28,7 +28,7 @@ export function MatchListsScreen({ route, navigation }: any) {
           subtitle="This match hasn't been added to any lists yet"
         />
       ) : (
-        <FlatList
+        <FlatList showsVerticalScrollIndicator={false}
           indicatorStyle={isDark ? 'white' : 'default'}
           data={lists}
           keyExtractor={(item: MatchList) => item.id}

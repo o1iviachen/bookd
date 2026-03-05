@@ -154,7 +154,7 @@ export function TeamDetailScreen({ route, navigation }: any) {
       </View>
 
       {/* ─── Single ScrollView with hero + tabs ─── */}
-      <ScrollView
+      <ScrollView showsVerticalScrollIndicator={false}
         style={{ flex: 1 }}
         indicatorStyle={isDark ? 'white' : 'default'}
         contentContainerStyle={{ paddingBottom: 16 }}
@@ -217,7 +217,7 @@ export function TeamDetailScreen({ route, navigation }: any) {
         </View>
 
         {/* Horizontal paging for tab content */}
-        <ScrollView
+        <ScrollView showsVerticalScrollIndicator={false}
           ref={horizontalRef}
           horizontal
           pagingEnabled

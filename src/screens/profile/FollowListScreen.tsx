@@ -43,7 +43,7 @@ export function FollowListScreen({ route, navigation }: any) {
           subtitle={title === 'Following' ? 'Find people to follow in Search' : 'Share your profile to get followers'}
         />
       ) : (
-        <FlatList indicatorStyle={isDark ? 'white' : 'default'}
+        <FlatList showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'}
           data={users}
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ paddingVertical: spacing.xs }}

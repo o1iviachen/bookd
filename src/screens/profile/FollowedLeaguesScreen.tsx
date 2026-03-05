@@ -44,7 +44,7 @@ export function FollowedLeaguesScreen({ navigation }: any) {
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
       <ScreenHeader title="Leagues" onBack={() => navigation.goBack()} />
 
-      <ScrollView indicatorStyle={isDark ? 'white' : 'default'}
+      <ScrollView showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'}
         style={{ flex: 1 }}
         contentContainerStyle={{ padding: spacing.md, paddingBottom: 60 }}
       >

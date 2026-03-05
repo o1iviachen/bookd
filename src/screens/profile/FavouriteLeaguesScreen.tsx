@@ -59,7 +59,7 @@ export function FavouriteLeaguesScreen() {
         Matches from selected leagues will appear on your feed.
       </Text>
 
-      <ScrollView indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: 100 }}>
+      <ScrollView showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: 100 }}>
         {leaguesLoading ? (
           <View style={{ marginTop: spacing.xxl }}>
             <LoadingSpinner fullScreen={false} />

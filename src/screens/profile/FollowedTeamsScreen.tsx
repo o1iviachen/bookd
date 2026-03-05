@@ -115,7 +115,7 @@ export function FollowedTeamsScreen({ navigation }: any) {
         </View>
       </View>
 
-      <ScrollView indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: spacing.xl }}>
+      <ScrollView showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: spacing.xl }}>
         {leagues.length === 0 && extraTeams.length === 0 && filteredCountries.length === 0 && !searchLoading ? (
           <View style={{ alignItems: 'center', marginTop: spacing.xxl * 2 }}>
             <Text style={{ ...typography.body, color: colors.textSecondary }}>No results found</Text>

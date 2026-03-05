@@ -63,7 +63,7 @@ export function MyListsScreen({ route, navigation }: any) {
           )}
         </EmptyState>
       ) : (
-        <FlatList indicatorStyle={isDark ? 'white' : 'default'}
+        <FlatList showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'}
           data={lists}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}

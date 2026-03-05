@@ -58,7 +58,7 @@ export function CreateUsernameScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={{ flex: 1, backgroundColor: colors.background }}
     >
-      <ScrollView
+      <ScrollView showsVerticalScrollIndicator={false}
         bounces={false}
         contentContainerStyle={{ flexGrow: 1 }}
         keyboardShouldPersistTaps="handled"

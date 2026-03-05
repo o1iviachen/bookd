@@ -250,7 +250,7 @@ export function TagMatchesScreen({ route, navigation }: any) {
           subtitle="Try adjusting your filters"
         />
       ) : (
-        <FlatList indicatorStyle={isDark ? 'white' : 'default'}
+        <FlatList showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'}
           data={visibleEntries}
           keyExtractor={(item) => String(item.matchId)}
           numColumns={NUM_COLUMNS}

@@ -296,7 +296,7 @@ export function MOTMPickerModal({
             </Pressable>
           </View>
 
-          <ScrollView bounces={false} showsVerticalScrollIndicator nestedScrollEnabled>
+          <ScrollView showsVerticalScrollIndicator={false} bounces={false} nestedScrollEnabled>
             {/* Formation pitch */}
             {homeRows.length > 0 && awayRows.length > 0 ? (
               <View style={{ alignItems: 'center', paddingVertical: spacing.md }}>

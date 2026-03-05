@@ -242,7 +242,7 @@ export function LikesScreen({ route, navigation }: any) {
               subtitle={likedMatchIds.length === 0 ? 'Like matches to build your collection' : 'Try adjusting your filters'}
             />
           ) : (
-            <FlatList
+            <FlatList showsVerticalScrollIndicator={false}
               indicatorStyle={isDark ? 'white' : 'default'}
               data={visibleEntries}
               keyExtractor={(item) => String(item.matchId)}
@@ -276,7 +276,7 @@ export function LikesScreen({ route, navigation }: any) {
               subtitle="Like reviews to save them here"
             />
           ) : (
-            <ScrollView
+            <ScrollView showsVerticalScrollIndicator={false}
               indicatorStyle={isDark ? 'white' : 'default'}
               nestedScrollEnabled
               contentContainerStyle={{ paddingBottom: spacing.xl }}
@@ -304,7 +304,7 @@ export function LikesScreen({ route, navigation }: any) {
               subtitle="Like lists to save them here"
             />
           ) : (
-            <ScrollView
+            <ScrollView showsVerticalScrollIndicator={false}
               indicatorStyle={isDark ? 'white' : 'default'}
               nestedScrollEnabled
               contentContainerStyle={{ paddingBottom: spacing.xl }}

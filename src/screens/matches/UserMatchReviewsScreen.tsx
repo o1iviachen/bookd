@@ -43,7 +43,7 @@ export function UserMatchReviewsScreen({ route, navigation }: any) {
       ) : userReviews.length === 0 ? (
         <EmptyState icon="book-outline" title="No entries" />
       ) : (
-        <FlatList
+        <FlatList showsVerticalScrollIndicator={false}
           indicatorStyle={isDark ? 'white' : 'default'}
           data={userReviews}
           keyExtractor={(item) => item.id}

@@ -32,7 +32,7 @@ export function DatePicker({ selectedDate, onDateChange }: DatePickerProps) {
   }, []);
 
   return (
-    <FlatList
+    <FlatList showsVerticalScrollIndicator={false}
       ref={flatListRef}
       horizontal
       data={dates}

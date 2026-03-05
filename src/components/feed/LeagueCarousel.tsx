@@ -39,7 +39,7 @@ export function LeagueCarousel({ title, matches, onMatchPress, onMorePress }: Le
         </Pressable>
       </View>
 
-      <FlatList
+      <FlatList showsVerticalScrollIndicator={false}
         horizontal
         data={matches}
         keyExtractor={(item) => item.id.toString()}

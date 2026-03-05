@@ -78,7 +78,7 @@ export function OnboardingMatchesScreen() {
         </Text>
       </View>
 
-      <ScrollView indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: 120, paddingTop: spacing.sm }}>
+      <ScrollView showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: 120, paddingTop: spacing.sm }}>
         {/* Selected matches + add button in poster grid */}
         <View style={{ paddingHorizontal: spacing.md }}>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: GAP }}>

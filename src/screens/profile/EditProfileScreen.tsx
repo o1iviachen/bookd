@@ -120,7 +120,7 @@ export function EditProfileScreen({ navigation }: Props) {
           <View style={{ width: 24 }} />
         </View>
 
-        <ScrollView indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ padding: spacing.md, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+        <ScrollView showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ padding: spacing.md, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
           {/* Avatar picker */}
           <Pressable onPress={handlePickAvatar} style={{ alignSelf: 'center', marginBottom: spacing.lg }}>
             <Avatar uri={avatarUri} name={displayName || 'User'} size={96} />

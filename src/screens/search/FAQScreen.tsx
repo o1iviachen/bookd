@@ -157,7 +157,7 @@ export function FAQScreen() {
         </View>
       </View>
 
-      <ScrollView indicatorStyle={isDark ? 'white' : 'default'}
+      <ScrollView showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'}
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: 40, paddingHorizontal: spacing.md, paddingTop: spacing.lg }}
       >
