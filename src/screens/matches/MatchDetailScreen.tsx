@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
-import { View, Text, Pressable, ScrollView, Animated, useWindowDimensions, Share, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, Pressable, ScrollView, Animated, useWindowDimensions, Share, KeyboardAvoidingView, Platform, Alert } from 'react-native';
 import { Select } from '../../components/ui/Select';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -12,7 +12,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useMatch, useMatchDetail } from '../../hooks/useMatches';
 import { useReviewsForMatch } from '../../hooks/useReviews';
 import { useUserProfile, useReviewerTeamIds } from '../../hooks/useUser';
-import { getUserProfile } from '../../services/firestore/users';
+import { getUserProfile, updateUserProfile } from '../../services/firestore/users';
 import { useListsForMatch } from '../../hooks/useLists';
 import { TeamLogo } from '../../components/match/TeamLogo';
 import { Avatar } from '../../components/ui/Avatar';
@@ -29,6 +29,7 @@ import { MatchDetail, MatchPlayer, MatchGoal, MatchBooking, MatchSubstitution } 
 import { shortName, lastName } from '../../utils/formatName';
 import { nationalityFlag } from '../../utils/flagEmoji';
 import { MatchPosterCard } from '../../components/match/MatchPosterCard';
+import { MOTMBadge } from '../../components/review/MOTMBadge';
 import { DiscussionSection, DiscussionInputBar } from '../../components/discussion/DiscussionSection';
 import { useDiscussion } from '../../hooks/useDiscussion';
 import { User } from '../../types/user';
@@ -109,20 +110,37 @@ export function MatchDetailScreen({ route, navigation }: Props) {
   const { data: matchLists } = useListsForMatch(matchId);
   const { data: matchDetail } = useMatchDetail(matchId);
 
-  // MOTM winner from aggregated votes on match doc
+  // MOTM winner — prefer aggregated votes on match doc, fall back to counting from reviews
   const motmWinnerId = useMemo(() => {
+    // Try match doc aggregate first
     const votes = match?.motmVotes;
-    if (!votes) return null;
-    let maxCount = 0;
-    let winnerId: number | null = null;
-    for (const [playerId, count] of Object.entries(votes)) {
-      if (count > maxCount) {
-        maxCount = count;
-        winnerId = Number(playerId);
+    if (votes && Object.keys(votes).length > 0) {
+      let maxCount = 0;
+      let winnerId: number | null = null;
+      for (const [playerId, count] of Object.entries(votes)) {
+        if (count > maxCount) {
+          maxCount = count;
+          winnerId = Number(playerId);
+        }
+      }
+      return winnerId;
+    }
+    // Fall back to counting from reviews
+    if (!reviews || reviews.length === 0) return null;
+    const counts = new Map<number, number>();
+    for (const r of reviews) {
+      if (r.motmPlayerId) {
+        counts.set(r.motmPlayerId, (counts.get(r.motmPlayerId) || 0) + 1);
       }
     }
+    if (counts.size === 0) return null;
+    let maxCount = 0;
+    let winnerId: number | null = null;
+    for (const [id, count] of counts) {
+      if (count > maxCount) { maxCount = count; winnerId = id; }
+    }
     return winnerId;
-  }, [match?.motmVotes]);
+  }, [match?.motmVotes, reviews]);
 
   // Fetch reviewer team affiliations for ratings filter
   const reviewerUserIds = useMemo(() => (reviews || []).map((r) => r.userId), [reviews]);
@@ -188,6 +206,26 @@ export function MatchDetailScreen({ route, navigation }: Props) {
     } catch (err) {
       // User cancelled or share failed — ignore
     }
+  };
+
+  const MAX_FAVOURITES = 3;
+  const favoriteMatchIds: number[] = profile?.favoriteMatchIds || [];
+  const isFavourite = favoriteMatchIds.some((id) => Number(id) === Number(matchId));
+
+  const handleToggleFavourite = async () => {
+    if (!user) return;
+    setShowMenu(false);
+    if (isFavourite) {
+      const updated = favoriteMatchIds.filter((id) => Number(id) !== Number(matchId));
+      await updateUserProfile(user.uid, { favoriteMatchIds: updated });
+    } else {
+      if (favoriteMatchIds.length >= MAX_FAVOURITES) {
+        Alert.alert('Limit reached', `You can only have ${MAX_FAVOURITES} favourite matches. Remove one first.`);
+        return;
+      }
+      await updateUserProfile(user.uid, { favoriteMatchIds: [...favoriteMatchIds, Number(matchId)] });
+    }
+    queryClient.invalidateQueries({ queryKey: ['user', user.uid] });
   };
 
   const stickyScoreText = (isFinished || isLive)
@@ -386,7 +424,7 @@ export function MatchDetailScreen({ route, navigation }: Props) {
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.background }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       {/* ─── Single ScrollView with header + active tab content ─── */}
-      <Animated.ScrollView
+      <Animated.ScrollView showsVerticalScrollIndicator={false}
         style={{ backgroundColor: colors.background }}
         indicatorStyle={isDark ? 'white' : 'default'}
         contentContainerStyle={{ paddingBottom: 16 }}
@@ -417,6 +455,17 @@ export function MatchDetailScreen({ route, navigation }: Props) {
                   <Text style={{ fontSize: 24, fontWeight: '700', color: '#fff' }}>{matchLists?.length || 0}</Text>
                   <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.8)' }}>Lists</Text>
                 </Pressable>
+              </View>
+            )}
+
+            {/* MOTM badge */}
+            {isFinished && motmWinnerId != null && (
+              <View style={{ paddingHorizontal: spacing.md, marginBottom: spacing.sm }}>
+                <MOTMBadge
+                  playerId={motmWinnerId}
+                  playerName={motmWinnerId === REFEREE_MOTM_ID ? matchDetail?.referee?.split(',')[0]?.trim() : undefined}
+                  size="md"
+                />
               </View>
             )}
 
@@ -600,6 +649,7 @@ export function MatchDetailScreen({ route, navigation }: Props) {
         visible={showMenu}
         onClose={() => setShowMenu(false)}
         items={[
+          { label: isFavourite ? 'Remove from favourites' : 'Add to favourites', icon: isFavourite ? 'star' : 'star-outline', onPress: handleToggleFavourite },
           { label: 'Add to list', icon: 'list-outline', onPress: () => { setShowMenu(false); setShowListModal(true); } },
           { label: 'Share', icon: 'share-social-outline', onPress: () => { setShowMenu(false); setTimeout(handleShare, 300); } },
         ]}
@@ -610,6 +660,7 @@ export function MatchDetailScreen({ route, navigation }: Props) {
         visible={showListModal}
         onClose={() => setShowListModal(false)}
         matchId={matchId}
+        navigation={navigation}
       />
 
     </KeyboardAvoidingView>
@@ -694,7 +745,7 @@ function WatchedByFriends({ reviews, matchId, following, colors, spacing, typogr
       </View>
 
       {/* Horizontal avatar scroll */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.md }}>
+      <ScrollView showsVerticalScrollIndicator={false} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.md }}>
         {friendWatchers.map((w) => {
           const handlePress = () => {
             if (w.singleReviewId) {
