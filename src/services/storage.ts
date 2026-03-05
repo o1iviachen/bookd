@@ -47,52 +47,20 @@ export async function uploadAvatar(userId: string, uri: string): Promise<string>
 }
 
 /**
- * Upload a review media file (image or video).
- * Images are compressed; videos are uploaded as-is (with a size check).
+ * Upload a review image file.
+ * Images are compressed before upload.
  * Returns the download URL.
  */
 export async function uploadReviewMedia(
   userId: string,
   reviewId: string,
   uri: string,
-  mediaType: 'image' | 'video',
+  mediaType: 'image',
   index: number
 ): Promise<string> {
-  let blob: Blob;
-  let ext: string;
-
-  if (mediaType === 'image') {
-    const compressed = await compressImage(uri, 1200, 0.7);
-    blob = await uriToBlob(compressed);
-    ext = 'jpg';
-  } else {
-    blob = await uriToBlob(uri);
-    // Preserve original extension (iOS uses .mov, Android uses .mp4)
-    const uriExt = uri.split('.').pop()?.toLowerCase();
-    ext = uriExt === 'mov' ? 'mov' : 'mp4';
-  }
-
-  const fileName = `${Date.now()}_${index}.${ext}`;
-  const storageRef = ref(storage, `reviews/${userId}/${reviewId}/${fileName}`);
-  const contentType = mediaType === 'video' ? (ext === 'mov' ? 'video/quicktime' : 'video/mp4') : 'image/jpeg';
-  const metadata = { contentType };
-  await uploadBytesResumable(storageRef, blob, metadata);
-  return getDownloadURL(storageRef);
-}
-
-/**
- * Upload a video thumbnail image.
- * Returns the download URL.
- */
-export async function uploadThumbnail(
-  userId: string,
-  reviewId: string,
-  uri: string,
-  index: number
-): Promise<string> {
-  const compressed = await compressImage(uri, 600, 0.8);
+  const compressed = await compressImage(uri, 1200, 0.7);
   const blob = await uriToBlob(compressed);
-  const fileName = `${Date.now()}_thumb_${index}.jpg`;
+  const fileName = `${Date.now()}_${index}.jpg`;
   const storageRef = ref(storage, `reviews/${userId}/${reviewId}/${fileName}`);
   await uploadBytesResumable(storageRef, blob, { contentType: 'image/jpeg' });
   return getDownloadURL(storageRef);

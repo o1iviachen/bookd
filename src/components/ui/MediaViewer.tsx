@@ -1,7 +1,6 @@
-import React, { useState, useRef, useCallback } from 'react';
-import { View, Modal, Pressable, Dimensions, FlatList, Text, ActivityIndicator } from 'react-native';
+import React, { useState } from 'react';
+import { View, Modal, Pressable, Dimensions, FlatList, Text } from 'react-native';
 import { Image } from 'expo-image';
-import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ReviewMedia } from '../../types/review';
@@ -15,62 +14,23 @@ interface MediaViewerProps {
   onClose: () => void;
 }
 
-function VideoItem({ item, isActive }: { item: ReviewMedia; isActive: boolean }) {
-  const [loading, setLoading] = useState(true);
-  const videoRef = useRef<Video>(null);
-
-  React.useEffect(() => {
-    if (!isActive) {
-      videoRef.current?.pauseAsync();
-    }
-  }, [isActive]);
-
-  const onStatus = useCallback((status: AVPlaybackStatus) => {
-    if (status.isLoaded && loading) setLoading(false);
-  }, [loading]);
-
-  return (
-    <View style={{ width: SCREEN_WIDTH, height: SCREEN_HEIGHT, justifyContent: 'center', alignItems: 'center' }}>
-      <Video
-        ref={videoRef}
-        source={{ uri: item.url }}
-        style={{ width: SCREEN_WIDTH, height: SCREEN_WIDTH * 1.2 }}
-        resizeMode={ResizeMode.CONTAIN}
-        useNativeControls
-        shouldPlay={isActive}
-        onPlaybackStatusUpdate={onStatus}
-      />
-      {loading && (
-        <View style={{ position: 'absolute', justifyContent: 'center', alignItems: 'center' }}>
-          <ActivityIndicator size="large" color="#fff" />
-          <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12, marginTop: 8 }}>Loading video...</Text>
-        </View>
-      )}
-    </View>
-  );
-}
-
 export function MediaViewer({ visible, media, initialIndex, onClose }: MediaViewerProps) {
   const insets = useSafeAreaInsets();
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
 
-  const renderItem = ({ item, index }: { item: ReviewMedia; index: number }) => {
-    if (item.type === 'video') {
-      return <VideoItem item={item} isActive={index === currentIndex} />;
-    }
-    return (
-      <Pressable
-        onPress={onClose}
-        style={{ width: SCREEN_WIDTH, height: SCREEN_HEIGHT, justifyContent: 'center', alignItems: 'center' }}
-      >
-        <Image
-          source={{ uri: item.url }}
-          style={{ width: SCREEN_WIDTH, height: SCREEN_WIDTH }}
-          contentFit="contain"
-        />
-      </Pressable>
-    );
-  };
+  const renderItem = ({ item }: { item: ReviewMedia }) => (
+    <Pressable
+      onPress={onClose}
+      style={{ width: SCREEN_WIDTH, height: SCREEN_HEIGHT, justifyContent: 'center', alignItems: 'center' }}
+    >
+      <Image
+        source={{ uri: item.url }}
+        style={{ width: SCREEN_WIDTH, height: SCREEN_WIDTH }}
+        contentFit="contain"
+        autoplay={item.type === 'gif'}
+      />
+    </Pressable>
+  );
 
   return (
     <Modal visible={visible} transparent animationType="none" statusBarTranslucent>
@@ -112,6 +72,7 @@ export function MediaViewer({ visible, media, initialIndex, onClose }: MediaView
         )}
 
         <FlatList
+          showsVerticalScrollIndicator={false}
           data={media}
           renderItem={renderItem}
           keyExtractor={(_, i) => String(i)}
