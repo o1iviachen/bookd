@@ -28,6 +28,7 @@ import { ReportModal } from '../../components/ui/ReportModal';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { ListComment } from '../../services/firestore/lists';
 import { isTextClean } from '../../utils/moderation';
+import { buildReplyMap } from '../../utils/comments';
 
 const NUM_COLUMNS = 3;
 
@@ -445,14 +446,7 @@ export function ListDetailScreen({ route, navigation }: any) {
           />
         ) : (
           (() => {
-            const topLevel = sortedComments.filter((c) => !c.parentId);
-            const replies = sortedComments.filter((c) => !!c.parentId);
-            const replyMap = new Map<string, ListComment[]>();
-            for (const r of replies) {
-              const arr = replyMap.get(r.parentId!) || [];
-              arr.push(r);
-              replyMap.set(r.parentId!, arr);
-            }
+            const { topLevel, replyMap } = buildReplyMap(sortedComments);
             return topLevel.map((comment) => (
               <View key={comment.id}>
                 <ListCommentRow

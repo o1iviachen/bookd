@@ -26,6 +26,7 @@ import { POPULAR_TEAMS } from '../../utils/constants';
 import { useAuth } from '../../context/AuthContext';
 import { formatRelativeTime, formatMatchDate } from '../../utils/formatDate';
 import { isTextClean } from '../../utils/moderation';
+import { buildReplyMap } from '../../utils/comments';
 import { MOTMBadge } from '../../components/review/MOTMBadge';
 import { Comment } from '../../services/firestore/comments';
 import { User } from '../../types/user';
@@ -440,14 +441,7 @@ export function ReviewDetailScreen({ route, navigation }: any) {
             />
           ) : (
             (() => {
-              const topLevel = sortedComments.filter((c) => !c.parentId);
-              const replies = sortedComments.filter((c) => !!c.parentId);
-              const replyMap = new Map<string, Comment[]>();
-              for (const r of replies) {
-                const arr = replyMap.get(r.parentId!) || [];
-                arr.push(r);
-                replyMap.set(r.parentId!, arr);
-              }
+              const { topLevel, replyMap } = buildReplyMap(sortedComments);
               return topLevel.map((comment) => (
                 <View key={comment.id}>
                   <CommentRow
