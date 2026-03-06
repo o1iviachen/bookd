@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.seedLeagues = exports.diagnoseTeams = exports.auditTeamIds = exports.migrateLegacyMatches = exports.backfillMatchRatings = exports.triggerAggregates = exports.computeAggregates = exports.backfillPlayerIds = exports.migratePlayerNames = exports.squadRefresh = exports.triggerSquadRefresh = exports.enrichPlayers = exports.enrichTeams = exports.buildPlayers = exports.migrateLeagueTier = exports.migrateSearchPrefixes = exports.fixPlayerNames = exports.migrateHasDetails = exports.syncDetailsForLeague = exports.manualSync = exports.buildTeams = exports.backfill = exports.detailBackfill = exports.liveSync = exports.dailySync = exports.backfillMatchDetailKickoffs = exports.submitReport = exports.deleteAccount = exports.moderateReviewMedia = exports.onMatchStatusChange = exports.preMatchNotify = exports.sendPushNotification = void 0;
+exports.seedLeagues = exports.diagnoseTeams = exports.auditTeamIds = exports.migrateLegacyMatches = exports.backfillMatchRatings = exports.triggerAggregates = exports.computeAggregates = exports.backfillPlayerIds = exports.migratePlayerNames = exports.squadRefresh = exports.triggerSquadRefresh = exports.enrichPlayers = exports.backfillCountry = exports.enrichTeams = exports.buildPlayers = exports.migrateLeagueTier = exports.migrateSearchPrefixes = exports.fixPlayerNames = exports.migrateHasDetails = exports.syncDetailsForLeague = exports.manualSync = exports.buildTeams = exports.backfill = exports.detailBackfill = exports.liveSync = exports.dailySync = exports.backfillMatchDetailKickoffs = exports.translateText = exports.submitReport = exports.deleteAccount = exports.moderateReviewMedia = exports.onMatchStatusChange = exports.preMatchNotify = exports.sendPushNotification = void 0;
 const functions = __importStar(require("firebase-functions"));
 const admin = __importStar(require("firebase-admin"));
 admin.initializeApp();
@@ -72,6 +72,9 @@ Object.defineProperty(exports, "deleteAccount", { enumerable: true, get: functio
 // ─── Reports ───
 var report_1 = require("./report");
 Object.defineProperty(exports, "submitReport", { enumerable: true, get: function () { return report_1.submitReport; } });
+// ─── Translation ───
+var translate_1 = require("./translate");
+Object.defineProperty(exports, "translateText", { enumerable: true, get: function () { return translate_1.translateText; } });
 /**
  * One-time migration: backfill kickoff + season into matchDetails docs.
  * Required so getMatchesForPerson can sort by kickoff DESC (most recent first).
@@ -595,6 +598,23 @@ exports.enrichTeams = functions
     }
     catch (err) {
         console.error('[enrichTeams] Error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+/**
+ * One-off: backfill real country for team docs (replaces city values).
+ *   GET /backfillCountry?limit=200
+ */
+exports.backfillCountry = functions
+    .runWith({ timeoutSeconds: 540, memory: '512MB' })
+    .https.onRequest(async (req, res) => {
+    const limit = req.query.limit ? parseInt(req.query.limit, 10) : 200;
+    try {
+        const result = await (0, backfill_1.backfillTeamCountry)(limit);
+        res.json({ success: true, ...result });
+    }
+    catch (err) {
+        console.error('[backfillCountry] Error:', err);
         res.status(500).json({ error: err.message });
     }
 });

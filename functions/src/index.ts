@@ -7,7 +7,7 @@ import { syncMatchesForDateRange } from './sync/syncMatches';
 import { syncAllStandings } from './sync/syncStandings';
 import { syncMissingDetails, syncMatchDetails } from './sync/syncDetails';
 import { syncLiveMatches } from './sync/syncLive';
-import { runBackfill, buildTeamsFromMatches, buildPlayersAndEnrichTeams, fetchTeamColors, enrichPlayersFromSquads, refreshSquadsOnly, backfillPlayerNameLower, generateSearchPrefixes } from './sync/backfill';
+import { runBackfill, buildTeamsFromMatches, buildPlayersAndEnrichTeams, fetchTeamColors, enrichPlayersFromSquads, refreshSquadsOnly, backfillPlayerNameLower, generateSearchPrefixes, backfillTeamCountry } from './sync/backfill';
 import { getLeagueTier } from './leagueHelper';
 import { SYNC_LEAGUES, COLLECTIONS } from './config';
 
@@ -41,6 +41,9 @@ export { deleteAccount } from './user';
 
 // ─── Reports ───
 export { submitReport } from './report';
+
+// ─── Translation ───
+export { translateText } from './translate';
 
 /**
  * One-time migration: backfill kickoff + season into matchDetails docs.
@@ -612,6 +615,23 @@ export const enrichTeams = functions
       res.json({ success: true, updated });
     } catch (err: any) {
       console.error('[enrichTeams] Error:', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+/**
+ * One-off: backfill real country for team docs (replaces city values).
+ *   GET /backfillCountry?limit=200
+ */
+export const backfillCountry = functions
+  .runWith({ timeoutSeconds: 540, memory: '512MB' })
+  .https.onRequest(async (req, res) => {
+    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 200;
+    try {
+      const result = await backfillTeamCountry(limit);
+      res.json({ success: true, ...result });
+    } catch (err: any) {
+      console.error('[backfillCountry] Error:', err);
       res.status(500).json({ error: err.message });
     }
   });
