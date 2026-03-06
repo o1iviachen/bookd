@@ -5,7 +5,7 @@ import { ProfileScreen } from '../screens/profile/ProfileScreen';
 import { EditProfileScreen } from '../screens/profile/EditProfileScreen';
 import { SettingsScreen } from '../screens/profile/SettingsScreen';
 import { FavouriteTeamsScreen } from '../screens/profile/FavouriteTeamsScreen';
-import { FavouriteLeaguesScreen } from '../screens/profile/FavouriteLeaguesScreen';
+
 import { FavouriteMatchesScreen } from '../screens/profile/FavouriteMatchesScreen';
 import { DiaryScreen } from '../screens/profile/DiaryScreen';
 import { GamesScreen } from '../screens/profile/GamesScreen';
@@ -50,7 +50,7 @@ export function ProfileStack() {
       <Stack.Screen name="EditProfile" component={EditProfileScreen} />
       <Stack.Screen name="Settings" component={SettingsScreen} />
       <Stack.Screen name="FavouriteTeams" component={FavouriteTeamsScreen} />
-      <Stack.Screen name="FavouriteLeagues" component={FavouriteLeaguesScreen} />
+
       <Stack.Screen name="FavouriteMatches" component={FavouriteMatchesScreen} />
       <Stack.Screen name="Diary" component={DiaryScreen} />
       <Stack.Screen name="Games" component={GamesScreen} />

@@ -74,7 +74,7 @@ export type ProfileStackParamList = SharedDetailScreenParams & {
   EditProfile: undefined;
   Settings: undefined;
   FavouriteTeams: undefined;
-  FavouriteLeagues: undefined;
+
   FavouriteMatches: undefined;
   FollowedTeams: undefined;
   FollowedLeagues: undefined;
