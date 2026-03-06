@@ -421,7 +421,7 @@ export function LeagueDetailScreen({ route, navigation }: any) {
 
   const fixturesContent = useMemo(() => {
     if (fixturesLoading || !allFixtures || !fixturesReady) return <View style={{ paddingTop: spacing.xl }}><LoadingSpinner /></View>;
-    if (leagueFixtures.length === 0) {
+    if (leagueFixtures.length === 0 && knockoutFixtures.length === 0) {
       return (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: spacing.xxl }}>
           <Ionicons name="football-outline" size={40} color={colors.textSecondary} />
@@ -431,13 +431,13 @@ export function LeagueDetailScreen({ route, navigation }: any) {
     }
     return (
       <View>
-        {sortedMatchdays.map((md) => {
+        {sortedMatchdays.map((md, idx) => {
           const mdMatches = fixturesByMatchday.get(md) || [];
           return (
             <View key={md} onLayout={(e) => handleMatchdayLayout(md, e)}>
               <View style={{
                 paddingHorizontal: spacing.md,
-                paddingTop: spacing.xl,
+                paddingTop: idx === 0 ? spacing.sm : spacing.xl,
                 paddingBottom: spacing.sm,
               }}>
                 <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1 }}>
@@ -448,9 +448,30 @@ export function LeagueDetailScreen({ route, navigation }: any) {
             </View>
           );
         })}
+
+        {/* Knockout rounds after league phase */}
+        {KNOCKOUT_STAGES.filter((s) => knockoutByStage.has(s)).map((stage) => {
+          const stageMatches = [...(knockoutByStage.get(stage) || [])].sort(
+            (a, b) => new Date(a.kickoff).getTime() - new Date(b.kickoff).getTime()
+          );
+          return (
+            <View key={stage}>
+              <View style={{
+                paddingHorizontal: spacing.md,
+                paddingTop: spacing.xl,
+                paddingBottom: spacing.sm,
+              }}>
+                <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1 }}>
+                  {STAGE_LABELS[stage] || stage}
+                </Text>
+              </View>
+              {stageMatches.map(renderFixtureRow)}
+            </View>
+          );
+        })}
       </View>
     );
-  }, [fixturesLoading, allFixtures, fixturesReady, leagueFixtures, sortedMatchdays, fixturesByMatchday, colors, spacing, typography, handleMatchdayLayout, renderFixtureRow, t]);
+  }, [fixturesLoading, allFixtures, fixturesReady, leagueFixtures, knockoutFixtures, sortedMatchdays, fixturesByMatchday, knockoutByStage, colors, spacing, typography, handleMatchdayLayout, renderFixtureRow, t]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
