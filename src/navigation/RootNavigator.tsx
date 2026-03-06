@@ -6,7 +6,6 @@ import { useTheme } from '../context/ThemeContext';
 import { AuthStack } from './AuthStack';
 import { OnboardingStack } from './OnboardingStack';
 import { MainTabs } from './MainTabs';
-import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { navigationRef } from './navigationRef';
 import { CreateUsernameScreen } from '../screens/auth/CreateUsernameScreen';
 
@@ -39,7 +38,8 @@ export function RootNavigator() {
   const { theme, isDark } = useTheme();
 
   if (loading) {
-    return <LoadingSpinner />;
+    // Splash screen is still visible — render nothing
+    return null;
   }
 
   const getContent = () => {
