@@ -205,7 +205,7 @@ export function RatingChart({ reviews, ratingBuckets, showStats = false, homeTea
               <Text style={{ fontSize: 13, color: season === opt.value ? colors.primary : colors.foreground, fontWeight: season === opt.value ? '600' : '400' }}>
                 {opt.label}
               </Text>
-              {season === opt.value && <Ionicons name="checkmark" size={16} color={colors.primary} />}
+              {season === opt.value && <Ionicons name="checkmark" size={16} color={colors.star} />}
             </Pressable>
           ))}
         </View>
@@ -232,7 +232,7 @@ export function RatingChart({ reviews, ratingBuckets, showStats = false, homeTea
               <Text style={{ fontSize: 13, color: filter === opt.key ? colors.primary : colors.foreground, fontWeight: filter === opt.key ? '600' : '400' }}>
                 {opt.label}
               </Text>
-              {filter === opt.key && <Ionicons name="checkmark" size={16} color={colors.primary} />}
+              {filter === opt.key && <Ionicons name="checkmark" size={16} color={colors.star} />}
             </Pressable>
           ))}
         </View>
@@ -246,7 +246,7 @@ export function RatingChart({ reviews, ratingBuckets, showStats = false, homeTea
         <View style={{ flexDirection: 'row', alignItems: 'flex-end' }}>
           {/* 1 star label on left */}
           <View style={{ justifyContent: 'flex-end', marginRight: 6, paddingBottom: 1 }}>
-            <Ionicons name="star" size={10} color={colors.primary} />
+            <Ionicons name="star" size={10} color={colors.star} />
           </View>
 
           {/* Vertical bars — pan responder for swipe */}
@@ -269,7 +269,7 @@ export function RatingChart({ reviews, ratingBuckets, showStats = false, homeTea
                     style={{
                       width: '100%',
                       height: Math.max(heightPct, count > 0 ? 3 : 1),
-                      backgroundColor: isActive ? colors.primary : colors.muted,
+                      backgroundColor: isActive ? colors.star : colors.muted,
                       borderRadius: 2,
                     }}
                   />
@@ -287,13 +287,13 @@ export function RatingChart({ reviews, ratingBuckets, showStats = false, homeTea
                 </Text>
                 <View style={{ flexDirection: 'row' }}>
                   {Array.from({ length: selectedFullStars }).map((_, s) => (
-                    <Ionicons key={`f${s}`} name="star" size={10} color={colors.primary} />
+                    <Ionicons key={`f${s}`} name="star" size={10} color={colors.star} />
                   ))}
                   {selectedHalfStar && (
-                    <Ionicons name="star-half" size={10} color={colors.primary} />
+                    <Ionicons name="star-half" size={10} color={colors.star} />
                   )}
                   {Array.from({ length: selectedEmptyStars }).map((_, s) => (
-                    <Ionicons key={`e${s}`} name="star-outline" size={10} color={colors.primary} />
+                    <Ionicons key={`e${s}`} name="star-outline" size={10} color={colors.star} />
                   ))}
                 </View>
               </>
@@ -311,7 +311,7 @@ export function RatingChart({ reviews, ratingBuckets, showStats = false, homeTea
                 )}
                 <View style={{ flexDirection: 'row' }}>
                   {Array.from({ length: 5 }).map((_, s) => (
-                    <Ionicons key={`f${s}`} name="star" size={10} color={colors.primary} />
+                    <Ionicons key={`f${s}`} name="star" size={10} color={colors.star} />
                   ))}
                 </View>
               </>
