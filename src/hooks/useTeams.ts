@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
-import { getTeamDetail, getTeamMatches, getAllTeams, searchPlayersQuery, getMatchesForPerson, PersonMatchAppearance } from '../services/footballApi';
+import { getTeamDetail, getTeamMatches, getAllTeams, SearchableTeam, searchPlayersQuery, getMatchesForPerson, PersonMatchAppearance } from '../services/footballApi';
 
 export function useTeamDetail(teamId: number) {
   return useQuery({
@@ -32,6 +32,17 @@ const LEAGUE_TIER: Record<string, number> = {
   WC: 5, EURO: 5, NL: 5, CA: 5,
 };
 
+// International-only competition codes — teams with ONLY these are national teams
+const INTERNATIONAL_CODES = new Set(['WC', 'EURO', 'NL', 'CA']);
+
+function isNationalTeam(team: SearchableTeam): boolean {
+  // National teams: competition codes are exclusively international
+  if (team.competitionCodes.length > 0 && team.competitionCodes.every((c) => INTERNATIONAL_CODES.has(c))) return true;
+  // Fallback: team name matches its own country (e.g. name: "Argentina", country: "Argentina")
+  if (team.name && team.country && team.name.toLowerCase() === team.country.toLowerCase()) return true;
+  return false;
+}
+
 function getTeamTier(competitionCodes: string[]): number {
   let best = 6;
   for (const code of competitionCodes) {
@@ -50,19 +61,24 @@ export function useSearchTeams(query: string, active = true) {
     enabled,
   });
 
-  const data = useMemo(() => {
-    if (!allTeams || !enabled) return [];
+  const { clubs, nationalTeams } = useMemo(() => {
+    if (!allTeams || !enabled) return { clubs: [], nationalTeams: [] };
     const q = query.toLowerCase();
-    return allTeams
-      .filter((t) =>
-        t.name?.toLowerCase().includes(q) ||
-        t.shortName?.toLowerCase().includes(q)
-      )
+    const matched = allTeams.filter((t) =>
+      t.name?.toLowerCase().includes(q) ||
+      t.shortName?.toLowerCase().includes(q)
+    );
+    const clubResults = matched
+      .filter((t) => !isNationalTeam(t))
       .sort((a, b) => getTeamTier(a.competitionCodes) - getTeamTier(b.competitionCodes) || a.name.localeCompare(b.name))
       .slice(0, 30);
+    const nationalResults = matched
+      .filter((t) => isNationalTeam(t))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    return { clubs: clubResults, nationalTeams: nationalResults };
   }, [allTeams, query, enabled]);
 
-  return { data, isLoading: isLoading && enabled };
+  return { data: clubs, nationalTeams, isLoading: isLoading && enabled };
 }
 
 // Fetch matches where a person appeared in the squad (lineup/bench/coach)

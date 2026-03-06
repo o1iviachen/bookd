@@ -35,7 +35,7 @@ export function OnboardingTeamsScreen() {
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const { data: firestoreResults, isLoading: searchLoading } = useSearchTeams(searchQuery, searchQuery.length >= 2);
+  const { data: firestoreResults, nationalTeams: searchedNationalTeams, isLoading: searchLoading } = useSearchTeams(searchQuery, searchQuery.length >= 2);
 
   const atMaxClubs = selectedClubs.length >= MAX_CLUBS;
 
@@ -83,12 +83,15 @@ export function OnboardingTeamsScreen() {
   }, [firestoreResults, searchQuery, popularIds]);
 
   const filteredCountries = useMemo(() => {
+    if (searchQuery.trim() && searchQuery.length >= 2 && searchedNationalTeams.length > 0) {
+      return searchedNationalTeams.map((t) => t.name);
+    }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       return POPULAR_COUNTRIES.filter((c) => c.toLowerCase().includes(q));
     }
     return POPULAR_COUNTRIES;
-  }, [searchQuery]);
+  }, [searchQuery, searchedNationalTeams]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
@@ -245,6 +248,7 @@ export function OnboardingTeamsScreen() {
             <View style={{ backgroundColor: colors.card, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' }}>
               {filteredCountries.map((country, i) => {
                 const isSelected = selectedCountry === country;
+                const nationalTeam = searchedNationalTeams.find((t) => t.name === country);
                 const flag = nationalityFlag(country);
                 return (
                   <Pressable
@@ -262,7 +266,11 @@ export function OnboardingTeamsScreen() {
                     })}
                   >
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-                      <Text style={{ fontSize: 24 }}>{flag}</Text>
+                      {nationalTeam?.crest ? (
+                        <TeamLogo uri={nationalTeam.crest} size={32} />
+                      ) : (
+                        <Text style={{ fontSize: 24 }}>{flag}</Text>
+                      )}
                       <Text style={{ ...typography.body, color: colors.foreground }}>{country}</Text>
                     </View>
                     <Ionicons

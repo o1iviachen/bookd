@@ -40,7 +40,7 @@ export function FavouriteTeamsScreen() {
   const [searchQuery, setSearchQuery] = useState('');
 
   // Firestore search for teams not in POPULAR_TEAMS
-  const { data: firestoreResults, isLoading: searchLoading } = useSearchTeams(searchQuery, searchQuery.length >= 2);
+  const { data: firestoreResults, nationalTeams: searchedNationalTeams, isLoading: searchLoading } = useSearchTeams(searchQuery, searchQuery.length >= 2);
 
   useEffect(() => {
     if (profile?.favoriteTeams?.length) {
@@ -98,14 +98,17 @@ export function FavouriteTeamsScreen() {
     return firestoreResults.filter((t) => !popularIds.has(String(t.id)));
   }, [firestoreResults, searchQuery, popularIds]);
 
-  // Filter countries by search
+  // Filter countries by search — use Firestore national teams when searching, hardcoded list otherwise
   const filteredCountries = useMemo(() => {
+    if (searchQuery.trim() && searchQuery.length >= 2 && searchedNationalTeams.length > 0) {
+      return searchedNationalTeams.map((t) => t.name);
+    }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       return POPULAR_COUNTRIES.filter((c) => c.toLowerCase().includes(q));
     }
     return POPULAR_COUNTRIES;
-  }, [searchQuery]);
+  }, [searchQuery, searchedNationalTeams]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
@@ -254,6 +257,7 @@ export function FavouriteTeamsScreen() {
             <View style={{ backgroundColor: colors.card, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' }}>
               {filteredCountries.map((country, i) => {
                 const isSelected = selectedCountry === country;
+                const nationalTeam = searchedNationalTeams.find((t) => t.name === country);
                 const flag = nationalityFlag(country);
                 return (
                   <Pressable
@@ -271,7 +275,11 @@ export function FavouriteTeamsScreen() {
                     })}
                   >
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-                      <Text style={{ fontSize: 24 }}>{flag}</Text>
+                      {nationalTeam?.crest ? (
+                        <TeamLogo uri={nationalTeam.crest} size={32} />
+                      ) : (
+                        <Text style={{ fontSize: 24 }}>{flag}</Text>
+                      )}
                       <Text style={{ ...typography.body, color: colors.foreground }}>{country}</Text>
                     </View>
                     <Ionicons

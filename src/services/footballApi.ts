@@ -429,6 +429,7 @@ export interface TeamDetail {
   crest: string;
   venue: string | null;
   founded: number | null;
+  country: string;
   clubColors: string | null;
   coach: Coach | null;
   squad: { id: number; name: string; position: string; nationality: string }[];
@@ -445,6 +446,7 @@ export async function getTeamDetail(teamId: number): Promise<TeamDetail> {
       name: 'Unknown Team',
       shortName: 'UNK',
       crest: '',
+      country: '',
       venue: null,
       founded: null,
       clubColors: null,
@@ -462,6 +464,7 @@ export async function getTeamDetail(teamId: number): Promise<TeamDetail> {
     name: data.name ?? 'Unknown Team',
     shortName: data.shortName || (data.name ? data.name.substring(0, 3).toUpperCase() : 'UNK'),
     crest: data.crest ?? '',
+    country: data.country || '',
     venue: data.venue || null,
     founded: data.founded || null,
     clubColors: data.clubColors || null,

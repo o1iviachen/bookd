@@ -36,7 +36,7 @@ export function FollowedTeamsScreen({ navigation }: any) {
   const followedLeagues = profile?.followedLeagues || [];
 
   // Firestore search for teams not in POPULAR_TEAMS
-  const { data: firestoreResults, isLoading: searchLoading } = useSearchTeams(search, search.length >= 2);
+  const { data: firestoreResults, nationalTeams: searchedNationalTeams, isLoading: searchLoading } = useSearchTeams(search, search.length >= 2);
 
   const toggleTeam = async (teamId: string) => {
     if (!user) return;
@@ -74,14 +74,18 @@ export function FollowedTeamsScreen({ navigation }: any) {
     return firestoreResults.filter((t) => !popularIds.has(String(t.id)));
   }, [firestoreResults, search, popularIds]);
 
-  // Filter countries by search
+  // Filter countries by search — use Firestore national teams when searching, hardcoded list otherwise
   const filteredCountries = useMemo(() => {
+    if (search.trim() && search.length >= 2 && searchedNationalTeams.length > 0) {
+      // When searching, show national teams from Firestore (already filtered by query)
+      return searchedNationalTeams.map((t) => t.name);
+    }
     if (search.trim()) {
       const q = search.toLowerCase();
       return POPULAR_COUNTRIES.filter((c) => c.toLowerCase().includes(q));
     }
     return POPULAR_COUNTRIES;
-  }, [search]);
+  }, [search, searchedNationalTeams]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
@@ -221,6 +225,7 @@ export function FollowedTeamsScreen({ navigation }: any) {
                 <View style={{ backgroundColor: colors.card, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' }}>
                   {filteredCountries.map((country, i) => {
                     const isFollowing = followedLeagues.includes(country);
+                    const nationalTeam = searchedNationalTeams.find((t) => t.name === country);
                     const flag = nationalityFlag(country);
                     return (
                       <Pressable
@@ -238,7 +243,11 @@ export function FollowedTeamsScreen({ navigation }: any) {
                         })}
                       >
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-                          <Text style={{ fontSize: 24 }}>{flag}</Text>
+                          {nationalTeam?.crest ? (
+                            <TeamLogo uri={nationalTeam.crest} size={32} />
+                          ) : (
+                            <Text style={{ fontSize: 24 }}>{flag}</Text>
+                          )}
                           <Text style={{ ...typography.body, color: colors.foreground }}>{country}</Text>
                         </View>
                         <Ionicons
