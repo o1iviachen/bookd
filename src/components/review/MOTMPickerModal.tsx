@@ -1,9 +1,11 @@
 import React, { useMemo } from 'react';
 import { View, Text, Modal, Pressable, ScrollView, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { TeamLogo } from '../match/TeamLogo';
 import { lastName, shortName } from '../../utils/formatName';
+import { nationalityFlag } from '../../utils/flagEmoji';
 import {
   MatchPlayer,
   MatchDetail,
@@ -59,8 +61,8 @@ function buildPlayerEvents(
 
 // ── Pitch player dot ────────────────────────────────────────────────────────
 
-const DOT_SIZE = 36;
-const TOUCH_WIDTH = 56;
+const DOT_SIZE = 28;
+const TOUCH_WIDTH = 44;
 
 function PitchDot({
   player, x, y, teamColor, events, isSelected, onPress,
@@ -95,33 +97,33 @@ function PitchDot({
           borderWidth: 2,
           borderColor: isSelected ? '#f59e0b' : 'rgba(255,255,255,0.5)',
         }}>
-          <Text style={{ fontSize: 13, fontWeight: '800', color: '#fff' }}>
+          <Text style={{ fontSize: 11, fontWeight: '800', color: '#fff' }}>
             {player.shirtNumber ?? ''}
           </Text>
         </View>
         {events?.goals > 0 && (
-          <View style={{ position: 'absolute', top: -1, left: -1 }}>
-            <Text style={{ fontSize: 11 }}>⚽</Text>
+          <View style={{ position: 'absolute', top: -2, left: -2 }}>
+            <Text style={{ fontSize: 9 }}>⚽</Text>
           </View>
         )}
         {events?.ownGoals > 0 && (
-          <View style={{ position: 'absolute', top: -2, left: -2, width: 16, height: 16, borderRadius: 8, backgroundColor: 'rgba(239,68,68,0.45)', alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={{ fontSize: 11 }}>⚽</Text>
+          <View style={{ position: 'absolute', top: -2, left: -2, width: 13, height: 13, borderRadius: 7, backgroundColor: 'rgba(239,68,68,0.45)', alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ fontSize: 9 }}>⚽</Text>
           </View>
         )}
         {events?.yellowCard && (
-          <View style={{ position: 'absolute', bottom: -1, left: -1, width: 7, height: 10, backgroundColor: '#facc15', borderRadius: 1, borderWidth: 0.5, borderColor: 'rgba(0,0,0,0.3)' }} />
+          <View style={{ position: 'absolute', bottom: -1, left: -1, width: 6, height: 8, backgroundColor: '#facc15', borderRadius: 1, borderWidth: 0.5, borderColor: 'rgba(0,0,0,0.3)' }} />
         )}
         {events?.redCard && (
-          <View style={{ position: 'absolute', bottom: -1, left: -1, width: 7, height: 10, backgroundColor: '#ef4444', borderRadius: 1, borderWidth: 0.5, borderColor: 'rgba(0,0,0,0.3)' }} />
+          <View style={{ position: 'absolute', bottom: -1, left: -1, width: 6, height: 8, backgroundColor: '#ef4444', borderRadius: 1, borderWidth: 0.5, borderColor: 'rgba(0,0,0,0.3)' }} />
         )}
         {isSelected && (
-          <View style={{ position: 'absolute', bottom: -4, right: -4 }}>
-            <Text style={{ fontSize: 12 }}>⭐</Text>
+          <View style={{ position: 'absolute', bottom: -3, right: -3 }}>
+            <Text style={{ fontSize: 10 }}>⭐</Text>
           </View>
         )}
       </View>
-      <Text style={{ fontSize: 9, fontWeight: '700', color: '#fff', textAlign: 'center', marginTop: 2, textShadowColor: 'rgba(0,0,0,0.9)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 }} numberOfLines={1}>
+      <Text style={{ fontSize: 8, fontWeight: '700', color: '#fff', textAlign: 'center', marginTop: 1, textShadowColor: 'rgba(0,0,0,0.9)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 }} numberOfLines={1}>
         {displayName}
       </Text>
     </Pressable>
@@ -153,9 +155,10 @@ export function MOTMPickerModal({
   selectedPlayerId,
   onSelect,
 }: MOTMPickerModalProps) {
+  const { t } = useTranslation();
   const { theme } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
-  const { width: screenWidth } = useWindowDimensions();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
 
   // Pitch dimensions (fits inside the modal card with small horizontal padding)
   const pitchWidth = screenWidth - spacing.md * 4;
@@ -183,16 +186,16 @@ export function MOTMPickerModal({
   const hasSubs = homeSubs.length > 0 || awaySubs.length > 0;
 
   // Pitch layout helpers
-  const padX = 24;
-  const topPad = pitchHeight * 0.07;
-  const bottomPad = pitchHeight * 0.08;
-  const centerPad = 40;
+  const padX = 18;
+  const topPad = pitchHeight * 0.06;
+  const bottomPad = pitchHeight * 0.07;
+  const centerPad = 28;
   const lineColor = 'rgba(255,255,255,0.25)';
   const penaltyBoxWidth = pitchWidth * 0.55;
   const penaltyBoxHeight = pitchHeight * 0.11;
   const goalBoxWidth = pitchWidth * 0.28;
   const goalBoxHeight = pitchHeight * 0.045;
-  const circleSize = pitchWidth * 0.22;
+  const circleSize = pitchWidth * 0.18;
 
   const getPlayerPos = (
     rowIndex: number, playerIndexInRow: number, playersInRow: number,
@@ -290,7 +293,7 @@ export function MOTMPickerModal({
         >
           {/* Header */}
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }}>
-            <Text style={{ ...typography.h4, color: colors.foreground }}>Man of the Match</Text>
+            <Text style={{ ...typography.h4, color: colors.foreground }}>{t('review.manOfTheMatch')}</Text>
             <Pressable onPress={onClose} hitSlop={8}>
               <Ionicons name="close" size={22} color={colors.textSecondary} />
             </Pressable>
@@ -312,11 +315,11 @@ export function MOTMPickerModal({
                   <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderWidth: 2, borderColor: lineColor, borderRadius: 12 }} />
 
                   {/* Team logos */}
-                  <View style={{ position: 'absolute', top: 10, left: 12 }}>
-                    <TeamLogo uri={homeTeamCrest} size={22} />
+                  <View style={{ position: 'absolute', top: 8, left: 10 }}>
+                    <TeamLogo uri={homeTeamCrest} size={18} />
                   </View>
-                  <View style={{ position: 'absolute', bottom: 10, right: 12 }}>
-                    <TeamLogo uri={awayTeamCrest} size={22} />
+                  <View style={{ position: 'absolute', bottom: 8, right: 10 }}>
+                    <TeamLogo uri={awayTeamCrest} size={18} />
                   </View>
 
                   {/* Home players */}
@@ -365,7 +368,7 @@ export function MOTMPickerModal({
               <View style={{ borderTopWidth: 1, borderTopColor: colors.border }}>
                 <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: spacing.xs }}>
                   <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1 }}>
-                    Substitutes
+                    {t('matches.substitutes')}
                   </Text>
                 </View>
                 {renderSubSection(homeSubs, homeTeamName, homeTeamCrest)}
@@ -380,7 +383,7 @@ export function MOTMPickerModal({
                 <View style={{ borderTopWidth: 1, borderTopColor: colors.border }}>
                   <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: spacing.xs }}>
                     <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1 }}>
-                      Referee
+                      {t('matches.referee')}
                     </Text>
                   </View>
                   <Pressable
@@ -396,7 +399,13 @@ export function MOTMPickerModal({
                     <Ionicons name="flag-outline" size={14} color={isSelected ? '#f59e0b' : colors.textSecondary} style={{ marginRight: spacing.sm }} />
                     {isSelected && <Text style={{ fontSize: 13, marginRight: 4 }}>⭐</Text>}
                     <Text style={{ ...typography.body, color: isSelected ? '#f59e0b' : colors.foreground, flex: 1, fontSize: 14, fontWeight: isSelected ? '700' : '400' }} numberOfLines={1}>
-                      {matchDetail.referee}
+                      {(() => {
+                        const parts = matchDetail.referee!.split(',');
+                        const country = parts.length > 1 ? parts.pop()!.trim() : null;
+                        const name = parts.join(',').trim();
+                        const flag = nationalityFlag(country);
+                        return `${name}${flag ? ` ${flag}` : country ? ` (${country})` : ''}`;
+                      })()}
                     </Text>
                     {isSelected && (
                       <Ionicons name="checkmark" size={16} color={colors.primary} style={{ marginLeft: 6 }} />
