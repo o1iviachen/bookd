@@ -31,6 +31,7 @@ import { NotificationSettingsScreen } from '../screens/settings/NotificationSett
 import { LeagueDetailScreen } from '../screens/league/LeagueDetailScreen';
 import { TeamDetailScreen } from '../screens/team/TeamDetailScreen';
 import { PersonDetailScreen } from '../screens/person/PersonDetailScreen';
+import { BlockedUsersScreen } from '../screens/profile/BlockedUsersScreen';
 import { useTheme } from '../context/ThemeContext';
 
 const Stack = createNativeStackNavigator<ProfileStackParamList>();
@@ -72,6 +73,7 @@ export function ProfileStack() {
       <Stack.Screen name="CreateReview" component={CreateReviewScreen} />
       <Stack.Screen name="ReviewDetail" component={ReviewDetailScreen} />
       <Stack.Screen name="NotificationSettings" component={NotificationSettingsScreen} />
+      <Stack.Screen name="BlockedUsers" component={BlockedUsersScreen} />
       <Stack.Screen name="LeagueDetail" component={LeagueDetailScreen} />
       <Stack.Screen name="TeamDetail" component={TeamDetailScreen} />
       <Stack.Screen name="PersonDetail" component={PersonDetailScreen} />

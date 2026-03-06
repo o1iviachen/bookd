@@ -1,36 +1,34 @@
 import React from 'react';
 import { View, Text, FlatList, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import { useQueries } from '@tanstack/react-query';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
-import { useBlockedUsers } from '../../hooks/useUser';
+import { useUserProfile, useUnblockUser } from '../../hooks/useUser';
 import { getUserProfile } from '../../services/firestore/users';
 import { Avatar } from '../../components/ui/Avatar';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { ScreenHeader } from '../../components/ui/ScreenHeader';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { Button } from '../../components/ui/Button';
 import { useTranslation } from 'react-i18next';
 
-export function FollowListScreen({ route, navigation }: any) {
+export function BlockedUsersScreen({ navigation }: any) {
   const { t } = useTranslation();
-  const { userIds, title } = route.params as { userIds: string[]; title: string };
   const { theme, isDark } = useTheme();
-  const { colors, spacing, typography, borderRadius } = theme;
+  const { colors, spacing, typography } = theme;
   const { user } = useAuth();
-  const blockedUsers = useBlockedUsers(user?.uid);
+  const { data: currentProfile } = useUserProfile(user?.uid || '');
+  const unblockMutation = useUnblockUser();
 
-  const filteredUserIds = blockedUsers.size > 0
-    ? userIds.filter((id) => !blockedUsers.has(id))
-    : userIds;
+  const blockedIds = currentProfile?.blockedUsers || [];
 
   const userQueries = useQueries({
-    queries: filteredUserIds.map((id) => ({
+    queries: blockedIds.map((id) => ({
       queryKey: ['user', id],
       queryFn: () => getUserProfile(id),
       staleTime: 60 * 1000,
-      enabled: filteredUserIds.length > 0,
+      enabled: blockedIds.length > 0,
     })),
   });
 
@@ -44,29 +42,29 @@ export function FollowListScreen({ route, navigation }: any) {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
-      <ScreenHeader title={title} onBack={() => navigation.goBack()} />
+      <ScreenHeader title={t('block.blockedUsers')} onBack={() => navigation.goBack()} />
 
       {users.length === 0 ? (
         <EmptyState
-          icon="people-outline"
-          title={title === t('common.following') ? t('profile.noFollowingYet') : t('profile.noFollowersYet')}
+          icon="ban-outline"
+          title={t('block.emptyState')}
           subtitle=""
         />
       ) : (
-        <FlatList showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'}
+        <FlatList
+          showsVerticalScrollIndicator={false}
+          indicatorStyle={isDark ? 'white' : 'default'}
           data={users}
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ paddingVertical: spacing.xs }}
           renderItem={({ item }) => (
-            <Pressable
-              onPress={() => navigation.navigate('UserProfile', { userId: item.id })}
-              style={({ pressed }) => ({
+            <View
+              style={{
                 flexDirection: 'row',
                 alignItems: 'center',
                 paddingHorizontal: spacing.md,
                 paddingVertical: spacing.sm + 2,
-                backgroundColor: pressed ? colors.accent : 'transparent',
-              })}
+              }}
             >
               <Avatar uri={item.avatar} name={item.displayName} size={44} />
               <View style={{ marginLeft: spacing.sm, flex: 1 }}>
@@ -77,8 +75,14 @@ export function FollowListScreen({ route, navigation }: any) {
                   @{item.username}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
-            </Pressable>
+              <Button
+                title={t('block.unblockUser')}
+                onPress={() => user && unblockMutation.mutate({ currentUserId: user.uid, targetUserId: item.id })}
+                variant="outline"
+                size="sm"
+                loading={unblockMutation.isPending}
+              />
+            </View>
           )}
         />
       )}

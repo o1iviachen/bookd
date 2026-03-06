@@ -4,7 +4,7 @@ export type AuthStackParamList = {
   Welcome: undefined;
   Login: undefined;
   SignUp: undefined;
-  ForgotPassword: undefined;
+  ForgotPassword: { email?: string } | undefined;
 };
 
 export type OnboardingStackParamList = {
@@ -90,6 +90,7 @@ export type ProfileStackParamList = SharedDetailScreenParams & {
   EditList: { listId: string };
   CreateReview: { matchId: number; reviewId?: string };
   NotificationSettings: undefined;
+  BlockedUsers: undefined;
 };
 
 export type MainTabsParamList = {

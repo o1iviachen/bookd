@@ -1,13 +1,15 @@
-import React, { useCallback } from 'react';
-import { View, Text, ScrollView, Pressable, Linking, useWindowDimensions } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { View, Text, ScrollView, Pressable, Linking, useWindowDimensions, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQueries, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
-import { useUserProfile, useFollowUser, useUnfollowUser } from '../../hooks/useUser';
+import { useUserProfile, useFollowUser, useUnfollowUser, useBlockUser, useUnblockUser, useBlockedUsers } from '../../hooks/useUser';
 import { useReviewsForUser, useLikedReviews } from '../../hooks/useReviews';
 import { useListsForUser, useLikedLists } from '../../hooks/useLists';
+import { ActionMenu } from '../../components/ui/ActionMenu';
+import { ReportModal } from '../../components/ui/ReportModal';
 import { getMatchById } from '../../services/matchService';
 import { Avatar } from '../../components/ui/Avatar';
 import { TeamLogo } from '../../components/match/TeamLogo';
@@ -39,9 +41,41 @@ export function UserProfileScreen({ route, navigation }: any) {
   const queryClient = useQueryClient();
   const followMutation = useFollowUser();
   const unfollowMutation = useUnfollowUser();
+  const blockMutation = useBlockUser();
+  const unblockMutation = useUnblockUser();
+  const [showMenu, setShowMenu] = useState(false);
+  const [showReport, setShowReport] = useState(false);
 
+  const blockedSet = useBlockedUsers(currentUser?.uid);
   const isOwnProfile = currentUser?.uid === userId;
   const isFollowing = currentProfile?.following?.includes(userId) || false;
+  const isBlocked = currentProfile?.blockedUsers?.includes(userId) || false;
+  const isBlockedBy = blockedSet.has(userId) && !isBlocked;
+  const isBlockRelated = isBlocked || isBlockedBy;
+
+  const handleBlock = () => {
+    if (!currentUser) return;
+    setShowMenu(false);
+    setTimeout(() => {
+      Alert.alert(
+        t('block.confirmTitle', { username: profile?.username }),
+        t('block.confirmMessage'),
+        [
+          { text: t('common.cancel'), style: 'cancel' },
+          {
+            text: t('block.blockUser'),
+            style: 'destructive',
+            onPress: () => blockMutation.mutate({ currentUserId: currentUser.uid, targetUserId: userId }),
+          },
+        ],
+      );
+    }, 300);
+  };
+
+  const handleUnblock = () => {
+    if (!currentUser) return;
+    unblockMutation.mutate({ currentUserId: currentUser.uid, targetUserId: userId });
+  };
 
   // Favourite matches
   const favoriteMatchIds = profile?.favoriteMatchIds || [];
@@ -136,6 +170,42 @@ export function UserProfileScreen({ route, navigation }: any) {
 
   if (isLoading || !profile) return <LoadingSpinner />;
 
+  // Blocked state — show minimal profile
+  if (isBlockRelated && !isOwnProfile) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
+        <ScreenHeader
+          title={profile.username}
+          onBack={() => navigation.goBack()}
+          rightElement={isBlocked ? (
+            <Pressable onPress={handleUnblock} hitSlop={8}>
+              <Ionicons name="ban-outline" size={22} color={colors.error} />
+            </Pressable>
+          ) : undefined}
+        />
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xl }}>
+          <Avatar uri={profile.avatar} name={profile.displayName} size={72} />
+          <Text style={{ ...typography.h4, color: colors.foreground, marginTop: spacing.sm }}>
+            @{profile.username}
+          </Text>
+          <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.sm }}>
+            {isBlocked ? t('block.blockedProfileMessage') : t('block.blockedByMessage')}
+          </Text>
+          {isBlocked && (
+            <Button
+              title={t('block.unblockUser')}
+              onPress={handleUnblock}
+              variant="outline"
+              size="sm"
+              loading={unblockMutation.isPending}
+              style={{ marginTop: spacing.md }}
+            />
+          )}
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   // Team crests
   const followedTeamCrests = (profile?.favoriteTeams || []).map((id: string) => {
     const team = POPULAR_TEAMS.find((t) => t.id === id);
@@ -153,7 +223,39 @@ export function UserProfileScreen({ route, navigation }: any) {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
-      <ScreenHeader title={profile.username} onBack={() => navigation.goBack()} />
+      <ScreenHeader
+        title={profile.username}
+        onBack={() => navigation.goBack()}
+        rightElement={!isOwnProfile ? (
+          <Pressable onPress={() => setShowMenu(true)} hitSlop={8}>
+            <Ionicons name="ellipsis-horizontal" size={22} color={colors.foreground} />
+          </Pressable>
+        ) : undefined}
+      />
+      <ActionMenu
+        visible={showMenu}
+        onClose={() => setShowMenu(false)}
+        items={[
+          {
+            label: t('common.report'),
+            icon: 'flag-outline',
+            onPress: () => { setShowMenu(false); setShowReport(true); },
+          },
+          {
+            label: isBlocked ? t('block.unblockUser') : t('block.blockUser'),
+            icon: 'ban-outline',
+            onPress: isBlocked ? () => { setShowMenu(false); handleUnblock(); } : handleBlock,
+            destructive: !isBlocked,
+          },
+        ]}
+      />
+
+      <ReportModal
+        visible={showReport}
+        onClose={() => setShowReport(false)}
+        contentType="user"
+        contentId={userId}
+      />
 
       <ScrollView showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: 60 }}>
         {/* Avatar + name */}

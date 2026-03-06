@@ -16,7 +16,7 @@ const REASON_KEYS = [
 interface ReportModalProps {
   visible: boolean;
   onClose: () => void;
-  contentType: 'review' | 'comment' | 'discussion_message';
+  contentType: 'review' | 'comment' | 'discussion_message' | 'user';
   contentId: string;
 }
 
@@ -71,7 +71,7 @@ export function ReportModal({ visible, onClose, contentType, contentId }: Report
           <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.border, alignSelf: 'center', marginBottom: spacing.md }} />
 
           <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 17, marginBottom: spacing.xs }}>
-            {contentType === 'review' ? t('ui.reportReview') : contentType === 'comment' ? t('ui.reportComment') : t('ui.reportMessage')}
+            {contentType === 'review' ? t('ui.reportReview') : contentType === 'comment' ? t('ui.reportComment') : contentType === 'user' ? t('ui.reportUser') : t('ui.reportMessage')}
           </Text>
           <Text style={{ ...typography.small, color: colors.textSecondary, marginBottom: spacing.lg }}>
             {t('ui.whyReporting')}

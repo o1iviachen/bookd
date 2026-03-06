@@ -30,6 +30,8 @@ export interface User {
   customTags: string[];
   following: string[];
   followers: string[];
+  blockedUsers: string[];
+  blockedBy: string[];
   expoPushToken: string | null;
   notificationPreferences: NotificationPreferences;
   preferredLanguage: string;

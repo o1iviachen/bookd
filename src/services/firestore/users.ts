@@ -38,6 +38,8 @@ function docToUser(docSnap: any): User {
     customTags: data.customTags || [],
     following: data.following || [],
     followers: data.followers || [],
+    blockedUsers: data.blockedUsers || [],
+    blockedBy: data.blockedBy || [],
     expoPushToken: data.expoPushToken || null,
     notificationPreferences: {
       pushEnabled: true,
@@ -82,6 +84,17 @@ export async function createUserProfile(
     followers: [],
     createdAt: serverTimestamp(),
   });
+}
+
+export async function getBlockList(uid: string): Promise<{ blockedUsers: string[]; blockedBy: string[] }> {
+  const userRef = doc(db, 'users', uid);
+  const snapshot = await getDoc(userRef);
+  if (!snapshot.exists()) return { blockedUsers: [], blockedBy: [] };
+  const data = snapshot.data();
+  return {
+    blockedUsers: data.blockedUsers || [],
+    blockedBy: data.blockedBy || [],
+  };
 }
 
 export async function getUserProfile(uid: string): Promise<User | null> {
@@ -249,6 +262,33 @@ export async function searchUsers(searchQuery: string): Promise<User[]> {
   );
   const snapshot = await getDocs(q);
   return snapshot.docs.map(docToUser);
+}
+
+export async function blockUser(currentUserId: string, targetUserId: string): Promise<void> {
+  const currentRef = doc(db, 'users', currentUserId);
+  const targetRef = doc(db, 'users', targetUserId);
+
+  // Update current user: add to blocked, remove follow both ways
+  await updateDoc(currentRef, {
+    blockedUsers: arrayUnion(targetUserId),
+    following: arrayRemove(targetUserId),
+    followers: arrayRemove(targetUserId),
+  });
+
+  // Update target user: add to blockedBy, remove follow both ways
+  await updateDoc(targetRef, {
+    blockedBy: arrayUnion(currentUserId),
+    following: arrayRemove(currentUserId),
+    followers: arrayRemove(currentUserId),
+  });
+}
+
+export async function unblockUser(currentUserId: string, targetUserId: string): Promise<void> {
+  const currentRef = doc(db, 'users', currentUserId);
+  const targetRef = doc(db, 'users', targetUserId);
+
+  await updateDoc(currentRef, { blockedUsers: arrayRemove(targetUserId) });
+  await updateDoc(targetRef, { blockedBy: arrayRemove(currentUserId) });
 }
 
 export async function getFollowingFeed(followingIds: string[]): Promise<User[]> {
