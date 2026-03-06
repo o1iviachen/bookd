@@ -1,10 +1,9 @@
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
-import { View, Text, ScrollView, Pressable, LayoutChangeEvent, Animated, Dimensions } from 'react-native';
+import { View, Text, ScrollView, Pressable, LayoutChangeEvent, Animated, Dimensions, InteractionManager } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useQuery } from '@tanstack/react-query';
-import PagerView from 'react-native-pager-view';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { getCompetitionStandings, getCompetitionMatchesByCode } from '../../services/footballApi';
@@ -71,6 +70,19 @@ function isValidFixture(match: Match): boolean {
   return !!(match.homeTeam?.name && match.awayTeam?.name && match.homeTeam.id && match.awayTeam.id);
 }
 
+// Map API-Football standing description → accent color
+function getDescriptionAccentColor(description: string | null | undefined): string | null {
+  if (!description) return null;
+  const d = description.toLowerCase();
+  if (d.includes('champions league')) return '#22c55e';       // green
+  if (d.includes('promotion')) return '#22c55e';              // green (e.g. Championship auto-promotion)
+  if (d.includes('europa league') && !d.includes('conference')) return '#f97316'; // orange
+  if (d.includes('conference league')) return '#3b82f6';      // blue
+  if (d.includes('playoff')) return '#f97316';                // orange (promotion playoffs, etc.)
+  if (d.includes('relegation')) return '#ef4444';             // red
+  return null;
+}
+
 type Tab = 'table' | 'fixtures' | 'knockout';
 
 export function LeagueDetailScreen({ route, navigation }: any) {
@@ -79,20 +91,27 @@ export function LeagueDetailScreen({ route, navigation }: any) {
   const { colors, spacing, typography, borderRadius } = theme;
   const { competitionCode, competitionName, competitionEmblem, initialTab } = route.params;
   const { data: leagueMap } = useLeagueMap();
-  const defaultTabIndex = initialTab === 'fixtures' ? 1 : 0;
-  const [activeTabIndex, setActiveTabIndex] = useState(defaultTabIndex);
-  const pagerRef = useRef<PagerView>(null);
+  const [activeTabIndex, setActiveTabIndex] = useState(initialTab === 'fixtures' ? 1 : 0);
+
+  // Defer queries until after navigation animation to prevent search page from freezing
+  const [animationDone, setAnimationDone] = useState(false);
+  useEffect(() => {
+    const task = InteractionManager.runAfterInteractions(() => setAnimationDone(true));
+    return () => task.cancel();
+  }, []);
 
   const { data: standings, isLoading: standingsLoading } = useQuery({
     queryKey: ['standings', competitionCode],
     queryFn: () => getCompetitionStandings(competitionCode),
     staleTime: 15 * 60 * 1000,
+    enabled: animationDone,
   });
 
   const { data: allFixtures, isLoading: fixturesLoading } = useQuery({
     queryKey: ['leagueFixtures', competitionCode],
     queryFn: () => getCompetitionMatchesByCode(competitionCode),
     staleTime: 15 * 60 * 1000,
+    enabled: animationDone,
   });
 
   // Filter out empty fixtures (TBD teams)
@@ -208,29 +227,40 @@ export function LeagueDetailScreen({ route, navigation }: any) {
     return sorted[sorted.length - 1][0];
   }, [fixturesByMatchday]);
 
-  const fixturesScrollRef = useRef<ScrollView>(null);
-  const matchdayOffsets = useRef<Map<number, number>>(new Map());
+  const sortedMatchdays = useMemo(() =>
+    Array.from(fixturesByMatchday.keys()).sort((a, b) => a - b),
+    [fixturesByMatchday]
+  );
+
+  const mainScrollRef = useRef<ScrollView>(null);
   const hasScrolled = useRef(false);
 
   const handleMatchdayLayout = useCallback((matchday: number, event: LayoutChangeEvent) => {
-    matchdayOffsets.current.set(matchday, event.nativeEvent.layout.y);
     if (matchday === currentMatchday && !hasScrolled.current) {
       hasScrolled.current = true;
       const y = event.nativeEvent.layout.y;
       setTimeout(() => {
-        fixturesScrollRef.current?.scrollTo({ y: Math.max(y + 16, 0), animated: false });
+        mainScrollRef.current?.scrollTo({ y: Math.max(y - 8, 0), animated: false });
       }, 100);
     }
   }, [currentMatchday]);
+
+  // Defer heavy fixtures render until after tab switch has painted
+  const [fixturesReady, setFixturesReady] = useState(false);
 
   useEffect(() => {
     const activeKey = tabs[activeTabIndex]?.key;
     if (activeKey !== 'fixtures') {
       hasScrolled.current = false;
+      setFixturesReady(false);
+    } else if (!fixturesReady) {
+      // Let the tab switch paint with a spinner first, then render fixtures
+      const id = requestAnimationFrame(() => setFixturesReady(true));
+      return () => cancelAnimationFrame(id);
     }
-  }, [activeTabIndex]);
+  }, [activeTabIndex, fixturesReady]);
 
-  // Build tabs — only include knockout for cup competitions
+  // Build tabs — include knockout for cup competitions
   const isCup = leagueMap.get(competitionCode)?.isCup ?? false;
   const tabs: { key: Tab; label: string }[] = [
     { key: 'table', label: t('league.table') },
@@ -302,16 +332,17 @@ export function LeagueDetailScreen({ route, navigation }: any) {
 
   // Memoize heavy page content so tab-switch re-renders don't rebuild them
   const tableContent = useMemo(() => {
-    if (standingsLoading) return <LoadingSpinner />;
+    if (standingsLoading) return <View style={{ paddingTop: spacing.xl }}><LoadingSpinner /></View>;
     if (!standings || standings.length === 0) {
       return (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <Text style={{ ...typography.body, color: colors.textSecondary }}>{t('league.noStandingsAvailable')}</Text>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: spacing.xxl }}>
+          <Ionicons name="podium-outline" size={40} color={colors.textSecondary} />
+          <Text style={{ ...typography.body, color: colors.textSecondary, marginTop: spacing.sm }}>{t('league.noStandingsAvailable')}</Text>
         </View>
       );
     }
     return (
-      <ScrollView showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: 60 }} nestedScrollEnabled>
+      <View>
         {/* Table header */}
         <View style={{
           flexDirection: 'row',
@@ -332,7 +363,9 @@ export function LeagueDetailScreen({ route, navigation }: any) {
         </View>
 
         {/* Table rows */}
-        {standings.map((row) => (
+        {standings.map((row) => {
+          const accentColor = getDescriptionAccentColor(row.description);
+          return (
           <Pressable
             key={row.position}
             onPress={() => navigation.navigate('TeamDetail', { teamId: row.team.id, teamName: row.team.name, teamCrest: row.team.crest })}
@@ -343,8 +376,8 @@ export function LeagueDetailScreen({ route, navigation }: any) {
               paddingVertical: spacing.sm + 2,
               borderBottomWidth: 1,
               borderBottomColor: colors.border,
-              borderLeftWidth: row.position <= 4 ? 3 : 0,
-              borderLeftColor: row.position <= 4 ? colors.primary : 'transparent',
+              borderLeftWidth: accentColor ? 3 : 0,
+              borderLeftColor: accentColor || 'transparent',
               opacity: pressed ? 0.7 : 1,
             })}
           >
@@ -380,133 +413,114 @@ export function LeagueDetailScreen({ route, navigation }: any) {
               {row.points}
             </Text>
           </Pressable>
-        ))}
-      </ScrollView>
+        );
+        })}
+      </View>
     );
-  }, [standingsLoading, standings, isDark, colors, spacing, typography, borderRadius, navigation]);
+  }, [standingsLoading, standings, colors, spacing, typography, borderRadius, navigation]);
 
   const fixturesContent = useMemo(() => {
-    if (fixturesLoading) return <LoadingSpinner />;
+    if (fixturesLoading || !allFixtures || !fixturesReady) return <View style={{ paddingTop: spacing.xl }}><LoadingSpinner /></View>;
     if (leagueFixtures.length === 0) {
       return (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <Text style={{ ...typography.body, color: colors.textSecondary }}>{t('league.noFixturesAvailable')}</Text>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: spacing.xxl }}>
+          <Ionicons name="football-outline" size={40} color={colors.textSecondary} />
+          <Text style={{ ...typography.body, color: colors.textSecondary, marginTop: spacing.sm }}>{t('league.noFixturesAvailable')}</Text>
         </View>
       );
     }
     return (
-      <ScrollView showsVerticalScrollIndicator={false} ref={fixturesScrollRef} indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: 60 }} nestedScrollEnabled>
-        {Array.from(fixturesByMatchday.entries())
-          .sort(([a], [b]) => a - b)
-          .map(([matchday, mdMatches]) => (
-            <View key={matchday} onLayout={(e) => handleMatchdayLayout(matchday, e)}>
-              {/* Matchday header */}
+      <View>
+        {sortedMatchdays.map((md) => {
+          const mdMatches = fixturesByMatchday.get(md) || [];
+          return (
+            <View key={md} onLayout={(e) => handleMatchdayLayout(md, e)}>
               <View style={{
                 paddingHorizontal: spacing.md,
                 paddingTop: spacing.xl,
                 paddingBottom: spacing.sm,
               }}>
                 <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1 }}>
-                  {t('league.matchdayLabel', { matchday })}
+                  {t('league.matchdayLabel', { matchday: md })}
                 </Text>
               </View>
-
               {mdMatches.map(renderFixtureRow)}
             </View>
-          ))}
-      </ScrollView>
+          );
+        })}
+      </View>
     );
-  }, [fixturesLoading, leagueFixtures, fixturesByMatchday, isDark, colors, spacing, handleMatchdayLayout, renderFixtureRow]);
+  }, [fixturesLoading, allFixtures, fixturesReady, leagueFixtures, sortedMatchdays, fixturesByMatchday, colors, spacing, typography, handleMatchdayLayout, renderFixtureRow, t]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
-      {/* Header */}
-      <View style={{
-        paddingBottom: spacing.md,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border,
-      }}>
-        {/* Back button row */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingTop: spacing.sm }}>
-          <Pressable onPress={() => navigation.goBack()} hitSlop={8}>
-            <Ionicons name="arrow-back" size={22} color={colors.foreground} />
-          </Pressable>
-          <View style={{ flex: 1 }} />
-          <View style={{ width: 22 }} />
-        </View>
-
-        {/* League emblem + name */}
-        <View style={{ alignItems: 'center', paddingTop: spacing.md }}>
-          <View style={{ backgroundColor: '#fff', borderRadius: borderRadius.md, padding: 6, marginBottom: spacing.sm }}>
-            <Image source={{ uri: competitionEmblem }} style={{ width: 48, height: 48 }} contentFit="contain" />
-          </View>
-          <Text style={{ ...typography.h3, color: colors.foreground, textAlign: 'center' }}>
-            {competitionName}
-          </Text>
-        </View>
-
-        {/* Tab bar — underline style */}
-        <View style={{ flexDirection: 'row', marginTop: spacing.md }}>
-          {tabs.map((tab, i) => {
-            const isActive = activeTabIndex === i;
-            return (
-              <Pressable
-                key={tab.key}
-                onPress={() => { setActiveTabIndex(i); pagerRef.current?.setPage(i); }}
-                style={{
-                  flex: 1,
-                  alignItems: 'center',
-                  paddingVertical: spacing.sm,
-                  borderBottomWidth: 2,
-                  borderBottomColor: isActive ? colors.primary : 'transparent',
-                }}
-              >
-                <Text style={{
-                  ...typography.body,
-                  fontWeight: isActive ? '600' : '400',
-                  color: isActive ? colors.foreground : colors.textSecondary,
-                  fontSize: 15,
-                }}>
-                  {tab.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
+      {/* Header bar */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+        <Pressable onPress={() => navigation.goBack()} hitSlop={8}>
+          <Ionicons name="arrow-back" size={22} color={colors.foreground} />
+        </Pressable>
+        <Text style={{ ...typography.bodyBold, color: colors.foreground, flex: 1, textAlign: 'center', fontSize: 17 }} numberOfLines={1}>
+          {competitionName}
+        </Text>
+        <View style={{ width: 22 }} />
       </View>
 
-      {/* ─── Swipeable Tab Content ─── */}
-      <PagerView
-        ref={pagerRef}
+      {/* Hero — league emblem + name */}
+      <View style={{ alignItems: 'center', paddingVertical: spacing.lg }}>
+        <View style={{ backgroundColor: '#fff', borderRadius: borderRadius.md, padding: 6, marginBottom: spacing.sm }}>
+          <Image source={{ uri: competitionEmblem }} style={{ width: 80, height: 80 }} contentFit="contain" />
+        </View>
+        <Text style={{ ...typography.h3, color: colors.foreground, textAlign: 'center' }}>
+          {competitionName}
+        </Text>
+      </View>
+
+      {/* Tab bar */}
+      <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: colors.border }}>
+        {tabs.map((tab, i) => {
+          const isActive = activeTabIndex === i;
+          return (
+            <Pressable
+              key={tab.key}
+              onPress={() => setActiveTabIndex(i)}
+              style={{
+                flex: 1,
+                alignItems: 'center',
+                paddingVertical: spacing.sm + 2,
+                borderBottomWidth: 2,
+                borderBottomColor: isActive ? colors.primary : 'transparent',
+              }}
+            >
+              <Text style={{
+                ...typography.body,
+                fontWeight: isActive ? '600' : '400',
+                color: isActive ? colors.foreground : colors.textSecondary,
+                fontSize: 15,
+              }}>
+                {tab.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {/* ─── Scrollable tab content ─── */}
+      <ScrollView
+        ref={mainScrollRef}
+        showsVerticalScrollIndicator={false}
         style={{ flex: 1 }}
-        initialPage={defaultTabIndex}
-        offscreenPageLimit={1}
-        onPageSelected={(e: any) => {
-          const page = e.nativeEvent.position;
-          // Prevent swiping to hidden knockout page for non-cup leagues
-          if (page >= tabs.length) {
-            pagerRef.current?.setPage(tabs.length - 1);
-          } else {
-            setActiveTabIndex(page);
-          }
-        }}
+        indicatorStyle={isDark ? 'white' : 'default'}
+        contentContainerStyle={{ paddingBottom: 16 }}
       >
-        {/* ─── Table Tab ─── */}
-        <View key="table" style={{ flex: 1 }}>
-          {tableContent}
-        </View>
+        {activeTabIndex === tabs.findIndex((t) => t.key === 'table') && tableContent}
 
-        {/* ─── Fixtures Tab ─── */}
-        <View key="fixtures" style={{ flex: 1 }}>
-          {fixturesContent}
-        </View>
+        {activeTabIndex === tabs.findIndex((t) => t.key === 'fixtures') && fixturesContent}
 
-        {/* ─── Knockout Tab ─── */}
-        <View key="knockout" collapsable={false} style={{ flex: 1 }}>
-          {!isCup ? null : fixturesLoading ? (
-            <LoadingSpinner />
+        {activeTabIndex === tabs.findIndex((t) => t.key === 'knockout') && (
+          !isCup ? null : fixturesLoading ? (
+            <View style={{ paddingTop: spacing.xl }}><LoadingSpinner /></View>
           ) : knockoutFixtures.length === 0 ? (
-            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: spacing.xxl }}>
               <Ionicons name="trophy-outline" size={40} color={colors.textSecondary} />
               <Text style={{ ...typography.body, color: colors.textSecondary, marginTop: spacing.sm }}>{t('league.noKnockoutMatchesYet')}</Text>
             </View>
@@ -710,17 +724,17 @@ export function LeagueDetailScreen({ route, navigation }: any) {
             );
 
             return (
-              <ScrollView showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingTop: spacing.md, paddingBottom: 60 }} nestedScrollEnabled>
+              <View style={{ paddingTop: spacing.md }}>
                 {needsHScroll ? (
-                  <ScrollView showsVerticalScrollIndicator={false} horizontal showsHorizontalScrollIndicator={false} nestedScrollEnabled>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                     {bracketContent}
                   </ScrollView>
                 ) : bracketContent}
-              </ScrollView>
+              </View>
             );
-          })()}
-        </View>
-      </PagerView>
+          })()
+        )}
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -789,9 +803,6 @@ function groupIntoTies(matches: Match[]): Tie[] {
 /* ─── Bracket constants ─── */
 
 const BRACKET_ORDER = [
-  'PLAYOFF_ROUND_1',
-  'PLAYOFF_ROUND_2',
-  'PLAYOFFS',
   'LAST_32',
   'LAST_16',
   'QUARTER_FINALS',
