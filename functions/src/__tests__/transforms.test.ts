@@ -1,4 +1,4 @@
-import { transformFixtureToMatch, transformFixtureDetails, transformStandings } from '../transforms';
+import { transformFixtureToMatch, transformFixtureDetails, transformStandings, transformLineupOnly, transformLiveEventDetails } from '../transforms';
 import {
   makeApiFixture,
   makeApiEvent,
@@ -419,5 +419,133 @@ describe('transformStandings', () => {
 
   it('handles empty standings array', () => {
     expect(transformStandings([])).toEqual([]);
+  });
+});
+
+// ─── transformFixtureToMatch — new fields ───
+
+describe('transformFixtureToMatch new fields', () => {
+  const leagueMap = makeLeagueMap();
+
+  it('includes elapsed from fixture status', () => {
+    const fixture = makeApiFixture({ fixture: { status: { elapsed: 67 } } });
+    const result = transformFixtureToMatch(fixture, leagueMap)!;
+    expect(result.elapsed).toBe(67);
+  });
+
+  it('elapsed is null for scheduled matches', () => {
+    const fixture = makeApiFixture({ fixture: { status: { short: 'NS', elapsed: null } } });
+    const result = transformFixtureToMatch(fixture, leagueMap)!;
+    expect(result.elapsed).toBeNull();
+  });
+
+  it('does not include hasDetails (set by callers for new docs only)', () => {
+    const fixture = makeApiFixture();
+    const result = transformFixtureToMatch(fixture, leagueMap)!;
+    expect(result.hasDetails).toBeUndefined();
+  });
+});
+
+// ─── transformLineupOnly ───
+
+describe('transformLineupOnly', () => {
+  it('returns lineup fields only', () => {
+    const homeLineup = makeApiLineup({
+      team: { id: 33, name: 'Man Utd', logo: '' },
+      coach: { id: 201, name: 'Coach A', photo: '' },
+      formation: '4-2-3-1',
+      startXI: [{ player: { id: 1, name: 'P1', number: 1, pos: 'G' } }],
+      substitutes: [{ player: { id: 2, name: 'P2', number: 2, pos: 'D' } }],
+    });
+    const awayLineup = makeApiLineup({
+      team: { id: 40, name: 'Liverpool', logo: '' },
+      coach: { id: 202, name: 'Coach B', photo: '' },
+      formation: '4-3-3',
+      startXI: [{ player: { id: 3, name: 'P3', number: 1, pos: 'G' } }],
+      substitutes: [],
+    });
+
+    const result = transformLineupOnly(1001, [homeLineup, awayLineup], 33, 40, '2025-01-15T15:00:00Z', 2024);
+
+    expect(result.matchId).toBe(1001);
+    expect(result.kickoff).toBe('2025-01-15T15:00:00Z');
+    expect(result.season).toBe(2024);
+    expect(result.homeLineup).toHaveLength(1);
+    expect(result.homeBench).toHaveLength(1);
+    expect(result.awayLineup).toHaveLength(1);
+    expect(result.awayBench).toHaveLength(0);
+    expect(result.homeFormation).toBe('4-2-3-1');
+    expect(result.awayFormation).toBe('4-3-3');
+    expect(result.homeCoach).toEqual({ id: 201, name: 'Coach A' });
+    expect(result.awayCoach).toEqual({ id: 202, name: 'Coach B' });
+    expect(result.playerIds).toEqual(expect.arrayContaining([1, 2, 3, 201, 202]));
+  });
+
+  it('does not include event or stats fields', () => {
+    const result = transformLineupOnly(1001, [], 33, 40, '2025-01-15T15:00:00Z', 2024);
+    expect(result).not.toHaveProperty('goals');
+    expect(result).not.toHaveProperty('stats');
+    expect(result).not.toHaveProperty('bookings');
+    expect(result).not.toHaveProperty('events');
+    expect(result).not.toHaveProperty('referee');
+  });
+
+  it('handles empty lineups', () => {
+    const result = transformLineupOnly(1001, [], 33, 40, '2025-01-15T15:00:00Z', 2024);
+    expect(result.homeLineup).toEqual([]);
+    expect(result.awayLineup).toEqual([]);
+    expect(result.homeCoach).toBeNull();
+    expect(result.awayCoach).toBeNull();
+    expect(result.homeFormation).toBeNull();
+    expect(result.playerIds).toEqual([]);
+  });
+});
+
+// ─── transformLiveEventDetails ───
+
+describe('transformLiveEventDetails', () => {
+  const fixture = makeApiFixture();
+
+  it('returns events and stats fields only', () => {
+    const events = [
+      makeApiEvent({ type: 'Goal', time: { elapsed: 23, extra: null } }),
+      makeApiEvent({ type: 'Card', detail: 'Yellow Card', time: { elapsed: 45, extra: null } }),
+      makeApiEvent({ type: 'subst', time: { elapsed: 60, extra: null } }),
+    ];
+    const homeStats = makeApiStats(33);
+    const awayStats = makeApiStats(40);
+
+    const result = transformLiveEventDetails(1001, events, [homeStats, awayStats], fixture);
+
+    expect(result.matchId).toBe(1001);
+    expect(result.kickoff).toBe(fixture.fixture.date);
+    expect(result.season).toBe(2024);
+    expect(result.goals).toHaveLength(1);
+    expect(result.bookings).toHaveLength(1);
+    expect(result.substitutions).toHaveLength(1);
+    expect(result.events).toHaveLength(3);
+    expect(result.stats).not.toBeNull();
+    expect(result.referee).toBe('M. Oliver');
+    expect(result.halfTimeScore).toEqual({ home: 1, away: 0 });
+  });
+
+  it('does not include lineup fields', () => {
+    const result = transformLiveEventDetails(1001, [], [], fixture);
+    expect(result).not.toHaveProperty('homeLineup');
+    expect(result).not.toHaveProperty('awayLineup');
+    expect(result).not.toHaveProperty('homeBench');
+    expect(result).not.toHaveProperty('awayBench');
+    expect(result).not.toHaveProperty('homeCoach');
+    expect(result).not.toHaveProperty('homeFormation');
+    expect(result).not.toHaveProperty('playerIds');
+  });
+
+  it('handles empty events and stats', () => {
+    const result = transformLiveEventDetails(1001, [], [], fixture);
+    expect(result.goals).toEqual([]);
+    expect(result.bookings).toEqual([]);
+    expect(result.substitutions).toEqual([]);
+    expect(result.events).toEqual([]);
+    expect(result.stats).toBeNull();
   });
 });

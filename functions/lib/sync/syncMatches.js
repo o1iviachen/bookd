@@ -103,12 +103,20 @@ async function syncLeagueSeason(leagueApiId, season) {
 }
 // ─── Helpers ───
 async function batchWrite(docs) {
+    // Check which docs already exist so we only set hasDetails: false on new ones
+    const refs = docs.map(({ id }) => db.collection(config_1.COLLECTIONS.MATCHES).doc(id));
+    const existingSnaps = await db.getAll(...refs);
+    const existingIds = new Set(existingSnaps.filter((s) => s.exists).map((s) => s.id));
     for (let i = 0; i < docs.length; i += config_1.FIRESTORE_BATCH_SIZE) {
         const chunk = docs.slice(i, i + config_1.FIRESTORE_BATCH_SIZE);
         const batch = db.batch();
         for (const { id, data } of chunk) {
             const ref = db.collection(config_1.COLLECTIONS.MATCHES).doc(id);
-            batch.set(ref, { ...data, cachedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+            batch.set(ref, {
+                ...data,
+                ...(!existingIds.has(id) && { hasDetails: false }),
+                cachedAt: admin.firestore.FieldValue.serverTimestamp(),
+            }, { merge: true });
         }
         await batch.commit();
     }

@@ -5,9 +5,11 @@ admin.initializeApp();
 
 import { syncMatchesForDateRange } from './sync/syncMatches';
 import { syncAllStandings } from './sync/syncStandings';
-import { syncMissingDetails, syncMatchDetails } from './sync/syncDetails';
+import { syncMatchDetails } from './sync/syncDetails';
 import { syncLiveMatches } from './sync/syncLive';
-import { runBackfill, buildTeamsFromMatches, buildPlayersAndEnrichTeams, fetchTeamColors, enrichPlayersFromSquads, refreshSquadsOnly, backfillPlayerNameLower, generateSearchPrefixes, backfillTeamCountry } from './sync/backfill';
+import { syncPreMatchLineups } from './sync/syncLineups';
+import { syncStaleMatchDetails } from './sync/syncStale';
+import { runBackfill, buildTeamsFromMatches, buildPlayersAndEnrichTeams, fetchTeamColors, enrichPlayersFromSquads, refreshSquadsOnly, backfillPlayerNameLower, generateSearchPrefixes, backfillMissingMatchDetails, backfillTeamCountry } from './sync/backfill';
 import { getLeagueTier } from './leagueHelper';
 import { SYNC_LEAGUES, COLLECTIONS } from './config';
 
@@ -105,79 +107,69 @@ export const backfillMatchDetailKickoffs = functions
 // ─── Scheduled Functions ───
 
 /**
- * Daily sync: runs at 06:00 UTC every day.
- * Fetches yesterday's results, today's schedule, and tomorrow's schedule.
- * Also syncs standings and missing match details.
+ * Daily prepopulation: runs at 05:00 UTC every day.
+ * Fetches yesterday's results + next 7 days of upcoming matches.
+ * Also syncs standings for all leagues.
  */
-export const dailySync = functions
+export const dailyPrepopulate = functions
   .runWith({ timeoutSeconds: 540, memory: '512MB' })
-  .pubsub.schedule('0 6 * * *')
+  .pubsub.schedule('0 5 * * *')
   .timeZone('UTC')
   .onRun(async () => {
     const yesterday = formatDate(daysAgo(1));
-    const today = formatDate(new Date());
-    const tomorrow = formatDate(daysFromNow(1));
-    const dayAfter = formatDate(daysFromNow(2));
+    const weekAhead = formatDate(daysFromNow(7));
 
-    console.log('[dailySync] Starting...');
+    console.log('[dailyPrepopulate] Starting...');
 
-    // Sync matches: yesterday through day-after-tomorrow
-    const matchCount = await syncMatchesForDateRange(yesterday, dayAfter);
-    console.log(`[dailySync] Synced ${matchCount} matches`);
+    const matchCount = await syncMatchesForDateRange(yesterday, weekAhead);
+    console.log(`[dailyPrepopulate] Synced ${matchCount} matches (${yesterday} to ${weekAhead})`);
 
-    // Sync standings
     const standingsCount = await syncAllStandings();
-    console.log(`[dailySync] Synced ${standingsCount} league standings`);
+    console.log(`[dailyPrepopulate] Synced ${standingsCount} league standings`);
 
-    // Sync details for recently finished matches
-    const detailsCount = await syncMissingDetails();
-    console.log(`[dailySync] Synced ${detailsCount} match details`);
-
-    console.log('[dailySync] Complete');
+    console.log('[dailyPrepopulate] Complete');
   });
 
 /**
- * Live match sync: runs every 2 minutes.
- * Updates scores for currently in-play matches.
+ * Lineup sync: runs every 5 minutes.
+ * Fetches lineups for matches starting within the next 60 minutes.
+ * Overrides lineup data in the last 10 minutes before kickoff.
+ */
+export const lineupSync = functions
+  .runWith({ timeoutSeconds: 120, memory: '256MB' })
+  .pubsub.schedule('every 5 minutes')
+  .onRun(async () => {
+    const synced = await syncPreMatchLineups();
+    if (synced > 0) console.log(`[lineupSync] Synced ${synced} lineups`);
+  });
+
+/**
+ * Live sync: runs every 1 minute.
+ * Per-league fixture queries for active leagues, updates scores/status.
+ * Fetches events + stats for each live match.
+ * Runs full detail sync when a match transitions to FINISHED.
  */
 export const liveSync = functions
-  .runWith({ timeoutSeconds: 60, memory: '256MB' })
-  .pubsub.schedule('every 2 minutes')
+  .runWith({ timeoutSeconds: 120, memory: '512MB' })
+  .pubsub.schedule('every 1 minutes')
   .onRun(async () => {
-    const count = await syncLiveMatches();
-    if (count > 0) {
-      console.log(`[liveSync] Updated ${count} live matches`);
+    const result = await syncLiveMatches();
+    if (result.matchesUpdated > 0) {
+      console.log(`[liveSync] ${result.matchesUpdated} matches, ${result.detailsUpdated} details`);
     }
   });
 
 /**
- * Detail backfill: runs every 2 minutes.
- * Queries matches with hasDetails == false to find exactly the ones needing work.
- * Processes ~28 matches per run (4 API calls each = ~112 calls/run).
- * 720 runs/day × ~28 matches = ~20,160 matches/day, exactly 10x the original rate.
- * ~50 Firestore reads per run instead of ~55,000 with the old full-scan approach.
+ * Stale sync: runs every hour.
+ * Catches finished matches 4+ hours past kickoff that are still missing
+ * complete match details. Safety net for anything the live sync missed.
  */
-export const detailBackfill = functions
+export const staleSync = functions
   .runWith({ timeoutSeconds: 540, memory: '512MB' })
-  .pubsub.schedule('every 2 minutes')
+  .pubsub.schedule('every 1 hours')
   .onRun(async () => {
-    const db = admin.firestore();
-
-    // Query only matches that are missing details
-    const snapshot = await db.collection('matches')
-      .where('status', '==', 'FINISHED')
-      .where('hasDetails', '==', false)
-      .limit(28)
-      .get();
-
-    if (snapshot.empty) return;
-
-    const fixtureIds = snapshot.docs.map((d) => d.data().id as number);
-    const synced = await syncMatchDetails(fixtureIds);
-
-    if (synced > 0) {
-      console.log(`[detailBackfill] Synced ${synced} match details`);
-    }
+    const synced = await syncStaleMatchDetails();
+    if (synced > 0) console.log(`[staleSync] Synced ${synced} stale match details`);
   });
 
 // ─── HTTP Functions (admin/backfill) ───
@@ -387,6 +379,41 @@ export const migrateHasDetails = functions
     } catch (err: any) {
       console.error('[migrateHasDetails] Error:', err);
       res.status(500).json({ error: err.message });
+    }
+  });
+
+/**
+ * Backfill missing matchDetails for FINISHED matches.
+ * Does ground-truth existence check (not just hasDetails flag).
+ * Also fixes inconsistent hasDetails flags.
+ *   GET /backfillDetails
+ *   GET /backfillDetails?max=1000
+ */
+export const backfillDetails = functions
+  .runWith({ timeoutSeconds: 540, memory: '512MB' })
+  .https.onRequest(async (req, res) => {
+    try {
+      const max = parseInt(req.query.max as string) || 500;
+      const result = await backfillMissingMatchDetails(max);
+      res.json(result);
+    } catch (err: any) {
+      console.error('[backfillDetails] Error:', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+/**
+ * Scheduled backfill: processes up to 100 missing matchDetails every 5 minutes.
+ * 100 matches × 4 API calls = 400 calls per run.
+ * 288 runs/day × 400 = ~115K max (stops early when no missing matches remain).
+ */
+export const scheduledBackfillDetails = functions
+  .runWith({ timeoutSeconds: 540, memory: '512MB' })
+  .pubsub.schedule('every 2 minutes')
+  .onRun(async () => {
+    const result = await backfillMissingMatchDetails(100);
+    if (result.missing > 0) {
+      console.log(`[scheduledBackfillDetails] ${result.synced} synced, ${result.failed} failed, ${result.missing} were missing`);
     }
   });
 

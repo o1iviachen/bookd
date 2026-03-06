@@ -23,17 +23,54 @@ export async function syncMatchDetails(fixtureIds: number[], force = false): Pro
       }
 
       // Fetch lineups, events, stats, and fixture in parallel (4 calls)
-      // We need the fixture for referee and venue info not stored in matches collection
-      const [fixture, lineups, events, stats] = await Promise.all([
+      // Uses allSettled so partial data is still written if some calls fail
+      const [fixtureResult, lineupsResult, eventsResult, statsResult] = await Promise.allSettled([
         getFixtureById(fixtureId),
         getFixtureLineups(fixtureId),
         getFixtureEvents(fixtureId),
         getFixtureStats(fixtureId),
       ]);
 
-      if (!fixture) continue;
+      const fixture = fixtureResult.status === 'fulfilled' ? fixtureResult.value : null;
+      const lineups = lineupsResult.status === 'fulfilled' ? lineupsResult.value : null;
+      const events = eventsResult.status === 'fulfilled' ? eventsResult.value : null;
+      const stats = statsResult.status === 'fulfilled' ? statsResult.value : null;
 
-      const detailDoc = transformFixtureDetails(fixtureId, lineups, events, stats, fixture);
+      // Check for 403 on any call — mark detailsNotFound
+      const allResults = [fixtureResult, lineupsResult, eventsResult, statsResult];
+      const has403 = allResults.some(
+        (r) => r.status === 'rejected' && r.reason?.message?.includes('403'),
+      );
+      if (has403) {
+        console.warn(`[syncDetails] 403 for fixture ${fixtureId} — marking detailsNotFound to stop retries`);
+        await db.collection(COLLECTIONS.MATCHES).doc(String(fixtureId)).update({ detailsNotFound: true });
+        continue;
+      }
+
+      // Check for rate limit on any call — stop processing
+      const hasRateLimit = allResults.some(
+        (r) => r.status === 'rejected' && (r.reason?.message?.includes('429') || r.reason?.message?.includes('request limit')),
+      );
+      if (hasRateLimit) {
+        console.error(`[syncDetails] API rate limit hit after syncing ${synced} fixtures. Stopping.`);
+        break;
+      }
+
+      if (!fixture) {
+        console.warn(`[syncDetails] Fixture ${fixtureId}: API returned no data — skipping`);
+        continue;
+      }
+
+      // Log partial data warnings
+      const missing: string[] = [];
+      if (!lineups?.length) missing.push('lineups');
+      if (!events?.length) missing.push('events');
+      if (!stats?.length) missing.push('stats');
+      if (missing.length > 0) {
+        console.warn(`[syncDetails] Fixture ${fixtureId}: missing ${missing.join(', ')} — writing partial details`);
+      }
+
+      const detailDoc = transformFixtureDetails(fixtureId, lineups || [], events || [], stats || [], fixture);
 
       await db.collection(COLLECTIONS.MATCH_DETAILS).doc(String(fixtureId)).set({
         ...detailDoc,
@@ -48,11 +85,6 @@ export async function syncMatchDetails(fixtureIds: number[], force = false): Pro
       synced++;
       console.log(`[syncDetails] Synced details for fixture ${fixtureId}`);
     } catch (err: any) {
-      // If we hit an API rate limit, stop processing to avoid wasting calls
-      if (err.message?.includes('request limit') || err.message?.includes('429')) {
-        console.error(`[syncDetails] API rate limit hit after syncing ${synced} fixtures. Stopping.`);
-        break;
-      }
       console.error(`[syncDetails] Error syncing fixture ${fixtureId}:`, err.message);
     }
   }
@@ -78,7 +110,9 @@ export async function syncMissingDetails(): Promise<number> {
 
   if (matchesSnapshot.empty) return 0;
 
-  const fixtureIds = matchesSnapshot.docs.map((d) => d.data().id as number);
+  // Filter out matches marked as detailsNotFound (403 from API)
+  const eligibleDocs = matchesSnapshot.docs.filter((d) => !d.data().detailsNotFound);
+  const fixtureIds = eligibleDocs.map((d) => d.data().id as number);
 
   // Batch-check which details already exist using getAll instead of N+1 getDoc
   const detailRefs = fixtureIds.map((id) =>

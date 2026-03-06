@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.seedLeagues = exports.diagnoseTeams = exports.auditTeamIds = exports.migrateLegacyMatches = exports.backfillMatchRatings = exports.triggerAggregates = exports.computeAggregates = exports.backfillPlayerIds = exports.migratePlayerNames = exports.squadRefresh = exports.triggerSquadRefresh = exports.enrichPlayers = exports.backfillCountry = exports.enrichTeams = exports.buildPlayers = exports.migrateLeagueTier = exports.migrateSearchPrefixes = exports.fixPlayerNames = exports.migrateHasDetails = exports.syncDetailsForLeague = exports.manualSync = exports.buildTeams = exports.backfill = exports.detailBackfill = exports.liveSync = exports.dailySync = exports.backfillMatchDetailKickoffs = exports.translateText = exports.submitReport = exports.deleteAccount = exports.moderateReviewMedia = exports.onMatchStatusChange = exports.preMatchNotify = exports.sendPushNotification = void 0;
+exports.seedLeagues = exports.diagnoseTeams = exports.auditTeamIds = exports.migrateLegacyMatches = exports.backfillMatchRatings = exports.triggerAggregates = exports.computeAggregates = exports.backfillPlayerIds = exports.migratePlayerNames = exports.squadRefresh = exports.triggerSquadRefresh = exports.enrichPlayers = exports.enrichTeams = exports.buildPlayers = exports.migrateLeagueTier = exports.migrateSearchPrefixes = exports.fixPlayerNames = exports.scheduledBackfillDetails = exports.backfillDetails = exports.migrateHasDetails = exports.syncDetailsForLeague = exports.manualSync = exports.buildTeams = exports.backfill = exports.staleSync = exports.liveSync = exports.lineupSync = exports.dailyPrepopulate = exports.backfillMatchDetailKickoffs = exports.submitReport = exports.deleteAccount = exports.moderateReviewMedia = exports.onMatchStatusChange = exports.preMatchNotify = exports.sendPushNotification = void 0;
 const functions = __importStar(require("firebase-functions"));
 const admin = __importStar(require("firebase-admin"));
 admin.initializeApp();
@@ -41,6 +41,8 @@ const syncMatches_1 = require("./sync/syncMatches");
 const syncStandings_1 = require("./sync/syncStandings");
 const syncDetails_1 = require("./sync/syncDetails");
 const syncLive_1 = require("./sync/syncLive");
+const syncLineups_1 = require("./sync/syncLineups");
+const syncStale_1 = require("./sync/syncStale");
 const backfill_1 = require("./sync/backfill");
 const leagueHelper_1 = require("./leagueHelper");
 const config_1 = require("./config");
@@ -72,9 +74,6 @@ Object.defineProperty(exports, "deleteAccount", { enumerable: true, get: functio
 // ─── Reports ───
 var report_1 = require("./report");
 Object.defineProperty(exports, "submitReport", { enumerable: true, get: function () { return report_1.submitReport; } });
-// ─── Translation ───
-var translate_1 = require("./translate");
-Object.defineProperty(exports, "translateText", { enumerable: true, get: function () { return translate_1.translateText; } });
 /**
  * One-time migration: backfill kickoff + season into matchDetails docs.
  * Required so getMatchesForPerson can sort by kickoff DESC (most recent first).
@@ -128,69 +127,64 @@ exports.backfillMatchDetailKickoffs = functions
 });
 // ─── Scheduled Functions ───
 /**
- * Daily sync: runs at 06:00 UTC every day.
- * Fetches yesterday's results, today's schedule, and tomorrow's schedule.
- * Also syncs standings and missing match details.
+ * Daily prepopulation: runs at 05:00 UTC every day.
+ * Fetches yesterday's results + next 7 days of upcoming matches.
+ * Also syncs standings for all leagues.
  */
-exports.dailySync = functions
+exports.dailyPrepopulate = functions
     .runWith({ timeoutSeconds: 540, memory: '512MB' })
-    .pubsub.schedule('0 6 * * *')
+    .pubsub.schedule('0 5 * * *')
     .timeZone('UTC')
     .onRun(async () => {
     const yesterday = formatDate(daysAgo(1));
-    const today = formatDate(new Date());
-    const tomorrow = formatDate(daysFromNow(1));
-    const dayAfter = formatDate(daysFromNow(2));
-    console.log('[dailySync] Starting...');
-    // Sync matches: yesterday through day-after-tomorrow
-    const matchCount = await (0, syncMatches_1.syncMatchesForDateRange)(yesterday, dayAfter);
-    console.log(`[dailySync] Synced ${matchCount} matches`);
-    // Sync standings
+    const weekAhead = formatDate(daysFromNow(7));
+    console.log('[dailyPrepopulate] Starting...');
+    const matchCount = await (0, syncMatches_1.syncMatchesForDateRange)(yesterday, weekAhead);
+    console.log(`[dailyPrepopulate] Synced ${matchCount} matches (${yesterday} to ${weekAhead})`);
     const standingsCount = await (0, syncStandings_1.syncAllStandings)();
-    console.log(`[dailySync] Synced ${standingsCount} league standings`);
-    // Sync details for recently finished matches
-    const detailsCount = await (0, syncDetails_1.syncMissingDetails)();
-    console.log(`[dailySync] Synced ${detailsCount} match details`);
-    console.log('[dailySync] Complete');
+    console.log(`[dailyPrepopulate] Synced ${standingsCount} league standings`);
+    console.log('[dailyPrepopulate] Complete');
 });
 /**
- * Live match sync: runs every 2 minutes.
- * Updates scores for currently in-play matches.
+ * Lineup sync: runs every 5 minutes.
+ * Fetches lineups for matches starting within the next 60 minutes.
+ * Overrides lineup data in the last 10 minutes before kickoff.
+ */
+exports.lineupSync = functions
+    .runWith({ timeoutSeconds: 120, memory: '256MB' })
+    .pubsub.schedule('every 5 minutes')
+    .onRun(async () => {
+    const synced = await (0, syncLineups_1.syncPreMatchLineups)();
+    if (synced > 0)
+        console.log(`[lineupSync] Synced ${synced} lineups`);
+});
+/**
+ * Live sync: runs every 1 minute.
+ * Per-league fixture queries for active leagues, updates scores/status.
+ * Fetches events + stats for each live match.
+ * Runs full detail sync when a match transitions to FINISHED.
  */
 exports.liveSync = functions
-    .runWith({ timeoutSeconds: 60, memory: '256MB' })
-    .pubsub.schedule('every 2 minutes')
+    .runWith({ timeoutSeconds: 120, memory: '512MB' })
+    .pubsub.schedule('every 1 minutes')
     .onRun(async () => {
-    const count = await (0, syncLive_1.syncLiveMatches)();
-    if (count > 0) {
-        console.log(`[liveSync] Updated ${count} live matches`);
+    const result = await (0, syncLive_1.syncLiveMatches)();
+    if (result.matchesUpdated > 0) {
+        console.log(`[liveSync] ${result.matchesUpdated} matches, ${result.detailsUpdated} details`);
     }
 });
 /**
- * Detail backfill: runs every 2 minutes.
- * Queries matches with hasDetails == false to find exactly the ones needing work.
- * Processes ~28 matches per run (4 API calls each = ~112 calls/run).
- * 720 runs/day × ~28 matches = ~20,160 matches/day, exactly 10x the original rate.
- * ~50 Firestore reads per run instead of ~55,000 with the old full-scan approach.
+ * Stale sync: runs every hour.
+ * Catches finished matches 4+ hours past kickoff that are still missing
+ * complete match details. Safety net for anything the live sync missed.
  */
-exports.detailBackfill = functions
+exports.staleSync = functions
     .runWith({ timeoutSeconds: 540, memory: '512MB' })
-    .pubsub.schedule('every 2 minutes')
+    .pubsub.schedule('every 1 hours')
     .onRun(async () => {
-    const db = admin.firestore();
-    // Query only matches that are missing details
-    const snapshot = await db.collection('matches')
-        .where('status', '==', 'FINISHED')
-        .where('hasDetails', '==', false)
-        .limit(28)
-        .get();
-    if (snapshot.empty)
-        return;
-    const fixtureIds = snapshot.docs.map((d) => d.data().id);
-    const synced = await (0, syncDetails_1.syncMatchDetails)(fixtureIds);
-    if (synced > 0) {
-        console.log(`[detailBackfill] Synced ${synced} match details`);
-    }
+    const synced = await (0, syncStale_1.syncStaleMatchDetails)();
+    if (synced > 0)
+        console.log(`[staleSync] Synced ${synced} stale match details`);
 });
 // ─── HTTP Functions (admin/backfill) ───
 /**
@@ -379,6 +373,40 @@ exports.migrateHasDetails = functions
     catch (err) {
         console.error('[migrateHasDetails] Error:', err);
         res.status(500).json({ error: err.message });
+    }
+});
+/**
+ * Backfill missing matchDetails for FINISHED matches.
+ * Does ground-truth existence check (not just hasDetails flag).
+ * Also fixes inconsistent hasDetails flags.
+ *   GET /backfillDetails
+ *   GET /backfillDetails?max=1000
+ */
+exports.backfillDetails = functions
+    .runWith({ timeoutSeconds: 540, memory: '512MB' })
+    .https.onRequest(async (req, res) => {
+    try {
+        const max = parseInt(req.query.max) || 500;
+        const result = await (0, backfill_1.backfillMissingMatchDetails)(max);
+        res.json(result);
+    }
+    catch (err) {
+        console.error('[backfillDetails] Error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+/**
+ * Scheduled backfill: processes up to 100 missing matchDetails every 5 minutes.
+ * 100 matches × 4 API calls = 400 calls per run.
+ * 288 runs/day × 400 = ~115K max (stops early when no missing matches remain).
+ */
+exports.scheduledBackfillDetails = functions
+    .runWith({ timeoutSeconds: 540, memory: '512MB' })
+    .pubsub.schedule('every 2 minutes')
+    .onRun(async () => {
+    const result = await (0, backfill_1.backfillMissingMatchDetails)(100);
+    if (result.missing > 0) {
+        console.log(`[scheduledBackfillDetails] ${result.synced} synced, ${result.failed} failed, ${result.missing} were missing`);
     }
 });
 /**
@@ -598,23 +626,6 @@ exports.enrichTeams = functions
     }
     catch (err) {
         console.error('[enrichTeams] Error:', err);
-        res.status(500).json({ error: err.message });
-    }
-});
-/**
- * One-off: backfill real country for team docs (replaces city values).
- *   GET /backfillCountry?limit=200
- */
-exports.backfillCountry = functions
-    .runWith({ timeoutSeconds: 540, memory: '512MB' })
-    .https.onRequest(async (req, res) => {
-    const limit = req.query.limit ? parseInt(req.query.limit, 10) : 200;
-    try {
-        const result = await (0, backfill_1.backfillTeamCountry)(limit);
-        res.json({ success: true, ...result });
-    }
-    catch (err) {
-        console.error('[backfillCountry] Error:', err);
         res.status(500).json({ error: err.message });
     }
 });

@@ -144,6 +144,7 @@ export async function getFixtures(params: {
   live?: string; // "all"
   ids?: string; // comma-separated fixture IDs
   status?: string;
+  timezone?: string; // e.g. "UTC"
 }): Promise<ApiFixture[]> {
   await rateLimit();
   const response = await client.get('/fixtures', { params });

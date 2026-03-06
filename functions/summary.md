@@ -4,9 +4,10 @@
 
 | Function | Schedule | Description |
 |----------|----------|-------------|
-| `dailySync` | `0 6 * * *` (06:00 UTC daily) | Syncs yesterday's results, today + tomorrow's schedule, league standings, and missing match details |
-| `liveSync` | Every 2 minutes | Updates scores for currently in-play matches |
-| `detailBackfill` | Every 2 minutes | Syncs lineups/stats/events for finished matches missing details (`hasDetails == false`). ~28 matches per run |
+| `dailyPrepopulate` | `0 5 * * *` (05:00 UTC daily) | 7-day match lookahead (yesterday → +7 days) and league standings refresh |
+| `lineupSync` | Every 5 minutes | Fetches pre-match lineups for matches starting within 60 min. Skips if lineups exist (unless ≤10 min to kickoff) |
+| `liveSync` | Every 1 minute | Per-league fixture queries for active leagues, live events/stats per match, full detail sync on match finish |
+| `staleSync` | Every 1 hour | Safety net: syncs full details for finished matches with `hasDetails == false` (kickoff 4+ hrs ago, limit 50) |
 | `computeAggregates` | `0 3 * * *` (03:00 UTC daily) | Paginates all reviews and writes pre-computed popular + highest-rated match lists to `aggregates` collection |
 
 ## Firestore Triggers

@@ -39,119 +39,199 @@ const apiFootball_1 = require("../apiFootball");
 const transforms_1 = require("../transforms");
 const config_1 = require("../config");
 const leagueHelper_1 = require("../leagueHelper");
+const syncDetails_1 = require("./syncDetails");
+const syncStandings_1 = require("./syncStandings");
 const db = admin.firestore();
+const TERMINAL_STATUSES = new Set(['FINISHED', 'CANCELLED', 'POSTPONED']);
+const LIVE_STATUSES = new Set(['IN_PLAY', 'PAUSED', 'SUSPENDED']);
+const PRE_WINDOW_MINS = 15;
+const POST_WINDOW_HRS = 3;
 /**
- * Fetches all currently live fixtures and updates scores in Firestore.
- * Also checks for stale matches (IN_PLAY/PAUSED 2+ hrs, SCHEDULED/TIMED 3+ hrs)
- * and re-fetches their status from the API.
- * Called every 2 minutes via Cloud Scheduler.
+ * Per-minute live sync: fetches fixtures per active league, updates scores/status,
+ * and fetches events/stats for each live match.
+ * Detects FINISHED transitions and runs full detail sync for just-finished matches.
  */
 async function syncLiveMatches() {
-    let updated = 0;
+    var _a, _b, _c, _d, _e;
+    let matchesUpdated = 0;
+    let detailsUpdated = 0;
     try {
-        // 1. Update currently live matches
+        const now = Date.now();
         const leagues = await (0, leagueHelper_1.getEnabledLeagues)();
-        const trackedIds = new Set(leagues.map((l) => l.apiId));
         const leagueMap = await (0, leagueHelper_1.getLeagueByApiIdMap)();
-        const liveFixtures = await (0, apiFootball_1.getLiveFixtures)();
-        const tracked = liveFixtures.filter((f) => trackedIds.has(f.league.id));
-        if (tracked.length > 0) {
-            for (let i = 0; i < tracked.length; i += config_1.FIRESTORE_BATCH_SIZE) {
-                const chunk = tracked.slice(i, i + config_1.FIRESTORE_BATCH_SIZE);
+        const leagueByCode = new Map(leagues.map((l) => [l.code, l]));
+        // 1. Query today's matches from Firestore
+        const todayStart = startOfDayUTC(new Date());
+        const todayEnd = endOfDayUTC(new Date());
+        const snap = await db.collection(config_1.COLLECTIONS.MATCHES)
+            .where('kickoff', '>=', todayStart)
+            .where('kickoff', '<=', todayEnd)
+            .get();
+        console.log(`[liveSync] Found ${snap.size} matches today (${todayStart} to ${todayEnd})`);
+        if (snap.empty) {
+            return { matchesUpdated: 0, detailsUpdated: 0 };
+        }
+        // 2. Group by league and compute windows
+        const windowMap = new Map();
+        for (const doc of snap.docs) {
+            const data = doc.data();
+            const code = (_a = data.competition) === null || _a === void 0 ? void 0 : _a.code;
+            if (!code)
+                continue;
+            const kickoffMs = new Date(data.kickoff).getTime();
+            const status = data.status;
+            const fixtureId = data.id;
+            let win = windowMap.get(code);
+            if (!win) {
+                const league = leagueByCode.get(code);
+                if (!league)
+                    continue;
+                win = {
+                    code,
+                    apiId: league.apiId,
+                    season: (0, leagueHelper_1.getSeasonForLeague)(league),
+                    earliest: kickoffMs,
+                    latest: kickoffMs,
+                    allFinished: true,
+                    matchStatuses: new Map(),
+                };
+                windowMap.set(code, win);
+            }
+            if (kickoffMs < win.earliest)
+                win.earliest = kickoffMs;
+            if (kickoffMs > win.latest)
+                win.latest = kickoffMs;
+            if (!TERMINAL_STATUSES.has(status))
+                win.allFinished = false;
+            win.matchStatuses.set(fixtureId, status);
+        }
+        for (const [code, win] of windowMap) {
+            const ids = [...win.matchStatuses.entries()].map(([id, s]) => `${id}(${s})`).join(', ');
+            console.log(`[liveSync] ${code}: ${win.matchStatuses.size} matches [${ids}]`);
+        }
+        // 3. Process each active league
+        for (const win of windowMap.values()) {
+            // Check if league is in active window
+            const windowStart = win.earliest - PRE_WINDOW_MINS * 60 * 1000;
+            const windowEnd = win.latest + POST_WINDOW_HRS * 60 * 60 * 1000;
+            if (now < windowStart) {
+                console.log(`[liveSync] ${win.code}: skipped (window starts in ${((windowStart - now) / 60000).toFixed(0)} min)`);
+                continue;
+            }
+            if (now > windowEnd && win.allFinished) {
+                console.log(`[liveSync] ${win.code}: skipped (all finished, window ended ${((now - windowEnd) / 60000).toFixed(0)} min ago)`);
+                continue;
+            }
+            // Fetch fixtures from API for this league
+            const dateStr = formatDateUTC(new Date());
+            const fixtures = await (0, apiFootball_1.getFixtures)({
+                league: win.apiId,
+                season: win.season,
+                from: dateStr,
+                to: dateStr,
+                timezone: 'UTC',
+            });
+            console.log(`[liveSync] ${win.code}: API returned ${fixtures.length} fixtures (apiId=${win.apiId}, season=${win.season}, date=${dateStr})`);
+            if (fixtures.length === 0)
+                continue;
+            // Batch-write match updates
+            const liveIds = [];
+            const justFinishedIds = [];
+            const fixtureById = new Map();
+            for (let i = 0; i < fixtures.length; i += config_1.FIRESTORE_BATCH_SIZE) {
+                const chunk = fixtures.slice(i, i + config_1.FIRESTORE_BATCH_SIZE);
                 const batch = db.batch();
                 for (const fixture of chunk) {
                     const matchDoc = (0, transforms_1.transformFixtureToMatch)(fixture, leagueMap);
                     if (!matchDoc)
                         continue;
-                    const ref = db.collection(config_1.COLLECTIONS.MATCHES).doc(String(fixture.fixture.id));
+                    const fid = fixture.fixture.id;
+                    fixtureById.set(fid, fixture);
+                    const ref = db.collection(config_1.COLLECTIONS.MATCHES).doc(String(fid));
+                    const isNew = !win.matchStatuses.has(fid);
                     batch.set(ref, {
                         ...matchDoc,
+                        ...(isNew && { hasDetails: false }),
                         cachedAt: admin.firestore.FieldValue.serverTimestamp(),
                     }, { merge: true });
+                    const apiStatus = matchDoc.status;
+                    const fsStatus = win.matchStatuses.get(fid);
+                    if (LIVE_STATUSES.has(apiStatus)) {
+                        liveIds.push(fid);
+                    }
+                    // Detect FINISHED transition: was live/scheduled, now finished
+                    if (apiStatus === 'FINISHED' && fsStatus && !TERMINAL_STATUSES.has(fsStatus)) {
+                        justFinishedIds.push(fid);
+                    }
+                    matchesUpdated++;
                 }
                 await batch.commit();
             }
-            updated += tracked.length;
-            console.log(`[syncLive] Updated ${tracked.length} live matches`);
+            console.log(`[liveSync] ${win.code}: ${liveIds.length} live [${liveIds.join(',')}], ${justFinishedIds.length} just-finished [${justFinishedIds.join(',')}]`);
+            // Fetch events + stats for live matches
+            for (const fid of liveIds) {
+                try {
+                    const fixture = fixtureById.get(fid);
+                    const [events, stats] = await Promise.all([
+                        (0, apiFootball_1.getFixtureEvents)(fid),
+                        (0, apiFootball_1.getFixtureStats)(fid),
+                    ]);
+                    console.log(`[liveSync] ${fid} API events(${events.length}): ${JSON.stringify(events.slice(0, 3))}`);
+                    console.log(`[liveSync] ${fid} API stats(${stats.length}): ${JSON.stringify(stats.map((s) => { var _a; return ({ team: s.team.id, stats: (_a = s.statistics) === null || _a === void 0 ? void 0 : _a.slice(0, 4) }); }))}`);
+                    const detailDoc = (0, transforms_1.transformLiveEventDetails)(fid, events, stats, fixture);
+                    console.log(`[liveSync] ${fid} writing matchDetails: goals=${(_b = detailDoc.goals) === null || _b === void 0 ? void 0 : _b.length}, bookings=${(_c = detailDoc.bookings) === null || _c === void 0 ? void 0 : _c.length}, subs=${(_d = detailDoc.substitutions) === null || _d === void 0 ? void 0 : _d.length}, events=${(_e = detailDoc.events) === null || _e === void 0 ? void 0 : _e.length}, hasStats=${!!detailDoc.stats}`);
+                    await db.collection(config_1.COLLECTIONS.MATCH_DETAILS).doc(String(fid)).set({ ...detailDoc, syncedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+                    detailsUpdated++;
+                }
+                catch (err) {
+                    console.error(`[liveSync] Error fetching details for ${fid}:`, err.message);
+                }
+            }
+            // Full detail sync for just-finished matches
+            for (const fid of justFinishedIds) {
+                try {
+                    await (0, syncDetails_1.syncMatchDetails)([fid], true);
+                    detailsUpdated++;
+                    console.log(`[liveSync] Full detail sync for just-finished match ${fid}`);
+                }
+                catch (err) {
+                    console.error(`[liveSync] Error syncing finished match ${fid}:`, err.message);
+                }
+            }
+            // Update standings when matches finish in this league
+            if (justFinishedIds.length > 0) {
+                try {
+                    await (0, syncStandings_1.syncLeagueStandings)(win.code, win.apiId, win.season);
+                    console.log(`[liveSync] ${win.code}: standings updated after ${justFinishedIds.length} match(es) finished`);
+                }
+                catch (err) {
+                    console.error(`[liveSync] ${win.code}: error updating standings:`, err.message);
+                }
+            }
+            if (liveIds.length > 0 || justFinishedIds.length > 0) {
+                console.log(`[liveSync] ${win.code}: ${fixtures.length} fixtures, ` +
+                    `${liveIds.length} live, ${justFinishedIds.length} just finished`);
+            }
         }
-        // 2. Check for stale matches: kickoff was 3+ hours ago but still not FINISHED
-        const staleUpdated = await syncStaleMatches(leagueMap);
-        updated += staleUpdated;
-        if (updated === 0) {
-            console.log('[syncLive] No live or stale matches to update');
-        }
-        return updated;
+        return { matchesUpdated, detailsUpdated };
     }
     catch (err) {
-        console.error('[syncLive] Error:', err.message);
-        return updated;
+        console.error('[liveSync] Error:', err.message);
+        return { matchesUpdated, detailsUpdated };
     }
 }
-/**
- * Finds matches in Firestore that should be finished but still have a
- * non-finished status, then re-fetches from API to update.
- *
- * Two cases:
- * - IN_PLAY/PAUSED with kickoff 2+ hours ago (match should be over by now)
- * - SCHEDULED/TIMED with kickoff 3+ hours ago (match was never marked live)
- */
-async function syncStaleMatches(leagueMap) {
-    try {
-        const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
-        const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000);
-        const staleQueries = [
-            { statuses: ['IN_PLAY', 'PAUSED'], cutoff: twoHoursAgo.toISOString() },
-            { statuses: ['SCHEDULED', 'TIMED'], cutoff: threeHoursAgo.toISOString() },
-        ];
-        const staleIds = [];
-        for (const { statuses, cutoff } of staleQueries) {
-            for (const status of statuses) {
-                const snap = await db.collection(config_1.COLLECTIONS.MATCHES)
-                    .where('status', '==', status)
-                    .where('kickoff', '<=', cutoff)
-                    .limit(20)
-                    .get();
-                snap.docs.forEach((d) => {
-                    const id = d.data().id;
-                    if (id && !staleIds.includes(id))
-                        staleIds.push(id);
-                });
-                if (staleIds.length >= 20)
-                    break;
-            }
-            if (staleIds.length >= 20)
-                break;
-        }
-        // Cap at 20 (API-Football limit per ids request)
-        const idsToFetch = staleIds.slice(0, 20);
-        if (idsToFetch.length === 0)
-            return 0;
-        console.log(`[syncLive] Found ${idsToFetch.length} stale matches, re-fetching from API`);
-        const fixtures = await (0, apiFootball_1.getFixtures)({ ids: idsToFetch.join('-') });
-        console.log(`[syncLive] API returned ${fixtures.length} fixtures for ${idsToFetch.length} stale IDs`);
-        if (fixtures.length === 0)
-            return 0;
-        for (let i = 0; i < fixtures.length; i += config_1.FIRESTORE_BATCH_SIZE) {
-            const chunk = fixtures.slice(i, i + config_1.FIRESTORE_BATCH_SIZE);
-            const batch = db.batch();
-            for (const fixture of chunk) {
-                const matchDoc = (0, transforms_1.transformFixtureToMatch)(fixture, leagueMap);
-                if (!matchDoc)
-                    continue;
-                const ref = db.collection(config_1.COLLECTIONS.MATCHES).doc(String(fixture.fixture.id));
-                batch.set(ref, {
-                    ...matchDoc,
-                    cachedAt: admin.firestore.FieldValue.serverTimestamp(),
-                }, { merge: true });
-            }
-            await batch.commit();
-        }
-        console.log(`[syncLive] Updated ${fixtures.length} stale matches`);
-        return fixtures.length;
-    }
-    catch (err) {
-        console.error('[syncLive] Error syncing stale matches:', err.message);
-        return 0;
-    }
+// ─── Helpers ───
+function startOfDayUTC(date) {
+    const d = new Date(date);
+    d.setUTCHours(0, 0, 0, 0);
+    return d.toISOString();
+}
+function endOfDayUTC(date) {
+    const d = new Date(date);
+    d.setUTCHours(23, 59, 59, 999);
+    return d.toISOString();
+}
+function formatDateUTC(date) {
+    return date.toISOString().split('T')[0];
 }
 //# sourceMappingURL=syncLive.js.map
