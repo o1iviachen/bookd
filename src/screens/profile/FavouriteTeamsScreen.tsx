@@ -80,6 +80,13 @@ export function FavouriteTeamsScreen() {
     navigation.goBack();
   };
 
+  // Selected team objects for the "Selected" section at top
+  const selectedTeamObjects = useMemo(() => {
+    if (!selectedClubs.length) return [];
+    const ids = new Set(selectedClubs);
+    return POPULAR_TEAMS.filter((t) => ids.has(t.id));
+  }, [selectedClubs]);
+
   // Filter popular teams by search
   const filteredPopular = useMemo(() => {
     if (!searchQuery.trim()) return POPULAR_TEAMS;
@@ -147,6 +154,67 @@ export function FavouriteTeamsScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: spacing.xl }}>
+        {/* Selected clubs at top */}
+        {!searchQuery.trim() && selectedTeamObjects.length > 0 && (
+          <View style={{ marginTop: spacing.lg, paddingHorizontal: spacing.md }}>
+            <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: spacing.sm, marginLeft: spacing.xs }}>
+              {t('common.selected', { defaultValue: 'Selected' })} ({selectedClubs.length}/{MAX_CLUBS})
+            </Text>
+            <View style={{ backgroundColor: colors.card, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' }}>
+              {selectedTeamObjects.map((team, i) => (
+                <Pressable
+                  key={team.id}
+                  onPress={() => toggleClub(team.id)}
+                  style={({ pressed }) => ({
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    paddingVertical: spacing.sm + 2,
+                    paddingHorizontal: spacing.md,
+                    backgroundColor: pressed ? colors.accent : 'transparent',
+                    borderTopWidth: i > 0 ? 1 : 0,
+                    borderTopColor: colors.border,
+                  })}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                    <TeamLogo uri={team.crest} size={32} />
+                    <Text style={{ ...typography.body, color: colors.foreground }}>{team.name}</Text>
+                  </View>
+                  <Ionicons name="checkmark-circle" size={24} color={colors.primary} />
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* Selected country at top */}
+        {!searchQuery.trim() && selectedCountry && (
+          <View style={{ marginTop: spacing.lg, paddingHorizontal: spacing.md }}>
+            <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: spacing.sm, marginLeft: spacing.xs }}>
+              {t('favourites.countries', { defaultValue: 'Country' })} (1/1)
+            </Text>
+            <View style={{ backgroundColor: colors.card, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' }}>
+              <Pressable
+                onPress={() => toggleCountry(selectedCountry)}
+                style={({ pressed }) => ({
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  paddingVertical: spacing.sm + 2,
+                  paddingHorizontal: spacing.md,
+                  backgroundColor: pressed ? colors.accent : 'transparent',
+                })}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                  <Text style={{ fontSize: 24 }}>{nationalityFlag(selectedCountry)}</Text>
+                  <Text style={{ ...typography.body, color: colors.foreground }}>{selectedCountry}</Text>
+                </View>
+                <Ionicons name="checkmark-circle" size={24} color={colors.primary} />
+              </Pressable>
+            </View>
+          </View>
+        )}
+
         {/* Clubs section header */}
         {leagues.length > 0 && (
           <View style={{ paddingHorizontal: spacing.md, marginTop: spacing.sm, marginBottom: -spacing.sm }}>

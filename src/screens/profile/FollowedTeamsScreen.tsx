@@ -56,6 +56,13 @@ export function FollowedTeamsScreen({ navigation }: any) {
     queryClient.invalidateQueries({ queryKey: ['user', user.uid] });
   };
 
+  // Followed team objects for the "Following" section at top
+  const followedTeamObjects = useMemo(() => {
+    if (!followedTeamIds.length) return [];
+    const ids = new Set(followedTeamIds);
+    return POPULAR_TEAMS.filter((t) => ids.has(t.id));
+  }, [followedTeamIds]);
+
   // Filter popular teams by search
   const filteredPopular = useMemo(() => {
     if (!search.trim()) return POPULAR_TEAMS;
@@ -122,6 +129,39 @@ export function FollowedTeamsScreen({ navigation }: any) {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: spacing.xl }}>
+        {/* Followed teams at top */}
+        {!search.trim() && followedTeamObjects.length > 0 && (
+          <View style={{ marginTop: spacing.lg, paddingHorizontal: spacing.md }}>
+            <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: spacing.sm, marginLeft: spacing.xs }}>
+              {t('common.following', { defaultValue: 'Following' })} ({followedTeamObjects.length})
+            </Text>
+            <View style={{ backgroundColor: colors.card, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' }}>
+              {followedTeamObjects.map((team, i) => (
+                <Pressable
+                  key={team.id}
+                  onPress={() => toggleTeam(team.id)}
+                  style={({ pressed }) => ({
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    paddingVertical: spacing.sm + 2,
+                    paddingHorizontal: spacing.md,
+                    backgroundColor: pressed ? colors.accent : 'transparent',
+                    borderTopWidth: i > 0 ? 1 : 0,
+                    borderTopColor: colors.border,
+                  })}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                    <TeamLogo uri={team.crest} size={32} />
+                    <Text style={{ ...typography.body, color: colors.foreground }}>{team.name}</Text>
+                  </View>
+                  <Ionicons name="checkmark-circle" size={24} color={colors.primary} />
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        )}
+
         {leagues.length === 0 && extraTeams.length === 0 && filteredCountries.length === 0 && !searchLoading ? (
           <View style={{ alignItems: 'center', marginTop: spacing.xxl * 2 }}>
             <Text style={{ ...typography.body, color: colors.textSecondary }}>{t('followedTeams.noResultsFound')}</Text>
