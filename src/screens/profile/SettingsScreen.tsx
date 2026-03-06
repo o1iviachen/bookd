@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, Pressable, Alert, Switch, Modal, TextInput, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, Pressable, Alert, Switch, Modal, TextInput, ActivityIndicator, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -127,8 +127,8 @@ export function SettingsScreen() {
     {
       title: t('settings.about'),
       items: [
-        { label: t('settings.privacyPolicy'), icon: 'lock-closed-outline' },
-        { label: t('settings.termsOfService'), icon: 'document-text-outline' },
+        { label: t('settings.privacyPolicy'), icon: 'lock-closed-outline', onPress: () => Linking.openURL('https://bookd-app.com/privacy-policy') },
+        { label: t('settings.termsOfService'), icon: 'document-text-outline', onPress: () => Linking.openURL('https://bookd-app.com/terms-of-service') },
       ],
     },
   ];
