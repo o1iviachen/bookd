@@ -184,7 +184,7 @@ export function TeamDetailScreen({ route, navigation }: any) {
         season={chartSeason}
         seasonOptions={[
           { value: 'all', label: t('team.allSeasons') },
-          ...availableSeasons.map((s) => ({ value: s, label: s })),
+          ...seasonOpts,
         ]}
         onSeasonChange={setChartSeason}
         loading={matchesLoading}
