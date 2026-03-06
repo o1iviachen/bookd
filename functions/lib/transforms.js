@@ -351,6 +351,7 @@ function transformStandings(standings) {
         goalsAgainst: s.all.goals.against,
         goalDifference: s.goalsDiff,
         points: s.points,
+        description: s.description || null,
     }));
 }
 //# sourceMappingURL=transforms.js.map

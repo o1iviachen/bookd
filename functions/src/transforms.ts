@@ -386,5 +386,6 @@ export function transformStandings(standings: ApiStanding[]): Array<Record<strin
     goalsAgainst: s.all.goals.against,
     goalDifference: s.goalsDiff,
     points: s.points,
+    description: s.description || null,
   }));
 }

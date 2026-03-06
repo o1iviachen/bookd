@@ -2,7 +2,8 @@ import './src/i18n';
 import React, { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { AppState } from 'react-native';
+import { QueryClient, QueryClientProvider, focusManager } from '@tanstack/react-query';
 import * as Notifications from 'expo-notifications';
 import * as SplashScreen from 'expo-splash-screen';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
@@ -12,6 +13,14 @@ import { navigationRef } from './src/navigation/navigationRef';
 
 // Keep splash screen visible until auth resolves
 SplashScreen.preventAutoHideAsync();
+
+// React Query: refetch stale queries when app returns to foreground
+focusManager.setEventListener((handleFocus) => {
+  const subscription = AppState.addEventListener('change', (state) => {
+    handleFocus(state === 'active');
+  });
+  return () => subscription.remove();
+});
 
 const queryClient = new QueryClient({
   defaultOptions: {

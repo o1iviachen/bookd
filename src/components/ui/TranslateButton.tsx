@@ -72,7 +72,7 @@ export function TranslateButton({ text, inline = true, fontSize = 14, contentLan
         {isTranslating ? (
           <ActivityIndicator size={12} color={colors.textSecondary} />
         ) : (
-          <Ionicons name="language-outline" size={13} color={colors.textSecondary} />
+          <Ionicons name="language-outline" size={11} color={colors.textSecondary} />
         )}
         <Text style={{ fontSize: 12, color: colors.textSecondary }}>
           {translatedText

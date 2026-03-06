@@ -121,6 +121,7 @@ export function SettingsScreen() {
       items: [
         { label: t('profile.editProfile'), icon: 'person-outline', onPress: () => navigation.navigate('EditProfile' as never) },
         { label: t('settings.notifications'), icon: 'notifications-outline', onPress: () => navigation.navigate('NotificationSettings' as never) },
+        { label: t('block.blockedUsers'), icon: 'ban-outline', onPress: () => navigation.navigate('BlockedUsers' as never) },
       ],
     },
     {

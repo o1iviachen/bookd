@@ -189,6 +189,7 @@ export interface Standing {
   goalsAgainst: number;
   goalDifference: number;
   points: number;
+  description: string | null;
 }
 
 export async function getCompetitionStandings(competitionCode: string): Promise<Standing[]> {

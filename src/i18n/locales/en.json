@@ -575,6 +575,7 @@
     "reportReview": "Report Review",
     "reportComment": "Report Comment",
     "reportMessage": "Report Message",
+    "reportUser": "Report User",
     "whyReporting": "Why are you reporting this?",
     "reasonSpam": "Spam or misleading",
     "reasonInappropriate": "Inappropriate content",
@@ -595,5 +596,15 @@
     "poweredByKlipy": "Powered by Klipy",
     "translate": "Translate",
     "translatedFrom": "Translated from {{language}} · Show original"
+  },
+  "block": {
+    "blockUser": "Block User",
+    "unblockUser": "Unblock",
+    "blockedUsers": "Blocked Users",
+    "confirmTitle": "Block {{username}}?",
+    "confirmMessage": "You won't see their reviews, comments, or messages, and they won't see yours.",
+    "blockedProfileMessage": "You've blocked this user",
+    "blockedByMessage": "This content is not available",
+    "emptyState": "You haven't blocked anyone"
   }
 }
