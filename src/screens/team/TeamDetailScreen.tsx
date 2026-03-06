@@ -14,6 +14,7 @@ import { shortName } from '../../utils/formatName';
 import { nationalityFlag } from '../../utils/flagEmoji';
 import { RatingChart } from '../../components/profile/RatingChart';
 import { useTranslation } from 'react-i18next';
+import { seasonOptions as buildSeasonOptions, formatSeason } from '../../utils/formatSeason';
 
 type SortKey = 'recent_played' | 'oldest';
 
@@ -55,7 +56,6 @@ export function TeamDetailScreen({ route, navigation }: any) {
   // Derive current-season competitions from actual matches (not stale Firestore data)
   const currentSeasonCompetitions = useMemo(() => {
     if (allMatches.length === 0) return [];
-    // Determine the current season based on today's date
     const now = new Date();
     const currentSeasonStart = now.getMonth() >= 7 ? now.getFullYear() : now.getFullYear() - 1;
     const currentSeasonStr = `${currentSeasonStart}/${(currentSeasonStart + 1).toString().slice(2)}`;
@@ -79,24 +79,11 @@ export function TeamDetailScreen({ route, navigation }: any) {
     return Array.from(seen.values());
   }, [allMatches]);
 
-  // Map matchId → season string for chart filtering
-  const matchSeasonMap = useMemo(() => {
-    const map = new Map<number, string>();
-    for (const m of allMatches) {
-      const kickoff = new Date(m.kickoff);
-      const year = kickoff.getFullYear();
-      const month = kickoff.getMonth();
-      const seasonStart = month >= 7 ? year : year - 1;
-      map.set(m.id, `${seasonStart}/${(seasonStart + 1).toString().slice(2)}`);
-    }
-    return map;
-  }, [allMatches]);
-
-  const availableSeasons = useMemo(() => {
-    const set = new Set<string>();
-    for (const season of matchSeasonMap.values()) set.add(season);
-    return Array.from(set).sort().reverse();
-  }, [matchSeasonMap]);
+  // Derive season options from team doc's availableSeasons
+  const seasonOpts = useMemo(() => {
+    if (!teamDetail?.availableSeasons?.length) return [];
+    return buildSeasonOptions(teamDetail.availableSeasons);
+  }, [teamDetail?.availableSeasons]);
 
   // O(1) path: aggregate ratingBuckets from already-loaded match docs — no extra reads.
   // Each match doc has per-bucket counts maintained by Cloud Function triggers.
@@ -104,13 +91,17 @@ export function TeamDetailScreen({ route, navigation }: any) {
     const buckets: Record<string, number> = {};
     for (const m of allMatches) {
       if (!m.ratingBuckets) continue;
-      if (chartSeason !== 'all' && matchSeasonMap.get(m.id) !== chartSeason) continue;
+      if (chartSeason !== 'all') {
+        const kickoff = new Date(m.kickoff);
+        const seasonStart = kickoff.getMonth() >= 7 ? kickoff.getFullYear() : kickoff.getFullYear() - 1;
+        if (formatSeason(seasonStart) !== chartSeason) continue;
+      }
       for (const [key, count] of Object.entries(m.ratingBuckets)) {
         buckets[key] = (buckets[key] || 0) + count;
       }
     }
     return buckets;
-  }, [allMatches, chartSeason, matchSeasonMap]);
+  }, [allMatches, chartSeason]);
 
   // Apply filters and sort
   const filteredMatches = useMemo(() => {
@@ -245,6 +236,7 @@ export function TeamDetailScreen({ route, navigation }: any) {
               onFiltersChange={setFilters}
               matches={allMatches}
               showMinLogs={false}
+              seasonOptions={seasonOpts}
             />
 
             {/* Sort + count row */}

@@ -14,6 +14,7 @@ import { Avatar } from '../../components/ui/Avatar';
 import { shortName } from '../../utils/formatName';
 import { nationalityFlag } from '../../utils/flagEmoji';
 import { useTranslation } from 'react-i18next';
+import { seasonOptions as buildSeasonOptions } from '../../utils/formatSeason';
 
 type SortKey = 'recent_played' | 'oldest';
 
@@ -36,6 +37,11 @@ export function PersonDetailScreen({ route, navigation }: any) {
 
   const { data: person, isLoading: personLoading } = usePersonDetail(personId);
   const { data: personMatches, isLoading: matchesLoading } = usePersonMatches(personId);
+
+  const seasonOpts = useMemo(() => {
+    if (!person?.availableSeasons?.length) return [];
+    return buildSeasonOptions(person.availableSeasons);
+  }, [person?.availableSeasons]);
 
   const PAGE_SIZE = 30;
   const [filters, setFilters] = useState<MatchFilterState>({ league: 'all', team: 'all', season: 'all' });
@@ -280,6 +286,7 @@ export function PersonDetailScreen({ route, navigation }: any) {
                 matches={allMatches}
                 showMinLogs={false}
                 teamOptions={playerTeamOptions}
+                seasonOptions={seasonOpts}
               />
             </View>
           )}

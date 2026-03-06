@@ -10,6 +10,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { Select } from '../ui/Select';
 import { SliderInput } from '../ui/SliderInput';
 import { Match } from '../../types/match';
+import { generateDefaultSeasons } from '../../utils/formatSeason';
 
 export interface MatchFilterState {
   league: string;
@@ -27,16 +28,10 @@ interface MatchFiltersProps {
   showTeamFilter?: boolean;
   showSeasonFilter?: boolean;
   teamOptions?: { value: string; label: string }[];
+  seasonOptions?: { value: string; label: string }[];
 }
 
-const SEASONS = [
-  '2025/26',
-  '2024/25',
-  '2023/24',
-  '2022/23',
-  '2021/22',
-  '2020/21',
-];
+const DEFAULT_SEASONS = generateDefaultSeasons();
 
 export function MatchFilters({
   filters,
@@ -48,6 +43,7 @@ export function MatchFilters({
   showTeamFilter = true,
   showSeasonFilter = true,
   teamOptions: teamOptionsProp,
+  seasonOptions: seasonOptionsProp,
 }: MatchFiltersProps) {
   const { t } = useTranslation();
   const { theme } = useTheme();
@@ -178,7 +174,7 @@ export function MatchFilters({
               onValueChange={(value) => onFiltersChange({ ...filters, season: value })}
               options={[
                 { value: 'all', label: t('matches.filtersAllSeasons') },
-                ...SEASONS.map((s) => ({ value: s, label: s })),
+                ...(seasonOptionsProp || DEFAULT_SEASONS.map((s) => ({ value: s, label: s }))),
               ]}
             />
           </View>

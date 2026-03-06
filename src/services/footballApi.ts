@@ -435,6 +435,7 @@ export interface TeamDetail {
   coach: Coach | null;
   squad: { id: number; name: string; position: string; nationality: string }[];
   activeCompetitions: { id: number; name: string; code: string; emblem: string }[];
+  availableSeasons: number[];
 }
 
 export async function getTeamDetail(teamId: number): Promise<TeamDetail> {
@@ -454,6 +455,7 @@ export async function getTeamDetail(teamId: number): Promise<TeamDetail> {
       coach: null,
       squad: [],
       activeCompetitions: [],
+      availableSeasons: [],
     };
   }
 
@@ -472,6 +474,7 @@ export async function getTeamDetail(teamId: number): Promise<TeamDetail> {
     coach: data.coach || null,
     squad,
     activeCompetitions: data.activeCompetitions || [],
+    availableSeasons: data.availableSeasons || [],
   };
 }
 
@@ -522,6 +525,7 @@ export interface PersonDetail {
   formerPosition: string | null;
   shirtNumber: number | null;
   currentTeam: { id: number; name: string; crest: string } | null;
+  availableSeasons: number[];
 }
 
 export async function getPersonDetail(personId: number): Promise<PersonDetail> {
@@ -539,6 +543,7 @@ export async function getPersonDetail(personId: number): Promise<PersonDetail> {
       formerPosition: null,
       shirtNumber: null,
       currentTeam: null,
+      availableSeasons: [],
     };
   }
 
@@ -554,6 +559,7 @@ export async function getPersonDetail(personId: number): Promise<PersonDetail> {
     formerPosition: data.formerPosition || null,
     shirtNumber: null,
     currentTeam: data.currentTeam || null,
+    availableSeasons: data.availableSeasons || [],
   };
 }
 
