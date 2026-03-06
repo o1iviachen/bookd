@@ -174,6 +174,11 @@ export function TeamDetailScreen({ route, navigation }: any) {
         <Text style={{ ...typography.h3, color: colors.foreground }}>
           {teamName}
         </Text>
+        {teamDetail?.country ? (
+          <Text style={{ ...typography.caption, color: colors.textSecondary, marginTop: 4 }}>
+            {teamDetail.country}
+          </Text>
+        ) : null}
       </View>
 
       {/* Ratings section — O(1): reads from pre-computed ratingBuckets on match docs */}
@@ -378,7 +383,7 @@ export function TeamDetailScreen({ route, navigation }: any) {
                   {/* Venue */}
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border }}>
                     <Text style={{ ...typography.body, color: colors.textSecondary, fontSize: 14 }}>{t('team.stadium')}</Text>
-                    <Text style={{ ...typography.body, color: colors.foreground, fontSize: 14, fontWeight: '500', flex: 1, textAlign: 'right', marginLeft: spacing.md }}>{teamDetail?.venue || '—'}</Text>
+                    <Text style={{ ...typography.body, color: colors.foreground, fontSize: 14, fontWeight: '500', flex: 1, textAlign: 'right', marginLeft: spacing.md }}>{typeof teamDetail?.venue === 'object' ? teamDetail.venue?.name : teamDetail?.venue || '—'}</Text>
                   </View>
 
                   {/* Competitions */}

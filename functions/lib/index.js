@@ -646,16 +646,18 @@ exports.buildPlayers = functions
     }
 });
 /**
- * Fetch team colors and venue info from API-Football.
- *   GET /enrichTeams?limit=100
+ * Backfill team docs with country, founded, venue from API-Football.
+ *   GET /enrichTeams?limit=200&cursor=<docId>
  */
 exports.enrichTeams = functions
     .runWith({ timeoutSeconds: 540, memory: '512MB' })
     .https.onRequest(async (req, res) => {
-    const limit = req.query.limit ? parseInt(req.query.limit, 10) : 100;
+    const limit = req.query.limit ? parseInt(req.query.limit, 10) : 400;
+    const body = req.body || {};
+    const cursor = req.query.cursor || body.cursor || undefined;
     try {
-        const updated = await (0, backfill_1.fetchTeamColors)(limit);
-        res.json({ success: true, updated });
+        const result = await (0, backfill_1.enrichTeamInfo)(limit, cursor);
+        res.json({ success: true, ...result });
     }
     catch (err) {
         console.error('[enrichTeams] Error:', err);

@@ -428,7 +428,7 @@ export interface TeamDetail {
   name: string;
   shortName: string;
   crest: string;
-  venue: string | null;
+  venue: { name: string; city: string | null; capacity: number | null; image: string | null } | string | null;
   founded: number | null;
   country: string;
   clubColors: string | null;

@@ -39,7 +39,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.runBackfill = runBackfill;
 exports.buildTeamsFromMatches = buildTeamsFromMatches;
 exports.buildPlayersAndEnrichTeams = buildPlayersAndEnrichTeams;
-exports.fetchTeamColors = fetchTeamColors;
+exports.enrichTeamInfo = enrichTeamInfo;
 exports.refreshSquadsOnly = refreshSquadsOnly;
 exports.enrichPlayersFromSquads = enrichPlayersFromSquads;
 exports.generateSearchPrefixes = generateSearchPrefixes;
@@ -540,69 +540,52 @@ async function buildPlayersAndEnrichTeams(options) {
     return { players: players.length, teams: teamsUpdated };
 }
 /**
- * Fetches team colors and venue info from API-Football for all teams in Firestore.
- * Processes in batches to stay within rate limits.
+ * Backfills team docs with country, founded, and venue from API-Football /teams endpoint.
+ * Uses cursor-based pagination. Pass cursor from previous response to continue.
  */
-async function fetchTeamColors(batchLimit = 100) {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
-    // Get teams that don't have colors yet
-    const snapshot = await db.collection(config_1.COLLECTIONS.TEAMS)
-        .where('clubColors', '==', null)
-        .limit(batchLimit)
-        .get();
-    // If that query fails (clubColors field might not exist), get all teams
-    let teamDocs = snapshot.docs;
-    if (teamDocs.length === 0) {
-        const allSnap = await db.collection(config_1.COLLECTIONS.TEAMS).limit(batchLimit).get();
-        teamDocs = allSnap.docs.filter((d) => !d.data().clubColors);
+async function enrichTeamInfo(batchLimit = 400, cursor) {
+    var _a, _b, _c;
+    let query = db.collection(config_1.COLLECTIONS.TEAMS).orderBy('__name__').limit(batchLimit);
+    if (cursor) {
+        query = query.startAfter(cursor);
     }
+    const snap = await query.get();
+    const teamDocs = snap.docs.filter((d) => {
+        const data = d.data();
+        return !data.country || !data.founded || !data.venue || typeof data.venue === 'string';
+    });
     let updated = 0;
     for (const teamDoc of teamDocs) {
         const teamId = teamDoc.data().id;
         try {
-            // Rate limit
-            await new Promise((r) => setTimeout(r, config_2.RATE_LIMIT_DELAY_MS));
-            const response = await axios_1.default.get(`${config_2.API_FOOTBALL_BASE}/teams`, {
-                params: { id: teamId },
-                headers: { 'x-apisports-key': config_2.API_FOOTBALL_KEY },
-                timeout: 15000,
-            });
-            const teamData = (_b = (_a = response.data) === null || _a === void 0 ? void 0 : _a.response) === null || _b === void 0 ? void 0 : _b[0];
-            if (teamData) {
-                const update = {};
-                if ((_c = teamData.team) === null || _c === void 0 ? void 0 : _c.colors) {
-                    // API-Football returns colors as an object with player/goalkeeper keys
-                    // Extract the primary color
-                    const primary = (_e = (_d = teamData.team.colors) === null || _d === void 0 ? void 0 : _d.player) === null || _e === void 0 ? void 0 : _e.primary;
-                    const secondary = (_g = (_f = teamData.team.colors) === null || _f === void 0 ? void 0 : _f.player) === null || _g === void 0 ? void 0 : _g.number;
-                    if (primary) {
-                        update.clubColors = `#${primary}`;
-                        if (secondary && secondary !== primary) {
-                            update.clubColors = `#${primary} / #${secondary}`;
-                        }
-                    }
-                }
-                if ((_h = teamData.venue) === null || _h === void 0 ? void 0 : _h.name) {
-                    update.venue = teamData.venue.name;
-                }
-                if ((_j = teamData.team) === null || _j === void 0 ? void 0 : _j.country) {
-                    update.country = teamData.team.country;
-                }
-                if ((_k = teamData.team) === null || _k === void 0 ? void 0 : _k.founded) {
-                    update.founded = teamData.team.founded;
-                }
-                if (Object.keys(update).length > 0) {
-                    await db.collection(config_1.COLLECTIONS.TEAMS).doc(String(teamId)).set(update, { merge: true });
-                    updated++;
-                }
+            const info = await (0, apiFootball_1.getTeamInfo)(teamId);
+            if (!info)
+                continue;
+            const update = {};
+            if ((_a = info.team) === null || _a === void 0 ? void 0 : _a.country)
+                update.country = info.team.country;
+            if ((_b = info.team) === null || _b === void 0 ? void 0 : _b.founded)
+                update.founded = info.team.founded;
+            if ((_c = info.venue) === null || _c === void 0 ? void 0 : _c.name) {
+                update.venue = {
+                    name: info.venue.name,
+                    city: info.venue.city || null,
+                    capacity: info.venue.capacity || null,
+                    image: info.venue.image || null,
+                };
+            }
+            if (Object.keys(update).length > 0) {
+                await db.collection(config_1.COLLECTIONS.TEAMS).doc(String(teamId)).set(update, { merge: true });
+                updated++;
             }
         }
         catch (err) {
-            console.error(`[fetchTeamColors] Error for team ${teamId}:`, err.message);
+            console.error(`[enrichTeamInfo] Error for team ${teamId}:`, err.message);
         }
     }
-    console.log(`[fetchTeamColors] Updated ${updated} teams with colors/venue data`);
-    return updated;
+    const nextCursor = snap.docs.length === batchLimit ? snap.docs[snap.docs.length - 1].id : null;
+    console.log(`[enrichTeamInfo] Scanned ${snap.docs.length}, updated ${updated}, cursor=${nextCursor}`);
+    return { updated, scanned: snap.docs.length, cursor: nextCursor };
 }
 /**
  * Shared helper: Processes Phases 1-3 of squad enrichment for a single team.
