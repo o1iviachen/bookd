@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { View, Text, ScrollView, Pressable, useWindowDimensions, NativeScrollEvent, NativeSyntheticEvent, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -35,18 +35,7 @@ export function TeamDetailScreen({ route, navigation }: any) {
   const SORT_OPTIONS = useMemo(() => SORT_OPTION_KEYS.map((o) => ({ value: o.value, label: t(o.i18nKey) })), [t]);
   const { teamId, teamName, teamCrest } = route.params;
   const [activeTabIndex, setActiveTabIndex] = useState(0);
-  const horizontalRef = useRef<ScrollView>(null);
   const { width: screenWidth } = useWindowDimensions();
-
-  const handleTabPress = useCallback((index: number) => {
-    setActiveTabIndex(index);
-    horizontalRef.current?.scrollTo({ x: index * screenWidth, animated: true });
-  }, [screenWidth]);
-
-  const handleHorizontalScrollEnd = useCallback((e: any) => {
-    const page = Math.round(e.nativeEvent.contentOffset.x / screenWidth);
-    setActiveTabIndex(page);
-  }, [screenWidth]);
 
   const { data: teamDetail, isLoading: detailLoading } = useTeamDetail(teamId);
   const { data: matches, isLoading: matchesLoading } = useTeamMatches(teamId);
@@ -197,7 +186,7 @@ export function TeamDetailScreen({ route, navigation }: any) {
             return (
               <Pressable
                 key={tab.key}
-                onPress={() => handleTabPress(i)}
+                onPress={() => setActiveTabIndex(i)}
                 style={{
                   flex: 1,
                   alignItems: 'center',
@@ -219,17 +208,9 @@ export function TeamDetailScreen({ route, navigation }: any) {
           })}
         </View>
 
-        {/* Horizontal paging for tab content */}
-        <ScrollView showsVerticalScrollIndicator={false}
-          ref={horizontalRef}
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          nestedScrollEnabled
-          onMomentumScrollEnd={handleHorizontalScrollEnd}
-        >
-          {/* ─── Matches Tab ─── */}
-          <View style={{ width: screenWidth }}>
+        {/* ─── Tab Content ─── */}
+        {activeTabIndex === 0 && (
+          <View>
             {/* Filters */}
             <MatchFilters
               filters={filters}
@@ -280,9 +261,10 @@ export function TeamDetailScreen({ route, navigation }: any) {
               </>
             )}
           </View>
+        )}
 
-          {/* ─── Squad Tab ─── */}
-          <View style={{ width: screenWidth }}>
+        {activeTabIndex === 1 && (
+          <View>
             <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.md, paddingBottom: spacing.xs }}>
               {detailLoading ? (
                 <View style={{ paddingVertical: spacing.xxl }}><LoadingSpinner fullScreen={false} /></View>
@@ -321,9 +303,10 @@ export function TeamDetailScreen({ route, navigation }: any) {
               )}
             </View>
           </View>
+        )}
 
-          {/* ─── Info Tab ─── */}
-          <View style={{ width: screenWidth }}>
+        {activeTabIndex === 2 && (
+          <View>
             <View style={{ padding: spacing.md }}>
               {detailLoading ? (
                 <View style={{ paddingVertical: spacing.xxl }}><LoadingSpinner fullScreen={false} /></View>
@@ -397,7 +380,7 @@ export function TeamDetailScreen({ route, navigation }: any) {
               )}
             </View>
           </View>
-        </ScrollView>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
