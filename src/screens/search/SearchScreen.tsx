@@ -11,6 +11,7 @@ import { useSearchMatches } from '../../hooks/useMatches';
 import { useSearchTeams, useSearchPlayers } from '../../hooks/useTeams';
 import { useSearchReviews } from '../../hooks/useReviews';
 import { useSearchLists } from '../../hooks/useLists';
+import { useFollowableLeagues } from '../../hooks/useLeagues';
 import { Avatar } from '../../components/ui/Avatar';
 import { MatchPosterCard } from '../../components/match/MatchPosterCard';
 import { Match } from '../../types/match';
@@ -26,13 +27,14 @@ const RECENT_SEARCHES_KEY = 'bookd_recent_searches';
 const MAX_RECENT_SEARCHES = 10;
 
 type Nav = NativeStackNavigationProp<SearchStackParamList, 'Search'>;
-type Category = 'matches' | 'teams' | 'players' | 'members' | 'reviews' | 'lists';
+type Category = 'matches' | 'teams' | 'leagues' | 'players' | 'members' | 'reviews' | 'lists';
 
 const NUM_COLUMNS = 3;
 
 const CATEGORY_KEYS: { key: Category; i18nKey: string }[] = [
   { key: 'matches', i18nKey: 'search.matchesTab' },
   { key: 'teams', i18nKey: 'search.teamsTab' },
+  { key: 'leagues', i18nKey: 'search.leaguesTab' },
   { key: 'players', i18nKey: 'search.playersAndManagers' },
   { key: 'members', i18nKey: 'search.members' },
   { key: 'reviews', i18nKey: 'search.reviewsTab' },
@@ -48,6 +50,7 @@ const BROWSE_LINKS: { i18nKey: string; route: keyof SearchStackParamList }[] = [
 const EMPTY_ICONS: Record<Category, keyof typeof Ionicons.glyphMap> = {
   matches: 'football-outline',
   teams: 'shield-outline',
+  leagues: 'trophy-outline',
   players: 'people-outline',
   members: 'person-outline',
   reviews: 'chatbubble-outline',
@@ -57,6 +60,7 @@ const EMPTY_ICONS: Record<Category, keyof typeof Ionicons.glyphMap> = {
 const EMPTY_LABEL_KEYS: Record<Category, string> = {
   matches: 'common.noResultsFound',
   teams: 'common.noResultsFound',
+  leagues: 'common.noResultsFound',
   players: 'common.noResultsFound',
   members: 'common.noResultsFound',
   reviews: 'common.noResultsFound',
@@ -144,6 +148,14 @@ export function SearchScreen() {
     return all;
   }, [matchPages]);
   const { data: teamResults, isLoading: teamsLoading } = useSearchTeams(debouncedQuery, activeCategory === 'teams');
+  const { data: allLeagues } = useFollowableLeagues();
+  const leagueResults = useMemo(() => {
+    if (activeCategory !== 'leagues' || !allLeagues || debouncedQuery.length < 2) return [];
+    const q = debouncedQuery.toLowerCase();
+    return allLeagues.filter(
+      (l) => l.name.toLowerCase().includes(q) || l.country.toLowerCase().includes(q)
+    );
+  }, [activeCategory, allLeagues, debouncedQuery]);
   const { data: playerPages, isLoading: playersLoading, isFetching: playersFetching, fetchNextPage: fetchNextPlayerPage, hasNextPage: hasNextPlayerPage, isFetchingNextPage: isFetchingNextPlayerPage } = useSearchPlayers(debouncedQuery, activeCategory === 'players');
   const playerResults = useMemo(() => {
     if (!playerPages?.pages) return [];
@@ -168,13 +180,14 @@ export function SearchScreen() {
     switch (activeCategory) {
       case 'matches': return matchResults || [];
       case 'teams': return teamResults || [];
+      case 'leagues': return leagueResults || [];
       case 'players': return playerResults || [];
       case 'members': return users || [];
       case 'reviews': return reviewResults || [];
       case 'lists': return listResults || [];
       default: return [];
     }
-  }, [hasQuery, activeCategory, matchResults, teamResults, playerResults, users, reviewResults, listResults]);
+  }, [hasQuery, activeCategory, matchResults, teamResults, leagueResults, playerResults, users, reviewResults, listResults]);
 
   const renderItem = useCallback(({ item }: { item: any }) => {
     switch (activeCategory) {
@@ -199,6 +212,28 @@ export function SearchScreen() {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.sm + 2, paddingHorizontal: spacing.md }}>
               <TeamLogo uri={item.crest} size={28} />
               <Text style={{ ...typography.body, color: colors.foreground, fontSize: 15, flex: 1 }}>{item.name}</Text>
+              <Ionicons name="chevron-forward" size={14} color={colors.textSecondary} />
+            </View>
+          </Pressable>
+        );
+      case 'leagues':
+        return (
+          <Pressable
+            onPress={() => navigation.navigate('LeagueDetail', { competitionCode: item.code, competitionName: item.name, competitionEmblem: item.emblem })}
+            style={({ pressed }) => ({
+              borderBottomWidth: 1,
+              borderBottomColor: colors.border,
+              opacity: pressed ? 0.7 : 1,
+            })}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.sm + 2, paddingHorizontal: spacing.md }}>
+              <View style={{ backgroundColor: '#fff', borderRadius: 6, padding: 3 }}>
+                <TeamLogo uri={item.emblem} size={28} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ ...typography.body, color: colors.foreground, fontSize: 15 }}>{item.name}</Text>
+                <Text style={{ ...typography.caption, color: colors.textSecondary }}>{item.country}</Text>
+              </View>
               <Ionicons name="chevron-forward" size={14} color={colors.textSecondary} />
             </View>
           </Pressable>
@@ -270,7 +305,7 @@ export function SearchScreen() {
     }
   }, [activeCategory, colors, spacing, typography, navigation, CARD_WIDTH]);
 
-  const keyExtractor = useCallback((item: any) => String(item.id), []);
+  const keyExtractor = useCallback((item: any) => String(item.id || item.code), []);
 
   // Content to show when NOT searching (browse view) or when searching with no query yet (recent searches)
   const renderNonResultContent = () => {
