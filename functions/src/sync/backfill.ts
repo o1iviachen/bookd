@@ -548,76 +548,54 @@ export async function buildPlayersAndEnrichTeams(options?: {
 }
 
 /**
- * Fetches team colors and venue info from API-Football for all teams in Firestore.
- * Processes in batches to stay within rate limits.
+ * Backfills team docs with country, founded, and venue from API-Football /teams endpoint.
+ * Uses cursor-based pagination. Pass cursor from previous response to continue.
  */
-export async function fetchTeamColors(batchLimit = 100): Promise<number> {
-  // Get teams that don't have colors yet
-  const snapshot = await db.collection(COLLECTIONS.TEAMS)
-    .where('clubColors', '==', null)
-    .limit(batchLimit)
-    .get();
-
-  // If that query fails (clubColors field might not exist), get all teams
-  let teamDocs = snapshot.docs;
-  if (teamDocs.length === 0) {
-    const allSnap = await db.collection(COLLECTIONS.TEAMS).limit(batchLimit).get();
-    teamDocs = allSnap.docs.filter((d) => !d.data().clubColors);
+export async function enrichTeamInfo(batchLimit = 400, cursor?: string): Promise<{ updated: number; scanned: number; cursor: string | null }> {
+  let query = db.collection(COLLECTIONS.TEAMS).orderBy('__name__').limit(batchLimit);
+  if (cursor) {
+    query = query.startAfter(cursor);
   }
+  const snap = await query.get();
+
+  const teamDocs = snap.docs.filter((d) => {
+    const data = d.data();
+    return !data.country || !data.founded || !data.venue || typeof data.venue === 'string';
+  });
 
   let updated = 0;
 
   for (const teamDoc of teamDocs) {
     const teamId = teamDoc.data().id;
     try {
-      // Rate limit
-      await new Promise((r) => setTimeout(r, RATE_LIMIT_DELAY_MS));
+      const info = await getTeamInfo(teamId);
+      if (!info) continue;
 
-      const response = await axios.get(`${API_FOOTBALL_BASE}/teams`, {
-        params: { id: teamId },
-        headers: { 'x-apisports-key': API_FOOTBALL_KEY },
-        timeout: 15000,
-      });
+      const update: Record<string, any> = {};
 
-      const teamData = response.data?.response?.[0];
-      if (teamData) {
-        const update: Record<string, any> = {};
+      if (info.team?.country) update.country = info.team.country;
+      if (info.team?.founded) update.founded = info.team.founded;
+      if (info.venue?.name) {
+        update.venue = {
+          name: info.venue.name,
+          city: info.venue.city || null,
+          capacity: info.venue.capacity || null,
+          image: info.venue.image || null,
+        };
+      }
 
-        if (teamData.team?.colors) {
-          // API-Football returns colors as an object with player/goalkeeper keys
-          // Extract the primary color
-          const primary = teamData.team.colors?.player?.primary;
-          const secondary = teamData.team.colors?.player?.number;
-          if (primary) {
-            update.clubColors = `#${primary}`;
-            if (secondary && secondary !== primary) {
-              update.clubColors = `#${primary} / #${secondary}`;
-            }
-          }
-        }
-
-        if (teamData.venue?.name) {
-          update.venue = teamData.venue.name;
-        }
-        if (teamData.team?.country) {
-          update.country = teamData.team.country;
-        }
-        if (teamData.team?.founded) {
-          update.founded = teamData.team.founded;
-        }
-
-        if (Object.keys(update).length > 0) {
-          await db.collection(COLLECTIONS.TEAMS).doc(String(teamId)).set(update, { merge: true });
-          updated++;
-        }
+      if (Object.keys(update).length > 0) {
+        await db.collection(COLLECTIONS.TEAMS).doc(String(teamId)).set(update, { merge: true });
+        updated++;
       }
     } catch (err: any) {
-      console.error(`[fetchTeamColors] Error for team ${teamId}:`, err.message);
+      console.error(`[enrichTeamInfo] Error for team ${teamId}:`, err.message);
     }
   }
 
-  console.log(`[fetchTeamColors] Updated ${updated} teams with colors/venue data`);
-  return updated;
+  const nextCursor = snap.docs.length === batchLimit ? snap.docs[snap.docs.length - 1].id : null;
+  console.log(`[enrichTeamInfo] Scanned ${snap.docs.length}, updated ${updated}, cursor=${nextCursor}`);
+  return { updated, scanned: snap.docs.length, cursor: nextCursor };
 }
 
 /**

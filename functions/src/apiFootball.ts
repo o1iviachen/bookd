@@ -240,8 +240,11 @@ export interface ApiTeamInfo {
   venue: {
     id: number | null;
     name: string | null;
+    address: string | null;
     city: string | null;
     capacity: number | null;
+    surface: string | null;
+    image: string | null;
   };
 }
 

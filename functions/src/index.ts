@@ -9,7 +9,7 @@ import { syncMatchDetails } from './sync/syncDetails';
 import { syncLiveMatches } from './sync/syncLive';
 import { syncPreMatchLineups } from './sync/syncLineups';
 import { syncStaleMatchDetails } from './sync/syncStale';
-import { runBackfill, buildTeamsFromMatches, buildPlayersAndEnrichTeams, fetchTeamColors, enrichPlayersFromSquads, refreshSquadsOnly, backfillPlayerNameLower, generateSearchPrefixes, backfillMissingMatchDetails } from './sync/backfill';
+import { runBackfill, buildTeamsFromMatches, buildPlayersAndEnrichTeams, enrichTeamInfo, enrichPlayersFromSquads, refreshSquadsOnly, backfillPlayerNameLower, generateSearchPrefixes, backfillMissingMatchDetails } from './sync/backfill';
 import { getLeagueTier } from './leagueHelper';
 import { SYNC_LEAGUES, COLLECTIONS } from './config';
 
@@ -662,16 +662,18 @@ export const buildPlayers = functions
   });
 
 /**
- * Fetch team colors and venue info from API-Football.
- *   GET /enrichTeams?limit=100
+ * Backfill team docs with country, founded, venue from API-Football.
+ *   GET /enrichTeams?limit=200&cursor=<docId>
  */
 export const enrichTeams = functions
   .runWith({ timeoutSeconds: 540, memory: '512MB' })
   .https.onRequest(async (req, res) => {
-    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 100;
+    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 400;
+    const body = req.body || {};
+    const cursor = (req.query.cursor as string) || body.cursor || undefined;
     try {
-      const updated = await fetchTeamColors(limit);
-      res.json({ success: true, updated });
+      const result = await enrichTeamInfo(limit, cursor);
+      res.json({ success: true, ...result });
     } catch (err: any) {
       console.error('[enrichTeams] Error:', err);
       res.status(500).json({ error: err.message });
