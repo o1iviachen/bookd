@@ -159,6 +159,7 @@
     "matchInformation": "Match Information",
     "competition": "Competition",
     "matchday": "Matchday",
+    "round": "Round",
     "date": "Date",
     "kickOff": "Kick-off",
     "venue": "Venue",
@@ -243,8 +244,11 @@
     "goalDifference": "GD",
     "points": "Pts",
     "knockoutPlayoffs": "Knockout Playoffs",
+    "roundOf128": "Round of 128",
+    "roundOf64": "Round of 64",
     "roundOf32": "Round of 32",
-    "thirdPlace": "Third Place"
+    "thirdPlace": "Third Place",
+    "selectSeason": "Season"
   },
   "list": {
     "newList": "New List",
@@ -254,6 +258,7 @@
     "descriptionPlaceholder": "What's this list about?",
     "rankedList": "Ranked list",
     "rankedListDescription": "Manually order matches by your ranking",
+    "addCoverImage": "Add cover image",
     "matchesCount": "Matches ({{count}})",
     "noMatchesYet": "No matches yet. Tap Add to get started.",
     "createList": "Create List",
@@ -308,6 +313,9 @@
     "sortBy": "Sort By",
     "mostRecent": "Most Recent",
     "oldestFirst": "Oldest First",
+    "averageRatingHigh": "Average Rating (High)",
+    "averageRatingLow": "Average Rating (Low)",
+    "mostLogged": "Most Logged",
     "managerOfMatches_one": "Manager of {{count}} match",
     "managerOfMatches_other": "Manager of {{count}} matches",
     "playerInMatches_one": "Player in {{count}} match",
@@ -327,6 +335,7 @@
     "locationPlaceholder": "Where are you from?",
     "website": "Website",
     "websitePlaceholder": "Your website URL",
+    "addHeaderImage": "Add header image",
     "profileUpdated": "Profile updated!",
     "usernameTaken": "That username is already taken.",
     "noEntriesYet": "No entries yet",
@@ -358,6 +367,7 @@
     "fanOther": "Other fans",
     "fanTeam": "{{teamName}} fans",
     "fanAway": "Away fans",
+    "fanOpposition": "Opposition fans",
     "recentlyLogged": "Recently Logged",
     "recentlyPlayed": "Recently Played",
     "yourRatingHigh": "Your Rating (High)",
@@ -555,7 +565,10 @@
     "allSeasons": "All Seasons",
     "sortBy": "Sort By",
     "mostRecent": "Most Recent",
-    "oldestFirst": "Oldest First"
+    "oldestFirst": "Oldest First",
+    "averageRatingHigh": "Average Rating (High)",
+    "averageRatingLow": "Average Rating (Low)",
+    "mostLogged": "Most Logged"
   },
   "discussion": {
     "deleteMessage": "Delete message",

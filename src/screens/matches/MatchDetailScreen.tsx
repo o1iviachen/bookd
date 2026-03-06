@@ -57,6 +57,7 @@ export function MatchDetailScreen({ route, navigation }: Props) {
   const [showMenu, setShowMenu] = useState(false);
   const [activeTabIndex, setActiveTabIndex] = useState(0);
   const scrollY = useRef(new Animated.Value(0)).current;
+  const scrollRef = useRef<ScrollView>(null);
   const insets = useSafeAreaInsets();
   const MATCH_TABS: { key: MatchTab; label: string }[] = [
     { key: 'reviews', label: t('common.reviews') },
@@ -428,6 +429,7 @@ export function MatchDetailScreen({ route, navigation }: Props) {
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.background }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       {/* ─── Single ScrollView with header + active tab content ─── */}
       <Animated.ScrollView showsVerticalScrollIndicator={false}
+        ref={scrollRef}
         style={{ backgroundColor: colors.background }}
         indicatorStyle={isDark ? 'white' : 'default'}
         contentContainerStyle={{ paddingBottom: 16 }}
@@ -435,6 +437,7 @@ export function MatchDetailScreen({ route, navigation }: Props) {
         onScrollEndDrag={handleScrollEndDrag}
         scrollEventThrottle={16}
         bounces
+        keyboardShouldPersistTaps="handled"
       >
         {renderMatchHeader()}
 
@@ -476,6 +479,10 @@ export function MatchDetailScreen({ route, navigation }: Props) {
             {isFinished && reviews && reviews.length > 0 && (
               <RatingChart
                 reviews={reviews}
+                ratingBuckets={match.ratingBuckets}
+                ratingBucketsHome={match.ratingBucketsHome}
+                ratingBucketsAway={match.ratingBucketsAway}
+                ratingBucketsNeutral={match.ratingBucketsNeutral}
                 showStats
                 homeTeamId={match.homeTeam.id}
                 awayTeamId={match.awayTeam.id}
@@ -588,6 +595,7 @@ export function MatchDetailScreen({ route, navigation }: Props) {
           colors={colors}
           spacing={spacing}
           borderRadius={borderRadius}
+          onFocus={() => setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 300)}
         />
       )}
 
@@ -911,6 +919,21 @@ function roundLabel(match: { matchday: number | null; stage: string | null }): s
   if (match.matchday) return `MD${match.matchday}`;
   return null;
 }
+
+const STAGE_DISPLAY_NAMES: Record<string, string> = {
+  FINAL: 'Final',
+  SEMI_FINALS: 'Semi-finals',
+  QUARTER_FINALS: 'Quarter-finals',
+  ROUND_OF_16: 'Round of 16',
+  LAST_16: 'Round of 16',
+  ROUND_OF_32: 'Round of 32',
+  LAST_32: 'Round of 32',
+  GROUP_STAGE: 'Group Stage',
+  PRELIMINARY_ROUND: 'Preliminary Round',
+  QUALIFICATION: 'Qualification',
+  PLAYOFF: 'Playoff',
+  THIRD_PLACE: 'Third Place',
+};
 
 /* ─── Lineup Section — Formation Pitch Diagram ─── */
 
@@ -1468,7 +1491,9 @@ function InfoSection({ matchDetail, match, colors, spacing, typography, borderRa
 
   const infoRows: { label: string; value: string }[] = [
     { label: t('matches.competition'), value: match.competition.name },
-    { label: t('matches.matchday'), value: match.matchday ? `${match.matchday}` : '—' },
+    match.matchday
+      ? { label: t('matches.matchday'), value: `${match.matchday}` }
+      : { label: t('matches.round'), value: (match.stage && STAGE_DISPLAY_NAMES[match.stage]) || '—' },
     { label: t('matches.date'), value: formatFullDate(match.kickoff) },
     { label: t('matches.kickOff'), value: formatMatchTime(match.kickoff) },
     { label: t('matches.venue'), value: match.venue || '—' },
