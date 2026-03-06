@@ -32,6 +32,7 @@ import { MatchPosterCard } from '../../components/match/MatchPosterCard';
 import { MOTMBadge } from '../../components/review/MOTMBadge';
 import { DiscussionSection, DiscussionInputBar } from '../../components/discussion/DiscussionSection';
 import { useDiscussion } from '../../hooks/useDiscussion';
+import { useTranslation } from 'react-i18next';
 import { User } from '../../types/user';
 
 type MatchTab = 'reviews' | 'discussion' | 'lineup' | 'info';
@@ -47,6 +48,7 @@ const STICKY_NAV_HEIGHT = 44;
 const REFEREE_MOTM_ID = -1;
 
 export function MatchDetailScreen({ route, navigation }: Props) {
+  const { t } = useTranslation();
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
   const { user } = useAuth();
@@ -57,10 +59,10 @@ export function MatchDetailScreen({ route, navigation }: Props) {
   const scrollY = useRef(new Animated.Value(0)).current;
   const insets = useSafeAreaInsets();
   const MATCH_TABS: { key: MatchTab; label: string }[] = [
-    { key: 'reviews', label: 'Reviews' },
-    { key: 'discussion', label: 'Discussion' },
-    { key: 'lineup', label: 'Lineup' },
-    { key: 'info', label: 'Info' },
+    { key: 'reviews', label: t('common.reviews') },
+    { key: 'discussion', label: t('matches.discussion') },
+    { key: 'lineup', label: t('matches.lineup') },
+    { key: 'info', label: t('matches.info') },
   ];
 
   const handleTabPress = useCallback((index: number) => {
@@ -220,7 +222,7 @@ export function MatchDetailScreen({ route, navigation }: Props) {
       await updateUserProfile(user.uid, { favoriteMatchIds: updated });
     } else {
       if (favoriteMatchIds.length >= MAX_FAVOURITES) {
-        Alert.alert('Limit reached', `You can only have ${MAX_FAVOURITES} favourite matches. Remove one first.`);
+        Alert.alert(t('matches.limitReached'), t('matches.limitReachedMessage', { count: MAX_FAVOURITES }));
         return;
       }
       await updateUserProfile(user.uid, { favoriteMatchIds: [...favoriteMatchIds, Number(matchId)] });
@@ -351,11 +353,11 @@ export function MatchDetailScreen({ route, navigation }: Props) {
               </View>
               {isLive && (
                 <View style={{ backgroundColor: colors.primary, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4, marginTop: 4 }}>
-                  <Text style={{ fontSize: 11, fontWeight: '800', color: '#14181c' }}>LIVE</Text>
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: '#14181c' }}>{t('common.live')}</Text>
                 </View>
               )}
               {isFinished && (
-                <Text style={{ ...typography.caption, color: colors.textSecondary, marginTop: 4 }}>Full Time</Text>
+                <Text style={{ ...typography.caption, color: colors.textSecondary, marginTop: 4 }}>{t('common.fullTime')}</Text>
               )}
             </>
           ) : (
@@ -364,7 +366,7 @@ export function MatchDetailScreen({ route, navigation }: Props) {
                 <Pressable onPress={() => (navigation as any).navigate('TeamDetail', { teamId: match.homeTeam.id, teamName: match.homeTeam.name, teamCrest: match.homeTeam.crest })} style={{ flex: 1 }}>
                   <Text style={{ ...typography.bodyBold, color: colors.foreground, textAlign: 'right' }} numberOfLines={1}>{match.homeTeam.shortName}</Text>
                 </Pressable>
-                <Text style={{ ...typography.h2, color: colors.textSecondary, paddingHorizontal: spacing.md }}>vs</Text>
+                <Text style={{ ...typography.h2, color: colors.textSecondary, paddingHorizontal: spacing.md }}>{t('common.vs')}</Text>
                 <Pressable onPress={() => (navigation as any).navigate('TeamDetail', { teamId: match.awayTeam.id, teamName: match.awayTeam.name, teamCrest: match.awayTeam.crest })} style={{ flex: 1 }}>
                   <Text style={{ ...typography.bodyBold, color: colors.foreground, textAlign: 'left' }} numberOfLines={1}>{match.awayTeam.shortName}</Text>
                 </Pressable>
@@ -446,14 +448,14 @@ export function MatchDetailScreen({ route, navigation }: Props) {
                   style={{ flex: 1, backgroundColor: colors.primary, borderRadius: borderRadius.md, padding: spacing.md, alignItems: 'center' }}
                 >
                   <Text style={{ fontSize: 24, fontWeight: '700', color: '#14181c' }}>{new Set(reviews.map((r: any) => r.userId)).size}</Text>
-                  <Text style={{ fontSize: 11, color: '#14181c', fontWeight: '500' }}>Watched</Text>
+                  <Text style={{ fontSize: 11, color: '#14181c', fontWeight: '500' }}>{t('matches.watched')}</Text>
                 </Pressable>
                 <Pressable
                   onPress={() => navigation.navigate('MatchLists', { matchId })}
                   style={{ flex: 1, backgroundColor: '#3b82f6', borderRadius: borderRadius.md, padding: spacing.md, alignItems: 'center' }}
                 >
                   <Text style={{ fontSize: 24, fontWeight: '700', color: '#fff' }}>{matchLists?.length || 0}</Text>
-                  <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.8)' }}>Lists</Text>
+                  <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.8)' }}>{t('common.lists')}</Text>
                 </Pressable>
               </View>
             )}
@@ -498,7 +500,7 @@ export function MatchDetailScreen({ route, navigation }: Props) {
               >
                 <Ionicons name="lock-closed" size={18} color={colors.textSecondary} />
                 <Text style={{ ...typography.body, color: colors.textSecondary, flex: 1 }}>
-                  {isLive ? 'Reviews unlock after full time' : 'Reviews unlock after this match is played'}
+                  {isLive ? t('matches.reviewsUnlockAfterFullTime') : t('matches.reviewsUnlockAfterPlayed')}
                 </Text>
               </View>
             )}
@@ -533,10 +535,10 @@ export function MatchDetailScreen({ route, navigation }: Props) {
               >
                 <View style={{ flex: 1 }}>
                   <Text style={{ ...typography.bodyBold, color: colors.foreground }}>
-                    {hasReview ? 'Log again...' : 'Rate or review...'}
+                    {hasReview ? t('matches.logAgain') : t('matches.rateOrReview')}
                   </Text>
                   <Text style={{ ...typography.small, color: colors.textSecondary }}>
-                    {hasReview ? 'Add another diary entry' : 'Share your thoughts on this match'}
+                    {hasReview ? t('matches.addAnotherDiaryEntry') : t('matches.shareYourThoughts')}
                   </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
@@ -649,9 +651,9 @@ export function MatchDetailScreen({ route, navigation }: Props) {
         visible={showMenu}
         onClose={() => setShowMenu(false)}
         items={[
-          { label: isFavourite ? 'Remove from favourites' : 'Add to favourites', icon: isFavourite ? 'star' : 'star-outline', onPress: handleToggleFavourite },
-          { label: 'Add to list', icon: 'list-outline', onPress: () => { setShowMenu(false); setShowListModal(true); } },
-          { label: 'Share', icon: 'share-social-outline', onPress: () => { setShowMenu(false); setTimeout(handleShare, 300); } },
+          { label: isFavourite ? t('matches.removeFromFavourites') : t('matches.addToFavourites'), icon: isFavourite ? 'star' : 'star-outline', onPress: handleToggleFavourite },
+          { label: t('matches.addToList'), icon: 'list-outline', onPress: () => { setShowMenu(false); setShowListModal(true); } },
+          { label: t('common.share'), icon: 'share-social-outline', onPress: () => { setShowMenu(false); setTimeout(handleShare, 300); } },
         ]}
       />
 
@@ -678,6 +680,7 @@ function WatchedByFriends({ reviews, matchId, following, colors, spacing, typogr
   typography: any;
   navigation: any;
 }) {
+  const { t } = useTranslation();
   // Get friend reviews grouped by userId (latest review per user + aggregated data)
   const { friendLatest, friendAllByUser } = useMemo(() => {
     const latestMap = new Map<string, any>();
@@ -733,13 +736,13 @@ function WatchedByFriends({ reviews, matchId, following, colors, spacing, typogr
       {/* Header */}
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm }}>
         <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1 }}>
-          Watched by
+          {t('matches.watchedBy')}
         </Text>
         <Pressable
           onPress={() => navigation.navigate('WatchedBy', { matchId, initialTab: 'friends' })}
           style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}
         >
-          <Text style={{ ...typography.caption, color: colors.primary }}>More</Text>
+          <Text style={{ ...typography.caption, color: colors.primary }}>{t('common.more')}</Text>
           <Ionicons name="chevron-forward" size={14} color={colors.primary} />
         </Pressable>
       </View>
@@ -787,6 +790,7 @@ type ReviewSort = 'recent' | 'popular' | 'highest' | 'lowest';
 
 
 function ReviewsSection({ reviews, userId, profile, colors, spacing, typography, borderRadius, navigation }: any) {
+  const { t } = useTranslation();
   const [filter, setFilter] = useState<ReviewFilter>('everyone');
   const [sort, setSort] = useState<ReviewSort>('popular');
 
@@ -814,23 +818,23 @@ function ReviewsSection({ reviews, userId, profile, colors, spacing, typography,
   }, [reviews, filter, sort, userId, profile?.following]);
 
   const filterTabs: { key: ReviewFilter; label: string }[] = [
-    { key: 'everyone', label: 'Everyone' },
-    { key: 'friends', label: 'Friends' },
-    { key: 'you', label: 'You' },
+    { key: 'everyone', label: t('matches.everyone') },
+    { key: 'friends', label: t('matches.friends') },
+    { key: 'you', label: t('matches.you') },
   ];
 
   const sortOptions: { key: ReviewSort; label: string }[] = [
-    { key: 'recent', label: 'Most Recent' },
-    { key: 'popular', label: 'Most Popular' },
-    { key: 'highest', label: 'Highest Rating' },
-    { key: 'lowest', label: 'Lowest Rating' },
+    { key: 'recent', label: t('matches.mostRecent') },
+    { key: 'popular', label: t('matches.mostPopular') },
+    { key: 'highest', label: t('matches.highestRating') },
+    { key: 'lowest', label: t('matches.lowestRating') },
   ];
 
   return (
     <View style={{ marginTop: spacing.lg }}>
       {/* Header */}
       <Text style={{ ...typography.h4, color: colors.foreground, marginBottom: spacing.sm, paddingHorizontal: spacing.md }}>
-        Reviews {filteredReviews.length > 0 ? `(${filteredReviews.length})` : ''}
+        {filteredReviews.length > 0 ? t('matches.reviewsCount', { count: filteredReviews.length }) : t('common.reviews')}
       </Text>
 
       {/* Filter tabs + Sort dropdown row */}
@@ -857,7 +861,7 @@ function ReviewsSection({ reviews, userId, profile, colors, spacing, typography,
           <Select
             value={sort}
             onValueChange={(v) => setSort(v as ReviewSort)}
-            title="Sort Reviews"
+            title={t('matches.sortReviews')}
             options={sortOptions.map((o) => ({ value: o.key, label: o.label }))}
           />
         </View>
@@ -868,7 +872,7 @@ function ReviewsSection({ reviews, userId, profile, colors, spacing, typography,
         <View style={{ alignItems: 'center', paddingVertical: spacing.xl }}>
           <Ionicons name="chatbubbles-outline" size={36} color={colors.textSecondary} />
           <Text style={{ ...typography.body, color: colors.textSecondary, marginTop: spacing.sm }}>
-            {filter === 'everyone' ? 'No reviews yet. Be the first!' : filter === 'friends' ? 'No reviews from friends yet' : 'You haven\'t logged this match yet'}
+            {filter === 'everyone' ? t('matches.noReviewsYetBeFirst') : filter === 'friends' ? t('matches.noReviewsFromFriends') : t('matches.youHaventLoggedYet')}
           </Text>
         </View>
       ) : (
@@ -1174,6 +1178,8 @@ function BenchPlayerRow({ player, substitution, colors, spacing, typography, onP
   onPress: () => void;
   isMOTM?: boolean;
 }) {
+  const { t } = useTranslation();
+  const posLabel = player.position === 'Goalkeeper' ? t('person.positionGK') : player.position === 'Defender' ? t('person.positionDEF') : player.position === 'Midfielder' ? t('person.positionMID') : player.position === 'Forward' ? t('person.positionFWD') : player.position;
   return (
     <Pressable onPress={onPress} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
       <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.xs + 2, gap: spacing.sm }}>
@@ -1193,7 +1199,7 @@ function BenchPlayerRow({ player, substitution, colors, spacing, typography, onP
         )}
         {player.position && !substitution && (
           <Text style={{ ...typography.small, color: colors.textSecondary }}>
-            {player.position === 'Goalkeeper' ? 'GK' : player.position === 'Defender' ? 'DEF' : player.position === 'Midfielder' ? 'MID' : player.position === 'Forward' ? 'FWD' : player.position}
+            {posLabel}
           </Text>
         )}
       </View>
@@ -1202,6 +1208,7 @@ function BenchPlayerRow({ player, substitution, colors, spacing, typography, onP
 }
 
 function LineupSection({ matchDetail, match, colors, spacing, typography, navigation, motmWinnerId }: { matchDetail: MatchDetail | null; match: any; colors: any; spacing: any; typography: any; navigation: any; motmWinnerId?: number | null }) {
+  const { t } = useTranslation();
   const { width: screenWidth } = useWindowDimensions();
   const pitchWidth = screenWidth - spacing.md * 2;
 
@@ -1220,10 +1227,10 @@ function LineupSection({ matchDetail, match, colors, spacing, typography, naviga
       <View style={{ alignItems: 'center', paddingVertical: spacing.xxl, paddingHorizontal: spacing.xl }}>
         <Ionicons name="people-outline" size={40} color={colors.textSecondary} />
         <Text style={{ ...typography.bodyBold, color: colors.foreground, marginTop: spacing.md }}>
-          Lineups not available
+          {t('matches.lineupsNotAvailable')}
         </Text>
         <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.xs }}>
-          Lineups are usually available close to kickoff
+          {t('matches.lineupsAvailableCloseToKickoff')}
         </Text>
       </View>
     );
@@ -1256,7 +1263,7 @@ function LineupSection({ matchDetail, match, colors, spacing, typography, naviga
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm }}>
               <TeamLogo uri={match.homeTeam.crest} size={18} />
               <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 14 }}>{match.homeTeam.shortName}</Text>
-              <Text style={{ ...typography.caption, color: colors.textSecondary }}>Starting XI</Text>
+              <Text style={{ ...typography.caption, color: colors.textSecondary }}>{t('matches.startingXI')}</Text>
             </View>
             {matchDetail.homeLineup.map((p) => (
               <BenchPlayerRow key={p.id} player={p} colors={colors} spacing={spacing} typography={typography} isMOTM={motmWinnerId === p.id} onPress={() => navigation.navigate('PersonDetail', { personId: p.id, personName: shortName(p.name), role: 'player' })} />
@@ -1268,7 +1275,7 @@ function LineupSection({ matchDetail, match, colors, spacing, typography, naviga
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm }}>
               <TeamLogo uri={match.awayTeam.crest} size={18} />
               <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 14 }}>{match.awayTeam.shortName}</Text>
-              <Text style={{ ...typography.caption, color: colors.textSecondary }}>Starting XI</Text>
+              <Text style={{ ...typography.caption, color: colors.textSecondary }}>{t('matches.startingXI')}</Text>
             </View>
             {matchDetail.awayLineup.map((p) => (
               <BenchPlayerRow key={p.id} player={p} colors={colors} spacing={spacing} typography={typography} isMOTM={motmWinnerId === p.id} onPress={() => navigation.navigate('PersonDetail', { personId: p.id, personName: shortName(p.name), role: 'player' })} />
@@ -1285,7 +1292,7 @@ function LineupSection({ matchDetail, match, colors, spacing, typography, naviga
             <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 14 }}>
               {match.homeTeam.shortName}
             </Text>
-            <Text style={{ ...typography.caption, color: colors.textSecondary }}>Substitutes</Text>
+            <Text style={{ ...typography.caption, color: colors.textSecondary }}>{t('matches.substitutes')}</Text>
           </View>
           {matchDetail.homeBench.map((p) => (
             <BenchPlayerRow
@@ -1306,7 +1313,7 @@ function LineupSection({ matchDetail, match, colors, spacing, typography, naviga
                   <Ionicons name="person" size={12} color={colors.textSecondary} />
                 </Text>
                 <Text style={{ ...typography.body, color: colors.textSecondary, fontSize: 14, fontStyle: 'italic' }}>
-                  {shortName(matchDetail.homeCoach.name)} (Coach)
+                  {shortName(matchDetail.homeCoach.name)} ({t('matches.coach')})
                 </Text>
               </View>
             </Pressable>
@@ -1324,7 +1331,7 @@ function LineupSection({ matchDetail, match, colors, spacing, typography, naviga
             <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 14 }}>
               {match.awayTeam.shortName}
             </Text>
-            <Text style={{ ...typography.caption, color: colors.textSecondary }}>Substitutes</Text>
+            <Text style={{ ...typography.caption, color: colors.textSecondary }}>{t('matches.substitutes')}</Text>
           </View>
           {matchDetail.awayBench.map((p) => (
             <BenchPlayerRow
@@ -1345,7 +1352,7 @@ function LineupSection({ matchDetail, match, colors, spacing, typography, naviga
                   <Ionicons name="person" size={12} color={colors.textSecondary} />
                 </Text>
                 <Text style={{ ...typography.body, color: colors.textSecondary, fontSize: 14, fontStyle: 'italic' }}>
-                  {shortName(matchDetail.awayCoach.name)} (Coach)
+                  {shortName(matchDetail.awayCoach.name)} ({t('matches.coach')})
                 </Text>
               </View>
             </Pressable>
@@ -1362,13 +1369,16 @@ function LineupSection({ matchDetail, match, colors, spacing, typography, naviga
         return (
           <>
             <View style={{ height: 1, backgroundColor: colors.border, marginVertical: spacing.md, marginHorizontal: -spacing.md }} />
+            <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: spacing.xs }}>
+              {t('matches.referee')}
+            </Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.xs + 2, gap: spacing.sm, marginBottom: spacing.md }}>
               <View style={{ width: 24, alignItems: 'center' }}>
-                {refFlag ? <Text style={{ fontSize: 14 }}>{refFlag}</Text> : <Ionicons name="flag-outline" size={12} color={colors.textSecondary} />}
+                <Ionicons name="flag-outline" size={12} color={colors.textSecondary} />
               </View>
               {motmWinnerId === REFEREE_MOTM_ID && <Text style={{ fontSize: 13 }}>⭐</Text>}
               <Text style={{ ...typography.body, color: motmWinnerId === REFEREE_MOTM_ID ? '#f59e0b' : colors.textSecondary, fontSize: 14, fontStyle: 'italic', flex: 1, fontWeight: motmWinnerId === REFEREE_MOTM_ID ? '700' : '400' }}>
-                {refName} (Referee)
+                {refName}{refFlag ? ` ${refFlag}` : refCountry ? ` (${refCountry})` : ''}
               </Text>
             </View>
           </>
@@ -1392,7 +1402,7 @@ function StatRow({ label, home, away, colors, spacing, typography, isPossession 
     return (
       <View style={{ marginBottom: spacing.md }}>
         <Text style={{ ...typography.small, color: colors.textSecondary, textAlign: 'center', marginBottom: spacing.xs }}>
-          Ball Possession
+          {label}
         </Text>
         <View style={{ flexDirection: 'row', gap: 2, alignItems: 'center' }}>
           <View style={{
@@ -1444,6 +1454,7 @@ function StatRow({ label, home, away, colors, spacing, typography, isPossession 
 }
 
 function InfoSection({ matchDetail, match, colors, spacing, typography, borderRadius, navigation }: { matchDetail: MatchDetail | null; match: any; colors: any; spacing: any; typography: any; borderRadius: any; navigation: any }) {
+  const { t } = useTranslation();
   if (!matchDetail) {
     return (
       <View style={{ alignItems: 'center', paddingVertical: spacing.xxl }}>
@@ -1455,12 +1466,12 @@ function InfoSection({ matchDetail, match, colors, spacing, typography, borderRa
   const { stats } = matchDetail;
 
   const infoRows: { label: string; value: string }[] = [
-    { label: 'Competition', value: match.competition.name },
-    { label: 'Matchday', value: match.matchday ? `${match.matchday}` : '—' },
-    { label: 'Date', value: formatFullDate(match.kickoff) },
-    { label: 'Kick-off', value: formatMatchTime(match.kickoff) },
-    { label: 'Venue', value: match.venue || '—' },
-    ...(matchDetail.attendance ? [{ label: 'Attendance', value: matchDetail.attendance.toLocaleString() }] : []),
+    { label: t('matches.competition'), value: match.competition.name },
+    { label: t('matches.matchday'), value: match.matchday ? `${match.matchday}` : '—' },
+    { label: t('matches.date'), value: formatFullDate(match.kickoff) },
+    { label: t('matches.kickOff'), value: formatMatchTime(match.kickoff) },
+    { label: t('matches.venue'), value: match.venue || '—' },
+    ...(matchDetail.attendance ? [{ label: t('matches.attendance'), value: matchDetail.attendance.toLocaleString() }] : []),
   ];
 
   return (
@@ -1469,7 +1480,7 @@ function InfoSection({ matchDetail, match, colors, spacing, typography, borderRa
       {stats ? (
         <View style={{ backgroundColor: colors.card, borderRadius: borderRadius.lg, padding: spacing.md, borderWidth: 1, borderColor: colors.border, marginBottom: spacing.lg }}>
           <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 15, textAlign: 'center', marginBottom: spacing.md }}>
-            Match Stats
+            {t('matches.matchStats')}
           </Text>
 
           {/* Team headers */}
@@ -1484,21 +1495,21 @@ function InfoSection({ matchDetail, match, colors, spacing, typography, borderRa
             </Pressable>
           </View>
 
-          <StatRow label="Ball Possession" home={stats.ballPossession[0]} away={stats.ballPossession[1]} colors={colors} spacing={spacing} typography={typography} isPossession />
-          <StatRow label="Total Shots" home={stats.shots[0]} away={stats.shots[1]} colors={colors} spacing={spacing} typography={typography} />
-          <StatRow label="Shots on Target" home={stats.shotsOnTarget[0]} away={stats.shotsOnTarget[1]} colors={colors} spacing={spacing} typography={typography} />
-          <StatRow label="Corners" home={stats.corners[0]} away={stats.corners[1]} colors={colors} spacing={spacing} typography={typography} />
-          <StatRow label="Saves" home={stats.saves[0]} away={stats.saves[1]} colors={colors} spacing={spacing} typography={typography} />
-          <StatRow label="Fouls" home={stats.fouls[0]} away={stats.fouls[1]} colors={colors} spacing={spacing} typography={typography} />
-          <StatRow label="Offsides" home={stats.offsides[0]} away={stats.offsides[1]} colors={colors} spacing={spacing} typography={typography} />
-          <StatRow label="Yellow Cards" home={stats.yellowCards[0]} away={stats.yellowCards[1]} colors={colors} spacing={spacing} typography={typography} />
-          <StatRow label="Red Cards" home={stats.redCards[0]} away={stats.redCards[1]} colors={colors} spacing={spacing} typography={typography} />
+          <StatRow label={t('matches.ballPossession')} home={stats.ballPossession[0]} away={stats.ballPossession[1]} colors={colors} spacing={spacing} typography={typography} isPossession />
+          <StatRow label={t('matches.totalShots')} home={stats.shots[0]} away={stats.shots[1]} colors={colors} spacing={spacing} typography={typography} />
+          <StatRow label={t('matches.shotsOnTarget')} home={stats.shotsOnTarget[0]} away={stats.shotsOnTarget[1]} colors={colors} spacing={spacing} typography={typography} />
+          <StatRow label={t('matches.corners')} home={stats.corners[0]} away={stats.corners[1]} colors={colors} spacing={spacing} typography={typography} />
+          <StatRow label={t('matches.saves')} home={stats.saves[0]} away={stats.saves[1]} colors={colors} spacing={spacing} typography={typography} />
+          <StatRow label={t('matches.fouls')} home={stats.fouls[0]} away={stats.fouls[1]} colors={colors} spacing={spacing} typography={typography} />
+          <StatRow label={t('matches.offsides')} home={stats.offsides[0]} away={stats.offsides[1]} colors={colors} spacing={spacing} typography={typography} />
+          <StatRow label={t('matches.yellowCards')} home={stats.yellowCards[0]} away={stats.yellowCards[1]} colors={colors} spacing={spacing} typography={typography} />
+          <StatRow label={t('matches.redCards')} home={stats.redCards[0]} away={stats.redCards[1]} colors={colors} spacing={spacing} typography={typography} />
         </View>
       ) : (
         <View style={{ alignItems: 'center', paddingVertical: spacing.lg, marginBottom: spacing.lg }}>
           <Ionicons name="stats-chart-outline" size={36} color={colors.textSecondary} />
           <Text style={{ ...typography.body, color: colors.textSecondary, marginTop: spacing.sm }}>
-            Match stats not available yet
+            {t('matches.matchStatsNotAvailable')}
           </Text>
         </View>
       )}
@@ -1506,10 +1517,10 @@ function InfoSection({ matchDetail, match, colors, spacing, typography, borderRa
       {/* Match Information */}
       <View style={{ backgroundColor: colors.card, borderRadius: borderRadius.lg, padding: spacing.md, borderWidth: 1, borderColor: colors.border }}>
         <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 15, textAlign: 'center', marginBottom: spacing.md }}>
-          Match Information
+          {t('matches.matchInformation')}
         </Text>
         {infoRows.map((row) => {
-          const isCompetition = row.label === 'Competition';
+          const isCompetition = row.label === t('matches.competition');
           const Container = isCompetition ? Pressable : View;
           const containerProps = isCompetition
             ? { onPress: () => navigation.navigate('LeagueDetail', { competitionCode: match.competition.code, competitionName: match.competition.name, competitionEmblem: match.competition.emblem }) }
