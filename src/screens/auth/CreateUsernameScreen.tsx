@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, KeyboardAvoidingView, Platform, ScrollView, Dimensions, Pressable } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { TextInput } from '../../components/ui/TextInput';
@@ -13,6 +14,7 @@ import { getUserByUsername } from '../../services/firestore/users';
 const { height } = Dimensions.get('window');
 
 export function CreateUsernameScreen() {
+  const { t } = useTranslation();
   const { theme } = useTheme();
   const { createUsernameForGoogle, signOut } = useAuth();
   const { colors, spacing, typography } = theme;
@@ -24,15 +26,15 @@ export function CreateUsernameScreen() {
   const handleSubmit = async () => {
     const trimmed = username.trim().toLowerCase();
     if (trimmed.length < 3) {
-      setError('Username must be at least 3 characters');
+      setError(t('auth.usernameMustBeAtLeast3'));
       return;
     }
     if (!isUsernameClean(trimmed)) {
-      setError("That username isn't allowed. Please choose another.");
+      setError(t('auth.usernameNotAllowed'));
       return;
     }
     if (isUsernameReserved(trimmed)) {
-      setError('That username is reserved. Please choose another.');
+      setError(t('auth.usernameReserved'));
       return;
     }
 
@@ -41,13 +43,13 @@ export function CreateUsernameScreen() {
     try {
       const existing = await getUserByUsername(trimmed);
       if (existing) {
-        setError('That username is already taken.');
+        setError(t('auth.usernameAlreadyTaken'));
         setLoading(false);
         return;
       }
       await createUsernameForGoogle(trimmed);
     } catch (e: any) {
-      setError(e.message || 'Failed to create username');
+      setError(e.message || t('auth.failedToCreateUsername'));
     } finally {
       setLoading(false);
     }
@@ -94,7 +96,7 @@ export function CreateUsernameScreen() {
               marginBottom: spacing.xs,
             }}
           >
-            Choose a Username
+            {t('auth.chooseAUsername')}
           </Text>
           <Text
             style={{
@@ -103,7 +105,7 @@ export function CreateUsernameScreen() {
               marginBottom: spacing.lg,
             }}
           >
-            Pick a unique username for your bookd profile
+            {t('auth.pickUniqueUsername')}
           </Text>
 
           {error ? (
@@ -119,8 +121,8 @@ export function CreateUsernameScreen() {
           ) : null}
 
           <TextInput
-            label="Username"
-            placeholder="Choose a username"
+            label={t('auth.username')}
+            placeholder={t('auth.chooseAUsernamePlaceholder')}
             value={username}
             onChangeText={setUsername}
             autoCapitalize="none"
@@ -129,7 +131,7 @@ export function CreateUsernameScreen() {
           />
 
           <Button
-            title="Continue"
+            title={t('common.continue')}
             onPress={handleSubmit}
             loading={loading}
             size="lg"
@@ -138,7 +140,7 @@ export function CreateUsernameScreen() {
 
           <Pressable onPress={signOut} style={{ alignSelf: 'center', marginTop: spacing.lg }}>
             <Text style={{ ...typography.caption, color: colors.textSecondary }}>
-              Sign out
+              {t('settings.signOutTitle')}
             </Text>
           </Pressable>
         </View>

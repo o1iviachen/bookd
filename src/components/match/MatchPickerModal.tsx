@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { View, Text, Modal, FlatList, Pressable, TextInput as RNTextInput, useWindowDimensions, ActivityIndicator, Keyboard } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { useAllMatches, useSearchMatches } from '../../hooks/useMatches';
 import { MatchPosterCard } from './MatchPosterCard';
@@ -12,9 +13,10 @@ import { LoadingSpinner } from '../ui/LoadingSpinner';
 const NUM_COLUMNS = 3;
 
 type SortBy = 'popular' | 'recent';
-const SORT_OPTIONS: { value: SortBy; label: string }[] = [
-  { value: 'popular', label: 'Most Popular' },
-  { value: 'recent', label: 'Most Recent' },
+// Labels set dynamically with t() inside component
+const SORT_KEYS: { value: SortBy; key: string }[] = [
+  { value: 'popular', key: 'matches.pickerSortPopular' },
+  { value: 'recent', key: 'matches.pickerSortRecent' },
 ];
 
 interface MatchPickerModalProps {
@@ -27,6 +29,7 @@ interface MatchPickerModalProps {
 }
 
 export function MatchPickerModal({ visible, onClose, onAddMatches, excludeMatchIds, singleSelect, finishedOnly }: MatchPickerModalProps) {
+  const { t } = useTranslation();
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
   const { width: screenWidth } = useWindowDimensions();
@@ -124,14 +127,14 @@ export function MatchPickerModal({ visible, onClose, onAddMatches, excludeMatchI
         {/* Header */}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }}>
           <Pressable onPress={handleCancel}>
-            <Text style={{ color: colors.primary, fontSize: 16 }}>Cancel</Text>
+            <Text style={{ color: colors.primary, fontSize: 16 }}>{t('matches.pickerCancel')}</Text>
           </Pressable>
           <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 17 }}>
-            {singleSelect ? 'Select a Match' : `Add Matches${selected.length > 0 ? ` (${selected.length})` : ''}`}
+            {singleSelect ? t('matches.pickerSelectMatch') : (selected.length > 0 ? t('matches.pickerAddMatchesCount', { count: selected.length }) : t('matches.pickerAddMatches'))}
           </Text>
           {!singleSelect ? (
             <Pressable onPress={handleDone}>
-              <Text style={{ color: colors.primary, fontSize: 16, fontWeight: '600' }}>Done</Text>
+              <Text style={{ color: colors.primary, fontSize: 16, fontWeight: '600' }}>{t('matches.pickerDone')}</Text>
             </Pressable>
           ) : <View style={{ width: 40 }} />}
         </View>
@@ -141,7 +144,7 @@ export function MatchPickerModal({ visible, onClose, onAddMatches, excludeMatchI
           <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.muted, borderRadius: borderRadius.md, paddingHorizontal: 12 }}>
             <Ionicons name="search" size={18} color={colors.textSecondary} />
             <RNTextInput
-              placeholder="Search by team or league..."
+              placeholder={t('matches.pickerSearchPlaceholder')}
               placeholderTextColor={colors.textSecondary}
               autoCorrect={false}
               value={search}
@@ -173,8 +176,8 @@ export function MatchPickerModal({ visible, onClose, onAddMatches, excludeMatchI
             <Select
               value={sortBy}
               onValueChange={(v) => setSortBy(v as SortBy)}
-              title="Sort By"
-              options={SORT_OPTIONS}
+              title={t('matches.pickerSortTitle')}
+              options={SORT_KEYS.map((s) => ({ value: s.value, label: t(s.key) }))}
             />
           </View>
         </View>
@@ -185,7 +188,7 @@ export function MatchPickerModal({ visible, onClose, onAddMatches, excludeMatchI
         ) : filtered.length === 0 ? (
           <Pressable style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingBottom: '20%' }} onPress={Keyboard.dismiss}>
             <Ionicons name="football-outline" size={48} color={colors.textSecondary} />
-            <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.md }}>No matches found</Text>
+            <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.md }}>{t('matches.pickerEmpty')}</Text>
           </Pressable>
         ) : (
           <FlatList showsVerticalScrollIndicator={false}

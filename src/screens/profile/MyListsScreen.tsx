@@ -9,9 +9,11 @@ import { ListPreviewCard } from '../../components/list/ListPreviewCard';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { ScreenHeader } from '../../components/ui/ScreenHeader';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { useTranslation } from 'react-i18next';
 import { MatchList } from '../../types/list';
 
 export function MyListsScreen({ route, navigation }: any) {
+  const { t } = useTranslation();
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
   const { user } = useAuth();
@@ -32,7 +34,7 @@ export function MyListsScreen({ route, navigation }: any) {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
       <ScreenHeader
-        title="Lists"
+        title={t('common.lists')}
         onBack={() => navigation.goBack()}
         rightElement={isOwnProfile ?
           <Pressable onPress={() => navigation.navigate('CreateList')} hitSlop={8}>
@@ -44,8 +46,8 @@ export function MyListsScreen({ route, navigation }: any) {
       {!lists || lists.length === 0 ? (
         <EmptyState
           icon="list-outline"
-          title="No lists yet"
-          subtitle={isOwnProfile ? 'Organize your favourite matches into lists' : 'This user hasn\'t created any lists yet'}
+          title={t('profile.noListsYet')}
+          subtitle={isOwnProfile ? t('profile.createYourFirstList') : t('profile.noListsYet')}
         >
           {isOwnProfile && (
             <Pressable
@@ -58,7 +60,7 @@ export function MyListsScreen({ route, navigation }: any) {
                 borderRadius: borderRadius.md,
               }}
             >
-              <Text style={{ ...typography.bodyBold, color: '#fff' }}>Create Your First List</Text>
+              <Text style={{ ...typography.bodyBold, color: '#fff' }}>{t('profile.createYourFirstList')}</Text>
             </Pressable>
           )}
         </EmptyState>

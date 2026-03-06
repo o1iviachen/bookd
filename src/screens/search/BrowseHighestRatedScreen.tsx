@@ -13,6 +13,7 @@ import { MatchPosterCard } from '../../components/match/MatchPosterCard';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { SearchStackParamList } from '../../types/navigation';
 import { Match } from '../../types/match';
+import { useTranslation } from 'react-i18next';
 
 type Nav = NativeStackNavigationProp<SearchStackParamList, 'BrowseHighestRated'>;
 const NUM_COLUMNS = 3;
@@ -22,6 +23,7 @@ export function BrowseHighestRatedScreen() {
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography } = theme;
   const navigation = useNavigation<Nav>();
+  const { t } = useTranslation();
   const { width: screenWidth } = useWindowDimensions();
 
   const GAP = spacing.sm;
@@ -88,9 +90,9 @@ export function BrowseHighestRatedScreen() {
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border }}>
         <Pressable onPress={() => navigation.goBack()} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
           <Ionicons name="chevron-back" size={22} color={colors.primary} />
-          <Text style={{ color: colors.primary, fontSize: 16 }}>Search</Text>
+          <Text style={{ color: colors.primary, fontSize: 16 }}>{t('common.search')}</Text>
         </Pressable>
-        <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 17 }}>Highest Rated</Text>
+        <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 17 }}>{t('search.highestRatedTitle')}</Text>
         <View style={{ width: 60 }} />
       </View>
 
@@ -108,7 +110,7 @@ export function BrowseHighestRatedScreen() {
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
           <Ionicons name="star-outline" size={48} color={colors.textSecondary} />
           <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.md }}>
-            No rated matches yet
+            {t('search.noRatedMatchesYet')}
           </Text>
         </View>
       ) : (

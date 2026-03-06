@@ -9,8 +9,10 @@ import { Avatar } from '../../components/ui/Avatar';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { ScreenHeader } from '../../components/ui/ScreenHeader';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { useTranslation } from 'react-i18next';
 
 export function FollowListScreen({ route, navigation }: any) {
+  const { t } = useTranslation();
   const { userIds, title } = route.params as { userIds: string[]; title: string };
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
@@ -39,8 +41,8 @@ export function FollowListScreen({ route, navigation }: any) {
       {users.length === 0 ? (
         <EmptyState
           icon="people-outline"
-          title={title === 'Following' ? 'Not following anyone yet' : 'No followers yet'}
-          subtitle={title === 'Following' ? 'Find people to follow in Search' : 'Share your profile to get followers'}
+          title={title === t('common.following') ? t('profile.noFollowingYet') : t('profile.noFollowersYet')}
+          subtitle=""
         />
       ) : (
         <FlatList showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'}

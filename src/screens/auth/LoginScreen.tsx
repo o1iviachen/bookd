@@ -3,6 +3,7 @@ import { View, Text, KeyboardAvoidingView, Platform, ScrollView, Dimensions, Pre
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTranslation } from 'react-i18next';
 import { getAuthErrorMessage } from '../../utils/authErrors';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,6 +20,7 @@ type Props = NativeStackScreenProps<AuthStackParamList, 'Login'>;
 const { height } = Dimensions.get('window');
 
 export function LoginScreen({ navigation }: Props) {
+  const { t } = useTranslation();
   const { theme, isDark } = useTheme();
   const { signIn } = useAuth();
   const { colors, spacing, typography } = theme;
@@ -42,7 +44,7 @@ export function LoginScreen({ navigation }: Props) {
 
   const handleLogin = async () => {
     if (!email || !password) {
-      setError('Please fill in all fields');
+      setError(t('auth.pleaseFillInAllFields'));
       return;
     }
     setError('');
@@ -96,7 +98,7 @@ export function LoginScreen({ navigation }: Props) {
           }}
         >
           <Ionicons name="chevron-back" size={24} color={colors.foreground} />
-          <Text style={{ ...typography.body, color: colors.foreground }}>Back</Text>
+          <Text style={{ ...typography.body, color: colors.foreground }}>{t('common.back')}</Text>
         </Pressable>
 
         {/* Content pinned to bottom */}
@@ -115,7 +117,7 @@ export function LoginScreen({ navigation }: Props) {
               marginBottom: spacing.lg,
             }}
           >
-            Log In
+            {t('common.logIn')}
           </Text>
 
           {error ? (
@@ -131,8 +133,8 @@ export function LoginScreen({ navigation }: Props) {
           ) : null}
 
           <TextInput
-            label="Email or Username"
-            placeholder="you@example.com or username"
+            label={t('auth.emailOrUsername')}
+            placeholder={t('auth.emailOrUsernamePlaceholder')}
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"
@@ -142,8 +144,8 @@ export function LoginScreen({ navigation }: Props) {
           />
           <TextInput
             ref={passwordRef}
-            label="Password"
-            placeholder="Your password"
+            label={t('auth.password')}
+            placeholder={t('auth.yourPassword')}
             value={password}
             onChangeText={setPassword}
             secureTextEntry
@@ -153,12 +155,12 @@ export function LoginScreen({ navigation }: Props) {
 
           <Pressable onPress={() => navigation.navigate('ForgotPassword')} style={{ alignSelf: 'flex-end', marginTop: -spacing.sm, marginBottom: spacing.md }}>
             <Text style={{ ...typography.caption, color: colors.primary, fontWeight: '600' }}>
-              Forgot Password?
+              {t('auth.forgotPassword')}
             </Text>
           </Pressable>
 
           <Button
-            title="Log In"
+            title={t('common.logIn')}
             onPress={handleLogin}
             loading={loading}
             size="lg"
@@ -168,7 +170,7 @@ export function LoginScreen({ navigation }: Props) {
           {/* Divider */}
           <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: spacing.lg }}>
             <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
-            <Text style={{ ...typography.caption, color: colors.textSecondary, marginHorizontal: spacing.md }}>or</Text>
+            <Text style={{ ...typography.caption, color: colors.textSecondary, marginHorizontal: spacing.md }}>{t('common.or')}</Text>
             <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
           </View>
 
@@ -186,8 +188,8 @@ export function LoginScreen({ navigation }: Props) {
             }}
             onPress={() => navigation.navigate('SignUp')}
           >
-            Don't have an account?{' '}
-            <Text style={{ color: colors.primary, fontWeight: '600' }}>Sign Up</Text>
+            {t('auth.dontHaveAccount')}{' '}
+            <Text style={{ color: colors.primary, fontWeight: '600' }}>{t('common.signUp')}</Text>
           </Text>
         </View>
       </ScrollView>

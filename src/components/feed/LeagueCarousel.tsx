@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, FlatList, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { MatchPosterCard } from '../match/MatchPosterCard';
 import { Match } from '../../types/match';
@@ -13,6 +14,7 @@ interface LeagueCarouselProps {
 }
 
 export function LeagueCarousel({ title, matches, onMatchPress, onMorePress }: LeagueCarouselProps) {
+  const { t } = useTranslation();
   const { theme } = useTheme();
   const { colors, spacing, typography } = theme;
 
@@ -34,7 +36,7 @@ export function LeagueCarousel({ title, matches, onMatchPress, onMorePress }: Le
           {title}
         </Text>
         <Pressable onPress={onMorePress} style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-          <Text style={{ ...typography.caption, color: colors.primary }}>More</Text>
+          <Text style={{ ...typography.caption, color: colors.primary }}>{t('common.more')}</Text>
           <Ionicons name="chevron-forward" size={14} color={colors.primary} />
         </Pressable>
       </View>

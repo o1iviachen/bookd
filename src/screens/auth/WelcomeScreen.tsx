@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, ImageBackground, Dimensions, StyleSheet } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { Button } from '../../components/ui/Button';
 import { BookdLogo } from '../../components/ui/BookdLogo';
@@ -12,6 +13,7 @@ type Props = NativeStackScreenProps<AuthStackParamList, 'Welcome'>;
 const { height } = Dimensions.get('window');
 
 export function WelcomeScreen({ navigation }: Props) {
+  const { t } = useTranslation();
   const { theme } = useTheme();
   const { colors, spacing, typography } = theme;
 
@@ -61,19 +63,19 @@ export function WelcomeScreen({ navigation }: Props) {
               marginTop: spacing.xs,
             }}
           >
-            The beautiful game, remembered.
+            {t('auth.theBeautifulGameRemembered')}
           </Text>
         </View>
 
         <View style={{ width: '100%', gap: spacing.sm }}>
           <Button
-            title="Log In"
+            title={t('common.logIn')}
             onPress={() => navigation.navigate('Login')}
             variant="primary"
             size="lg"
           />
           <Button
-            title="Create Account"
+            title={t('auth.createAccount')}
             onPress={() => navigation.navigate('SignUp')}
             variant="outline"
             size="lg"

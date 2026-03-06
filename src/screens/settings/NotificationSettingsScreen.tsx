@@ -8,6 +8,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useUserProfile } from '../../hooks/useUser';
 import { updateUserProfile } from '../../services/firestore/users';
 import { NotificationPreferences } from '../../types/user';
+import { useTranslation } from 'react-i18next';
 
 type ToggleItem = { label: string; description: string; key: keyof NotificationPreferences };
 
@@ -24,6 +25,7 @@ const DEFAULT_PREFS: NotificationPreferences = {
 };
 
 export function NotificationSettingsScreen() {
+  const { t } = useTranslation();
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
   const navigation = useNavigation();
@@ -63,13 +65,13 @@ export function NotificationSettingsScreen() {
   };
 
   const pushItems: ToggleItem[] = [
-    { label: 'Review Likes', description: 'When someone likes your review', key: 'reviewLikes' },
-    { label: 'Review Comments', description: 'When someone comments on your review', key: 'reviewComments' },
-    { label: 'Comment Likes', description: 'When someone likes your comment', key: 'commentLikes' },
-    { label: 'List Likes', description: 'When someone likes your list', key: 'listLikes' },
-    { label: 'List Comments', description: 'When someone comments on your list', key: 'listComments' },
-    { label: 'New Followers', description: 'When someone starts following you', key: 'follows' },
-    { label: 'Match Events', description: 'Pre-kickoff and post-match alerts for your teams', key: 'matchEvents' },
+    { label: t('notificationSettings.reviewLikes'), description: t('notificationSettings.reviewLikesDescription'), key: 'reviewLikes' },
+    { label: t('notificationSettings.reviewComments'), description: t('notificationSettings.reviewCommentsDescription'), key: 'reviewComments' },
+    { label: t('notificationSettings.commentLikes'), description: t('notificationSettings.commentLikesDescription'), key: 'commentLikes' },
+    { label: t('notificationSettings.listLikes'), description: t('notificationSettings.listLikesDescription'), key: 'listLikes' },
+    { label: t('notificationSettings.listComments'), description: t('notificationSettings.listCommentsDescription'), key: 'listComments' },
+    { label: t('notificationSettings.newFollowers'), description: t('notificationSettings.newFollowersDescription'), key: 'follows' },
+    { label: t('notificationSettings.matchEvents'), description: t('notificationSettings.matchEventsDescription'), key: 'matchEvents' },
   ];
 
   return (
@@ -77,9 +79,9 @@ export function NotificationSettingsScreen() {
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border }}>
         <Pressable onPress={() => navigation.goBack()} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
           <Ionicons name="chevron-back" size={22} color={colors.primary} />
-          <Text style={{ color: colors.primary, fontSize: 16 }}>Back</Text>
+          <Text style={{ color: colors.primary, fontSize: 16 }}>{t('common.back')}</Text>
         </Pressable>
-        <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 17 }}>Notifications</Text>
+        <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 17 }}>{t('settings.notifications')}</Text>
         <View style={{ width: 60 }} />
       </View>
 
@@ -87,13 +89,13 @@ export function NotificationSettingsScreen() {
         {/* Email */}
         <View style={{ marginTop: spacing.lg, paddingHorizontal: spacing.md }}>
           <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: spacing.sm, marginLeft: spacing.xs }}>
-            Email
+            {t('auth.email')}
           </Text>
           <View style={{ backgroundColor: colors.card, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: spacing.md, paddingHorizontal: spacing.md }}>
               <View style={{ flex: 1, marginRight: spacing.md }}>
-                <Text style={{ ...typography.body, color: colors.foreground }}>Email Communication</Text>
-                <Text style={{ ...typography.small, color: colors.textSecondary, marginTop: 2 }}>Receive updates and announcements via email</Text>
+                <Text style={{ ...typography.body, color: colors.foreground }}>{t('notificationSettings.emailCommunication')}</Text>
+                <Text style={{ ...typography.small, color: colors.textSecondary, marginTop: 2 }}>{t('notificationSettings.emailDescription')}</Text>
               </View>
               <Switch
                 value={prefs.emailEnabled}
@@ -108,14 +110,14 @@ export function NotificationSettingsScreen() {
         {/* Push Notifications */}
         <View style={{ marginTop: spacing.lg, paddingHorizontal: spacing.md }}>
           <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: spacing.sm, marginLeft: spacing.xs }}>
-            Push Notifications
+            {t('notificationSettings.pushNotifications')}
           </Text>
           <View style={{ backgroundColor: colors.card, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' }}>
             {/* Master toggle */}
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: spacing.md, paddingHorizontal: spacing.md }}>
               <View style={{ flex: 1, marginRight: spacing.md }}>
-                <Text style={{ ...typography.body, color: colors.foreground, fontWeight: '600' }}>Allow Push Notifications</Text>
-                <Text style={{ ...typography.small, color: colors.textSecondary, marginTop: 2 }}>Receive notifications on your device</Text>
+                <Text style={{ ...typography.body, color: colors.foreground, fontWeight: '600' }}>{t('notificationSettings.allowPushNotifications')}</Text>
+                <Text style={{ ...typography.small, color: colors.textSecondary, marginTop: 2 }}>{t('notificationSettings.pushDescription')}</Text>
               </View>
               <Switch
                 value={prefs.pushEnabled}

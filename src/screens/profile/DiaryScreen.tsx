@@ -12,10 +12,12 @@ import { DiaryEntryRow } from '../../components/diary/DiaryEntryRow';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { ScreenHeader } from '../../components/ui/ScreenHeader';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { useTranslation } from 'react-i18next';
 import { Review } from '../../types/review';
 import { Match } from '../../types/match';
 
 export function DiaryScreen({ route, navigation }: any) {
+  const { t } = useTranslation();
   const { theme, isDark } = useTheme();
   const { colors, spacing } = theme;
   const { user } = useAuth();
@@ -71,13 +73,13 @@ export function DiaryScreen({ route, navigation }: any) {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
-      <ScreenHeader title="Diary" onBack={() => navigation.goBack()} />
+      <ScreenHeader title={t('common.diary')} onBack={() => navigation.goBack()} />
 
       {sections.length === 0 ? (
         <EmptyState
           icon="book-outline"
-          title="No entries yet"
-          subtitle="Start logging matches to build your diary"
+          title={t('profile.noEntriesYet')}
+          subtitle={t('profile.startLoggingMatches')}
         />
       ) : (
         <SectionList showsVerticalScrollIndicator={false}

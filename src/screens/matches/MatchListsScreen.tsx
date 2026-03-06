@@ -8,24 +8,26 @@ import { ScreenHeader } from '../../components/ui/ScreenHeader';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { ListPreviewCard } from '../../components/list/ListPreviewCard';
 import { MatchList } from '../../types/list';
+import { useTranslation } from 'react-i18next';
 
 export function MatchListsScreen({ route, navigation }: any) {
   const { theme, isDark } = useTheme();
   const { colors } = theme;
+  const { t } = useTranslation();
   const { matchId } = route.params;
   const { data: lists, isLoading } = useListsForMatch(matchId);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-      <ScreenHeader title="Lists" onBack={() => navigation.goBack()} />
+      <ScreenHeader title={t('common.lists')} onBack={() => navigation.goBack()} />
 
       {isLoading ? (
         <LoadingSpinner />
       ) : !lists || lists.length === 0 ? (
         <EmptyState
           icon="list-outline"
-          title="No lists yet"
-          subtitle="This match hasn't been added to any lists yet"
+          title={t('matches.noListsYet')}
+          subtitle={t('matches.matchNotAddedToLists')}
         />
       ) : (
         <FlatList showsVerticalScrollIndicator={false}

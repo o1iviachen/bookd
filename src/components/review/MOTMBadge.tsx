@@ -3,6 +3,7 @@ import { View, Text, Pressable } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { usePersonDetail } from '../../hooks/usePeople';
 import { decodeHtmlEntities } from '../../utils/formatName';
@@ -16,6 +17,7 @@ interface MOTMBadgeProps {
 }
 
 export function MOTMBadge({ playerId, playerName, size = 'sm' }: MOTMBadgeProps) {
+  const { t } = useTranslation();
   const { theme } = useTheme();
   const { colors, spacing, borderRadius } = theme;
   const isReferee = playerId === REFEREE_MOTM_ID;
@@ -56,7 +58,7 @@ export function MOTMBadge({ playerId, playerName, size = 'sm' }: MOTMBadgeProps)
         </View>
         <View style={{ flex: 1 }}>
           <Text style={{ fontSize: 9, fontWeight: '700', color: '#F59E0B', textTransform: 'uppercase', letterSpacing: 0.8 }}>
-            Man of the Match
+            {t('review.manOfTheMatch')}
           </Text>
           <Text style={{ fontSize: size === 'md' ? 14 : 13, fontWeight: '600', color: colors.foreground }} numberOfLines={1}>
             {displayName}
@@ -71,6 +73,7 @@ export function MOTMBadge({ playerId, playerName, size = 'sm' }: MOTMBadgeProps)
 }
 
 function PlayerMOTMBadge({ playerId, playerName, size = 'sm' }: { playerId: number; playerName?: string; size?: 'sm' | 'md' }) {
+  const { t } = useTranslation();
   const { theme } = useTheme();
   const { colors, spacing, borderRadius } = theme;
   const { data: player } = usePersonDetail(playerId);
@@ -122,7 +125,7 @@ function PlayerMOTMBadge({ playerId, playerName, size = 'sm' }: { playerId: numb
       )}
       <View style={{ flex: 1 }}>
         <Text style={{ fontSize: 9, fontWeight: '700', color: '#F59E0B', textTransform: 'uppercase', letterSpacing: 0.8 }}>
-          Man of the Match
+          {t('review.manOfTheMatch')}
         </Text>
         <Text style={{ fontSize: size === 'md' ? 14 : 13, fontWeight: '600', color: colors.foreground }} numberOfLines={1}>
           {displayName}

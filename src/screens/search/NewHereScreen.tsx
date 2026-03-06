@@ -8,35 +8,21 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../context/ThemeContext';
 import { SearchStackParamList } from '../../types/navigation';
+import { useTranslation } from 'react-i18next';
 
 type Nav = NativeStackNavigationProp<SearchStackParamList, 'NewHere'>;
 
-const sections = [
-  {
-    title: 'Getting Started',
-    body: 'Start by searching for matches you\'ve watched and rating them. Build your profile to showcase your favorite games and discover what others are watching.',
-    icon: 'rocket-outline' as const,
-  },
-  {
-    title: 'Follow Your Teams',
-    body: 'Customize your feed by following leagues and teams. See reviews from matches featuring your favorite clubs first.',
-    icon: 'shield-outline' as const,
-  },
-  {
-    title: 'Create Lists',
-    body: 'Organize matches into collections. Best Champions League finals, unforgettable comebacks, or matches that made you cry\u2014the choice is yours.',
-    icon: 'list-outline' as const,
-  },
-  {
-    title: 'Join the Conversation',
-    body: 'Engage with other fans through reviews, upvotes, and discussion threads. Share your perspective on the beautiful game.',
-    icon: 'chatbubbles-outline' as const,
-  },
+const sectionKeys = [
+  { titleKey: 'newHere.gettingStartedTitle', bodyKey: 'newHere.gettingStartedBody', icon: 'rocket-outline' as const },
+  { titleKey: 'newHere.followYourTeamsTitle', bodyKey: 'newHere.followYourTeamsBody', icon: 'shield-outline' as const },
+  { titleKey: 'newHere.createListsTitle', bodyKey: 'newHere.createListsBody', icon: 'list-outline' as const },
+  { titleKey: 'newHere.joinConversationTitle', bodyKey: 'newHere.joinConversationBody', icon: 'chatbubbles-outline' as const },
 ];
 
 export function NewHereScreen() {
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
+  const { t } = useTranslation();
   const navigation = useNavigation<Nav>();
 
   return (
@@ -58,10 +44,10 @@ export function NewHereScreen() {
           style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
         >
           <Ionicons name="chevron-back" size={22} color={colors.primary} />
-          <Text style={{ color: colors.primary, fontSize: 16 }}>Search</Text>
+          <Text style={{ color: colors.primary, fontSize: 16 }}>{t('common.search')}</Text>
         </Pressable>
         <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 17 }}>
-          Welcome
+          {t('newHere.welcome')}
         </Text>
         <View style={{ width: 60 }} />
       </View>
@@ -101,7 +87,7 @@ export function NewHereScreen() {
               marginBottom: spacing.lg,
             }}
           >
-            Take your first step into a larger world...
+            {t('newHere.heroText')}
           </Text>
 
           <Text
@@ -113,8 +99,7 @@ export function NewHereScreen() {
               marginBottom: spacing.sm,
             }}
           >
-            Bookd lets you keep track of every match you've seen, so you can instantly recommend
-            one the moment someone asks, or check reactions to a match you've just heard about.
+            {t('newHere.introText1')}
           </Text>
 
           <Text
@@ -126,15 +111,15 @@ export function NewHereScreen() {
               marginBottom: spacing.lg,
             }}
           >
-            We're a global community of football fans who live to discuss, rate and rank what we watch.
+            {t('newHere.introText2')}
           </Text>
         </View>
 
         {/* Getting started sections */}
         <View style={{ paddingHorizontal: spacing.md, marginTop: spacing.md }}>
-          {sections.map((section) => (
+          {sectionKeys.map((section) => (
             <View
-              key={section.title}
+              key={section.titleKey}
               style={{
                 flexDirection: 'row',
                 gap: spacing.md,
@@ -164,7 +149,7 @@ export function NewHereScreen() {
                     marginBottom: spacing.xs,
                   }}
                 >
-                  {section.title}
+                  {t(section.titleKey)}
                 </Text>
                 <Text
                   style={{
@@ -173,7 +158,7 @@ export function NewHereScreen() {
                     lineHeight: 21,
                   }}
                 >
-                  {section.body}
+                  {t(section.bodyKey)}
                 </Text>
               </View>
             </View>
@@ -192,7 +177,7 @@ export function NewHereScreen() {
             })}
           >
             <Text style={{ fontSize: 16, fontWeight: '600', color: '#14181c' }}>
-              Start Exploring Matches
+              {t('newHere.startExploringMatches')}
             </Text>
           </Pressable>
         </View>

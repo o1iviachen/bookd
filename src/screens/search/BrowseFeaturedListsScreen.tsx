@@ -9,6 +9,7 @@ import { useRecentLists } from '../../hooks/useLists';
 import { ListPreviewCard } from '../../components/list/ListPreviewCard';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { SearchStackParamList } from '../../types/navigation';
+import { useTranslation } from 'react-i18next';
 
 type Nav = NativeStackNavigationProp<SearchStackParamList, 'BrowseFeaturedLists'>;
 
@@ -16,6 +17,7 @@ export function BrowseFeaturedListsScreen() {
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography } = theme;
   const navigation = useNavigation<Nav>();
+  const { t } = useTranslation();
   const { data: lists, isLoading } = useRecentLists();
 
   return (
@@ -23,9 +25,9 @@ export function BrowseFeaturedListsScreen() {
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border }}>
         <Pressable onPress={() => navigation.goBack()} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
           <Ionicons name="chevron-back" size={22} color={colors.primary} />
-          <Text style={{ color: colors.primary, fontSize: 16 }}>Search</Text>
+          <Text style={{ color: colors.primary, fontSize: 16 }}>{t('common.search')}</Text>
         </Pressable>
-        <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 17 }}>Featured Lists</Text>
+        <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 17 }}>{t('search.featuredListsTitle')}</Text>
         <View style={{ width: 60 }} />
       </View>
 
@@ -36,7 +38,7 @@ export function BrowseFeaturedListsScreen() {
           <View style={{ alignItems: 'center', marginTop: spacing.xxl * 2 }}>
             <Ionicons name="list-outline" size={48} color={colors.textSecondary} />
             <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.md }}>
-              No featured lists yet
+              {t('search.noFeaturedListsYet')}
             </Text>
           </View>
         ) : (

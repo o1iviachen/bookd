@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { searchGifs, featuredGifs, TenorGif } from '../../services/tenor';
 
@@ -22,6 +23,7 @@ interface GifPickerModalProps {
 }
 
 export function GifPickerModal({ visible, onClose, onSelect }: GifPickerModalProps) {
+  const { t } = useTranslation();
   const { theme } = useTheme();
   const { colors, spacing, borderRadius } = theme;
   const { width: screenWidth } = useWindowDimensions();
@@ -114,17 +116,17 @@ export function GifPickerModal({ visible, onClose, onSelect }: GifPickerModalPro
           }}
         >
           <Text style={{ fontSize: 16, fontWeight: '700', color: colors.foreground }}>
-            Choose a GIF
+            {t('ui.chooseAGif')}
           </Text>
           <Pressable onPress={onClose} hitSlop={8}>
-            <Text style={{ fontSize: 15, fontWeight: '600', color: colors.primary }}>Cancel</Text>
+            <Text style={{ fontSize: 15, fontWeight: '600', color: colors.primary }}>{t('common.cancel')}</Text>
           </Pressable>
         </View>
 
         {/* Search */}
         <View style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.sm }}>
           <RNTextInput
-            placeholder="Search GIFs"
+            placeholder={t('ui.searchGifs')}
             placeholderTextColor={colors.textSecondary}
             value={query}
             onChangeText={handleSearch}
@@ -162,17 +164,17 @@ export function GifPickerModal({ visible, onClose, onSelect }: GifPickerModalPro
                 <View style={{ alignItems: 'center', justifyContent: 'center', paddingTop: spacing.xl * 3 }}>
                   <Ionicons name="images-outline" size={48} color={colors.textSecondary} />
                   <Text style={{ fontSize: 17, fontWeight: '700', color: colors.foreground, marginTop: spacing.md, textAlign: 'center' }}>
-                    No GIFs found
+                    {t('ui.noGifsFound')}
                   </Text>
                   <Text style={{ fontSize: 14, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.xs }}>
-                    Try a different search term
+                    {t('ui.tryDifferentSearch')}
                   </Text>
                 </View>
               ) : null
             }
             ListFooterComponent={
               <View style={{ alignItems: 'center', paddingVertical: spacing.md }}>
-                <Text style={{ fontSize: 10, color: colors.textSecondary }}>Powered by Klipy</Text>
+                <Text style={{ fontSize: 10, color: colors.textSecondary }}>{t('ui.poweredByKlipy')}</Text>
               </View>
             }
           />

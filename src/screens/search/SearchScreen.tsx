@@ -20,6 +20,7 @@ import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { SearchStackParamList } from '../../types/navigation';
 import { TeamLogo } from '../../components/match/TeamLogo';
 import { shortName } from '../../utils/formatName';
+import { useTranslation } from 'react-i18next';
 
 const RECENT_SEARCHES_KEY = 'bookd_recent_searches';
 const MAX_RECENT_SEARCHES = 10;
@@ -29,19 +30,19 @@ type Category = 'matches' | 'teams' | 'players' | 'members' | 'reviews' | 'lists
 
 const NUM_COLUMNS = 3;
 
-const CATEGORIES: { key: Category; label: string }[] = [
-  { key: 'matches', label: 'Matches' },
-  { key: 'teams', label: 'Teams' },
-  { key: 'players', label: 'Players and Managers' },
-  { key: 'members', label: 'Members' },
-  { key: 'reviews', label: 'Reviews' },
-  { key: 'lists', label: 'Lists' },
+const CATEGORY_KEYS: { key: Category; i18nKey: string }[] = [
+  { key: 'matches', i18nKey: 'search.matchesTab' },
+  { key: 'teams', i18nKey: 'search.teamsTab' },
+  { key: 'players', i18nKey: 'search.playersAndManagers' },
+  { key: 'members', i18nKey: 'search.members' },
+  { key: 'reviews', i18nKey: 'search.reviewsTab' },
+  { key: 'lists', i18nKey: 'search.listsTab' },
 ];
 
-const BROWSE_LINKS: { label: string; route: keyof SearchStackParamList }[] = [
-  { label: 'Date', route: 'BrowseByDate' },
-  { label: 'Most popular', route: 'BrowsePopular' },
-  { label: 'Highest rated', route: 'BrowseHighestRated' },
+const BROWSE_LINKS: { i18nKey: string; route: keyof SearchStackParamList }[] = [
+  { i18nKey: 'search.browseByDate', route: 'BrowseByDate' },
+  { i18nKey: 'search.mostPopular', route: 'BrowsePopular' },
+  { i18nKey: 'search.highestRated', route: 'BrowseHighestRated' },
 ];
 
 const EMPTY_ICONS: Record<Category, keyof typeof Ionicons.glyphMap> = {
@@ -53,13 +54,13 @@ const EMPTY_ICONS: Record<Category, keyof typeof Ionicons.glyphMap> = {
   lists: 'list-outline',
 };
 
-const EMPTY_LABELS: Record<Category, string> = {
-  matches: 'No matches found',
-  teams: 'No teams found',
-  players: 'No players found',
-  members: 'No members found',
-  reviews: 'No reviews found',
-  lists: 'No lists found',
+const EMPTY_LABEL_KEYS: Record<Category, string> = {
+  matches: 'common.noResultsFound',
+  teams: 'common.noResultsFound',
+  players: 'common.noResultsFound',
+  members: 'common.noResultsFound',
+  reviews: 'common.noResultsFound',
+  lists: 'common.noResultsFound',
 };
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -76,6 +77,7 @@ export function SearchScreen() {
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
   const navigation = useNavigation<Nav>();
+  const { t } = useTranslation();
   const { width: screenWidth } = useWindowDimensions();
   const [queryStr, setQueryStr] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
@@ -277,12 +279,12 @@ export function SearchScreen() {
         <ScrollView showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'} style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 0 }} keyboardShouldPersistTaps="always" keyboardDismissMode="on-drag">
           <View style={{ paddingVertical: spacing.lg, paddingHorizontal: spacing.md }}>
             <Text style={{ ...typography.h4, color: colors.foreground, marginBottom: spacing.md }}>
-              Browse By
+              {t('search.browseBy')}
             </Text>
             <View style={{ backgroundColor: colors.card, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' }}>
               {BROWSE_LINKS.map((link, i) => (
                 <Pressable
-                  key={link.label}
+                  key={link.i18nKey}
                   onPress={() => navigation.navigate(link.route as any)}
                   style={({ pressed }) => ({
                     flexDirection: 'row',
@@ -295,7 +297,7 @@ export function SearchScreen() {
                     borderTopColor: colors.border,
                   })}
                 >
-                  <Text style={{ ...typography.body, color: colors.foreground }}>{link.label}</Text>
+                  <Text style={{ ...typography.body, color: colors.foreground }}>{t(link.i18nKey)}</Text>
                   <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
                 </Pressable>
               ))}
@@ -306,9 +308,9 @@ export function SearchScreen() {
               bookd
             </Text>
             <View style={{ backgroundColor: colors.card, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' }}>
-              {[{ label: 'New here?', route: 'NewHere' as const }, { label: 'Frequent questions', route: 'FAQ' as const }].map((item, i) => (
+              {[{ i18nKey: 'search.newHere', route: 'NewHere' as const }, { i18nKey: 'search.frequentQuestions', route: 'FAQ' as const }].map((item, i) => (
                 <Pressable
-                  key={item.label}
+                  key={item.i18nKey}
                   onPress={() => navigation.navigate(item.route)}
                   style={({ pressed }) => ({
                     flexDirection: 'row',
@@ -321,7 +323,7 @@ export function SearchScreen() {
                     borderTopColor: colors.border,
                   })}
                 >
-                  <Text style={{ ...typography.body, color: colors.foreground }}>{item.label}</Text>
+                  <Text style={{ ...typography.body, color: colors.foreground }}>{t(item.i18nKey)}</Text>
                   <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
                 </Pressable>
               ))}
@@ -338,7 +340,7 @@ export function SearchScreen() {
           {recentSearches.length > 0 ? (
             <View style={{ paddingTop: spacing.md }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm, paddingHorizontal: spacing.md }}>
-                <Text style={{ ...typography.h4, color: colors.foreground }}>Recent Searches</Text>
+                <Text style={{ ...typography.h4, color: colors.foreground }}>{t('search.recentSearches')}</Text>
                 <Pressable
                   onPress={async () => {
                     setRecentSearches([]);
@@ -347,7 +349,7 @@ export function SearchScreen() {
                   }}
                   hitSlop={8}
                 >
-                  <Text style={{ ...typography.caption, color: colors.textSecondary }}>Clear All</Text>
+                  <Text style={{ ...typography.caption, color: colors.textSecondary }}>{t('search.clearAll')}</Text>
                 </Pressable>
               </View>
               {recentSearches.map((term, i) => (
@@ -384,7 +386,7 @@ export function SearchScreen() {
             </View>
           ) : (
             <View style={{ alignItems: 'center', paddingTop: spacing.xxl * 2 }}>
-              <Text style={{ ...typography.body, color: colors.textSecondary }}>Start typing to search...</Text>
+              <Text style={{ ...typography.body, color: colors.textSecondary }}>{t('search.startTypingToSearch')}</Text>
             </View>
           )}
         </ScrollView>
@@ -411,7 +413,7 @@ export function SearchScreen() {
         <View style={{ flex: 1, alignItems: 'center', paddingTop: spacing.lg, paddingHorizontal: spacing.xl }}>
           <Ionicons name={EMPTY_ICONS[activeCategory]} size={32} color={colors.textSecondary} />
           <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.sm }}>
-            {EMPTY_LABELS[activeCategory]}
+            {t(EMPTY_LABEL_KEYS[activeCategory])}
           </Text>
         </View>
       );
@@ -468,14 +470,14 @@ export function SearchScreen() {
       {/* Header */}
       <Pressable onPress={Keyboard.dismiss} style={{ paddingHorizontal: spacing.md, paddingTop: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }}>
         <Text style={{ ...typography.h2, color: colors.foreground, textAlign: 'center', marginBottom: spacing.md }}>
-          Search
+          {t('common.search')}
         </Text>
 
         {/* Search input */}
         <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.muted, borderRadius: borderRadius.md, marginBottom: spacing.sm, paddingHorizontal: 12 }}>
           <Ionicons name="search" size={18} color={colors.textSecondary} />
           <RNTextInput
-            placeholder="Find matches, teams, players and managers..."
+            placeholder={t('search.searchPlaceholder')}
             placeholderTextColor={colors.textSecondary}
             value={queryStr}
             onChangeText={setQueryStr}
@@ -510,7 +512,7 @@ export function SearchScreen() {
         {isSearching && (
           <ScrollView showsVerticalScrollIndicator={false} horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="always" style={{ marginBottom: spacing.sm }}>
             <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-              {CATEGORIES.map((cat) => (
+              {CATEGORY_KEYS.map((cat) => (
                 <Pressable
                   key={cat.key}
                   onPress={() => {
@@ -532,7 +534,7 @@ export function SearchScreen() {
                       color: activeCategory === cat.key ? '#14181c' : colors.textSecondary,
                     }}
                   >
-                    {cat.label}
+                    {t(cat.i18nKey)}
                   </Text>
                 </Pressable>
               ))}

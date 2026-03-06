@@ -5,34 +5,41 @@ import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
+import { useTranslation } from 'react-i18next';
 import { auth } from '../../config/firebase';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
+import { usePreferredLanguage, SUPPORTED_LANGUAGES } from '../../hooks/usePreferredLanguage';
 
 export function SettingsScreen() {
+  const { t } = useTranslation();
   const { theme, toggleTheme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
   const navigation = useNavigation();
   const { signOut, user } = useAuth();
+  const { language, setLanguage } = usePreferredLanguage();
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showLanguageModal, setShowLanguageModal] = useState(false);
   const [deletePassword, setDeletePassword] = useState('');
   const [deleting, setDeleting] = useState(false);
 
+  const currentLangLabel = SUPPORTED_LANGUAGES.find((l) => l.code === language)?.label || language;
+
   const handleSignOut = () => {
-    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Sign Out', style: 'destructive', onPress: () => signOut() },
+    Alert.alert(t('settings.signOutTitle'), t('settings.signOutConfirm'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('settings.signOutTitle'), style: 'destructive', onPress: () => signOut() },
     ]);
   };
 
   const handleDeleteAccount = () => {
     Alert.alert(
-      'Delete Account',
-      'This will permanently delete your account, all your reviews, comments, and lists. This cannot be undone.',
+      t('settings.deleteAccount'),
+      t('settings.deleteAccountWarning'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Continue',
+          text: t('common.continue'),
           style: 'destructive',
           onPress: () => {
             setDeletePassword('');
@@ -55,7 +62,7 @@ export function SettingsScreen() {
       await signOut();
     } catch (err: any) {
       const isWrongPassword = err?.code === 'auth/wrong-password' || err?.code === 'auth/invalid-credential';
-      Alert.alert('Error', isWrongPassword ? 'Incorrect password. Please try again.' : 'Failed to delete account. Please try again.');
+      Alert.alert(t('common.error'), isWrongPassword ? t('settings.incorrectPassword') : t('settings.failedToDeleteAccount'));
     } finally {
       setDeleting(false);
     }
@@ -63,10 +70,10 @@ export function SettingsScreen() {
 
   const sections: { title: string; items: { label: string; icon: keyof typeof Ionicons.glyphMap; onPress?: () => void; right?: React.ReactNode }[] }[] = [
     {
-      title: 'Appearance',
+      title: t('settings.appearance'),
       items: [
         {
-          label: 'Dark Mode',
+          label: t('settings.darkMode'),
           icon: 'moon',
           right: (
             <Switch
@@ -80,31 +87,47 @@ export function SettingsScreen() {
       ],
     },
     {
-      title: 'Who are ya?',
+      title: t('settings.language'),
       items: [
-        { label: 'Favourite Teams', icon: 'shield-outline', onPress: () => navigation.navigate('FavouriteTeams' as never) },
-        { label: 'Favourite Matches', icon: 'football-outline', onPress: () => navigation.navigate('FavouriteMatches' as never) },
+        {
+          label: t('settings.translationLanguage'),
+          icon: 'language-outline',
+          onPress: () => setShowLanguageModal(true),
+          right: (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Text style={{ ...typography.body, color: colors.textSecondary }}>{currentLangLabel}</Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+            </View>
+          ),
+        },
       ],
     },
     {
-      title: 'Following',
+      title: t('settings.whoAreYa'),
       items: [
-        { label: 'Teams', icon: 'shield-outline', onPress: () => navigation.navigate('FollowedTeams' as never) },
-        { label: 'Leagues', icon: 'trophy-outline', onPress: () => navigation.navigate('FollowedLeagues' as never) },
+        { label: t('settings.favouriteTeams'), icon: 'shield-outline', onPress: () => navigation.navigate('FavouriteTeams' as never) },
+        { label: t('settings.favouriteMatches'), icon: 'football-outline', onPress: () => navigation.navigate('FavouriteMatches' as never) },
       ],
     },
     {
-      title: 'Account',
+      title: t('common.following'),
       items: [
-        { label: 'Edit Profile', icon: 'person-outline', onPress: () => navigation.navigate('EditProfile' as never) },
-        { label: 'Notifications', icon: 'notifications-outline', onPress: () => navigation.navigate('NotificationSettings' as never) },
+        { label: t('settings.teams'), icon: 'shield-outline', onPress: () => navigation.navigate('FollowedTeams' as never) },
+        { label: t('settings.leagues'), icon: 'trophy-outline', onPress: () => navigation.navigate('FollowedLeagues' as never) },
       ],
     },
     {
-      title: 'About',
+      title: t('settings.account'),
       items: [
-        { label: 'Privacy Policy', icon: 'lock-closed-outline' },
-        { label: 'Terms of Service', icon: 'document-text-outline' },
+        { label: t('profile.editProfile'), icon: 'person-outline', onPress: () => navigation.navigate('EditProfile' as never) },
+        { label: t('settings.notifications'), icon: 'notifications-outline', onPress: () => navigation.navigate('NotificationSettings' as never) },
+      ],
+    },
+    {
+      title: t('settings.about'),
+      items: [
+        { label: t('settings.privacyPolicy'), icon: 'lock-closed-outline' },
+        { label: t('settings.termsOfService'), icon: 'document-text-outline' },
       ],
     },
   ];
@@ -115,9 +138,9 @@ export function SettingsScreen() {
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border }}>
         <Pressable onPress={() => navigation.goBack()} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
           <Ionicons name="chevron-back" size={22} color={colors.primary} />
-          <Text style={{ color: colors.primary, fontSize: 16 }}>Back</Text>
+          <Text style={{ color: colors.primary, fontSize: 16 }}>{t('common.back')}</Text>
         </Pressable>
-        <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 17 }}>Settings</Text>
+        <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 17 }}>{t('settings.title')}</Text>
         <View style={{ width: 60 }} />
       </View>
 
@@ -167,7 +190,7 @@ export function SettingsScreen() {
               alignItems: 'center',
             })}
           >
-            <Text style={{ ...typography.bodyBold, color: '#ef4444', fontSize: 15 }}>Sign Out</Text>
+            <Text style={{ ...typography.bodyBold, color: '#ef4444', fontSize: 15 }}>{t('settings.signOutTitle')}</Text>
           </Pressable>
         </View>
 
@@ -186,10 +209,63 @@ export function SettingsScreen() {
             })}
           >
             <Ionicons name="trash-outline" size={14} color={colors.textSecondary} />
-            <Text style={{ ...typography.small, color: colors.textSecondary, fontSize: 13 }}>Delete Account</Text>
+            <Text style={{ ...typography.small, color: colors.textSecondary, fontSize: 13 }}>{t('settings.deleteAccount')}</Text>
           </Pressable>
         </View>
       </ScrollView>
+
+      {/* Language Picker Modal */}
+      <Modal visible={showLanguageModal} transparent animationType="slide" onRequestClose={() => setShowLanguageModal(false)}>
+        <Pressable
+          onPress={() => setShowLanguageModal(false)}
+          style={{ flex: 1, backgroundColor: 'transparent', justifyContent: 'flex-end' }}
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: colors.background,
+              borderTopLeftRadius: borderRadius.lg,
+              borderTopRightRadius: borderRadius.lg,
+              paddingTop: spacing.md,
+              paddingBottom: spacing.xl + 16,
+              paddingHorizontal: spacing.md,
+            }}
+          >
+            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.border, alignSelf: 'center', marginBottom: spacing.md }} />
+
+            <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 17, marginBottom: spacing.md }}>
+              {t('settings.translationLanguage')}
+            </Text>
+            <Text style={{ ...typography.small, color: colors.textSecondary, marginBottom: spacing.lg }}>
+              {t('settings.translationsDescription')}
+            </Text>
+
+            {SUPPORTED_LANGUAGES.map((lang) => (
+              <Pressable
+                key={lang.code}
+                onPress={() => {
+                  setLanguage(lang.code);
+                  setShowLanguageModal(false);
+                }}
+                style={({ pressed }) => ({
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  paddingVertical: spacing.md,
+                  paddingHorizontal: spacing.sm,
+                  backgroundColor: pressed ? colors.accent : 'transparent',
+                  borderRadius: borderRadius.sm,
+                })}
+              >
+                <Text style={{ ...typography.body, color: colors.foreground }}>{lang.label}</Text>
+                {language === lang.code && (
+                  <Ionicons name="checkmark" size={20} color={colors.primary} />
+                )}
+              </Pressable>
+            ))}
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* Delete Account Password Modal */}
       <Modal visible={showDeleteModal} transparent animationType="slide" onRequestClose={() => setShowDeleteModal(false)}>
@@ -212,16 +288,16 @@ export function SettingsScreen() {
 
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.xs }}>
               <Ionicons name="trash-outline" size={20} color="#ef4444" />
-              <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 17 }}>Delete Account</Text>
+              <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 17 }}>{t('settings.deleteAccount')}</Text>
             </View>
             <Text style={{ ...typography.small, color: colors.textSecondary, marginBottom: spacing.lg }}>
-              Enter your password to permanently delete your account and all data.
+              {t('settings.deleteAccountPasswordPrompt')}
             </Text>
 
             <TextInput
               value={deletePassword}
               onChangeText={setDeletePassword}
-              placeholder="Password"
+              placeholder={t('auth.password')}
               placeholderTextColor={colors.textSecondary}
               secureTextEntry
               autoFocus
@@ -250,7 +326,7 @@ export function SettingsScreen() {
                 <ActivityIndicator color="#fff" size="small" />
               ) : (
                 <Text style={{ ...typography.bodyBold, color: deletePassword ? '#fff' : colors.textSecondary }}>
-                  Delete Account
+                  {t('settings.deleteAccount')}
                 </Text>
               )}
             </Pressable>

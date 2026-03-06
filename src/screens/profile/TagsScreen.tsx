@@ -8,6 +8,7 @@ import { useReviewsForUser } from '../../hooks/useReviews';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { ScreenHeader } from '../../components/ui/ScreenHeader';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { useTranslation } from 'react-i18next';
 
 interface TagEntry {
   tag: string;
@@ -15,6 +16,7 @@ interface TagEntry {
 }
 
 export function TagsScreen({ route, navigation }: any) {
+  const { t } = useTranslation();
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
   const { user } = useAuth();
@@ -38,13 +40,13 @@ export function TagsScreen({ route, navigation }: any) {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
-      <ScreenHeader title="Tags" onBack={() => navigation.goBack()} />
+      <ScreenHeader title={t('common.tags')} onBack={() => navigation.goBack()} />
 
       {tags.length === 0 ? (
         <EmptyState
           icon="pricetag-outline"
-          title="No tags yet"
-          subtitle="Add tags when reviewing matches"
+          title={t('profile.noTagsYet')}
+          subtitle={t('profile.addTagsWhenReviewing')}
         />
       ) : (
         <FlatList showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'}
@@ -77,7 +79,7 @@ export function TagsScreen({ route, navigation }: any) {
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
                 <Text style={{ ...typography.caption, color: colors.textSecondary }}>
-                  {item.count} {item.count === 1 ? 'match' : 'matches'}
+                  {t('common.matchCount', { count: item.count })}
                 </Text>
                 <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
               </View>

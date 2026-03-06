@@ -17,10 +17,12 @@ import { ProfileStackParamList } from '../../types/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { isUsernameClean, isDisplayNameClean } from '../../utils/moderation';
 import { isUsernameReserved } from '../../utils/reservedUsernames';
+import { useTranslation } from 'react-i18next';
 
 type Props = NativeStackScreenProps<ProfileStackParamList, 'EditProfile'>;
 
 export function EditProfileScreen({ navigation }: Props) {
+  const { t } = useTranslation();
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography } = theme;
   const { user } = useAuth();
@@ -64,19 +66,19 @@ export function EditProfileScreen({ navigation }: Props) {
   const handleSave = async () => {
     if (!user) return;
     if (!username.trim() || username.trim().length < 3) {
-      Alert.alert('Invalid Username', 'Username must be at least 3 characters.');
+      Alert.alert(t('common.error'), t('auth.usernameMustBeAtLeast3'));
       return;
     }
     if (!isUsernameClean(username.trim())) {
-      Alert.alert('Invalid Username', 'That username isn\'t allowed. Please choose another.');
+      Alert.alert(t('common.error'), t('auth.usernameNotAllowed'));
       return;
     }
     if (isUsernameReserved(username.trim())) {
-      Alert.alert('Invalid Username', 'That username is reserved. Please choose another.');
+      Alert.alert(t('common.error'), t('auth.usernameReserved'));
       return;
     }
     if (!isDisplayNameClean(displayName.trim())) {
-      Alert.alert('Invalid Name', 'Your display name contains inappropriate language.');
+      Alert.alert(t('common.error'), t('review.contentWarning'));
       return;
     }
     setSaving(true);
@@ -99,7 +101,7 @@ export function EditProfileScreen({ navigation }: Props) {
       navigation.goBack();
     } catch (err: any) {
       console.error('Profile update error:', err);
-      Alert.alert('Error', err?.message || 'Failed to update profile');
+      Alert.alert(t('common.error'), err?.message || t('common.error'));
     } finally {
       setSaving(false);
     }
@@ -115,7 +117,7 @@ export function EditProfileScreen({ navigation }: Props) {
             <Ionicons name="close" size={24} color={colors.foreground} />
           </Pressable>
           <Text style={{ ...typography.h4, color: colors.foreground, flex: 1, textAlign: 'center' }}>
-            Edit Profile
+            {t('profile.editProfile')}
           </Text>
           <View style={{ width: 24 }} />
         </View>
@@ -148,30 +150,30 @@ export function EditProfileScreen({ navigation }: Props) {
           </Pressable>
 
           <TextInput
-            label="Username"
+            label={t('auth.username')}
             value={username}
             onChangeText={setUsername}
             autoCapitalize="none"
             placeholder="your_username"
           />
-          <TextInput label="Display Name" value={displayName} onChangeText={setDisplayName} placeholder="Your Name" />
-          <TextInput label="Bio" value={bio} onChangeText={setBio} multiline numberOfLines={3} placeholder="Tell us about yourself..." />
+          <TextInput label={t('profile.displayName')} value={displayName} onChangeText={setDisplayName} placeholder={t('profile.displayNamePlaceholder')} />
+          <TextInput label={t('profile.bio')} value={bio} onChangeText={setBio} multiline numberOfLines={3} placeholder={t('profile.bioPlaceholder')} />
           <TextInput
-            label="Location"
+            label={t('profile.location')}
             value={location}
             onChangeText={setLocation}
-            placeholder="London, UK"
+            placeholder={t('profile.locationPlaceholder')}
             autoCapitalize="words"
           />
           <TextInput
-            label="Website"
+            label={t('profile.website')}
             value={website}
             onChangeText={setWebsite}
-            placeholder="https://yoursite.com"
+            placeholder={t('profile.websitePlaceholder')}
             autoCapitalize="none"
             keyboardType="url"
           />
-          <Button title="Save" onPress={handleSave} loading={saving} size="lg" style={{ marginTop: spacing.md }} />
+          <Button title={t('common.save')} onPress={handleSave} loading={saving} size="lg" style={{ marginTop: spacing.md }} />
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback, useMemo } from 'react';
 import { View, Text, PanResponder, LayoutChangeEvent, Pressable, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { Review } from '../../types/review';
 
@@ -29,6 +30,7 @@ const BUCKETS = [0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5];
 const BAR_HEIGHT = 40;
 
 export function RatingChart({ reviews, ratingBuckets, showStats = false, homeTeamId, awayTeamId, homeTeamName, awayTeamName, reviewerTeamMap, season, seasonOptions, onSeasonChange, loading = false, onTouchStart, onTouchEnd }: RatingChartProps) {
+  const { t } = useTranslation();
   const { theme } = useTheme();
   const { colors, spacing, borderRadius } = theme;
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
@@ -127,22 +129,22 @@ export function RatingChart({ reviews, ratingBuckets, showStats = false, homeTea
   // For default state (nothing selected): show 5 filled stars
 
   const filterOptions: { key: RatingFilter; label: string }[] = [
-    { key: 'everyone', label: 'Everyone' },
-    { key: 'neutral', label: awayTeamName ? 'Neutral fans' : 'Other fans' },
-    { key: 'home', label: awayTeamName ? (homeTeamName || 'Home fans') : `${homeTeamName || 'Team'} fans` },
-    ...(awayTeamName ? [{ key: 'away' as RatingFilter, label: awayTeamName || 'Away fans' }] : []),
+    { key: 'everyone', label: t('profile.fanEveryone') },
+    { key: 'neutral', label: awayTeamName ? t('profile.fanNeutral') : t('profile.fanOther') },
+    { key: 'home', label: awayTeamName ? t('profile.fanTeam', { teamName: homeTeamName || '' }) : t('profile.fanTeam', { teamName: homeTeamName || '' }) },
+    ...(awayTeamName ? [{ key: 'away' as RatingFilter, label: t('profile.fanAway') }] : []),
   ];
 
-  const activeFilterLabel = filterOptions.find((f) => f.key === filter)?.label || 'Everyone';
+  const activeFilterLabel = filterOptions.find((f) => f.key === filter)?.label || t('profile.fanEveryone');
 
   const hasSeasonPicker = !!(seasonOptions && seasonOptions.length > 0 && onSeasonChange);
-  const activeSeasonLabel = seasonOptions?.find((o) => o.value === season)?.label ?? season ?? 'All seasons';
+  const activeSeasonLabel = seasonOptions?.find((o) => o.value === season)?.label ?? season ?? t('profile.allSeasons');
 
   return (
     <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: spacing.md, backgroundColor: `${colors.accent}30`, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.border }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md }}>
         <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1 }}>
-          Ratings
+          {t('profile.ratingsLabel')}
         </Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
           {hasSeasonPicker && (
@@ -281,7 +283,7 @@ export function RatingChart({ reviews, ratingBuckets, showStats = false, homeTea
             {showSelected ? (
               <>
                 <Text style={{ fontSize: 10, color: colors.textSecondary, textAlign: 'right', marginBottom: 2 }}>
-                  {counts[activeIndex!]} {counts[activeIndex!] === 1 ? 'rating' : 'ratings'}
+                  {t('common.ratingCount', { count: counts[activeIndex!] })}
                 </Text>
                 <View style={{ flexDirection: 'row' }}>
                   {Array.from({ length: selectedFullStars }).map((_, s) => (
@@ -304,7 +306,7 @@ export function RatingChart({ reviews, ratingBuckets, showStats = false, homeTea
                 )}
                 {totalRated > 0 && (
                   <Text style={{ fontSize: 10, color: colors.textSecondary, textAlign: 'right', marginBottom: 2 }}>
-                    {totalRated} {totalRated === 1 ? 'rating' : 'ratings'}
+                    {t('common.ratingCount', { count: totalRated })}
                   </Text>
                 )}
                 <View style={{ flexDirection: 'row' }}>

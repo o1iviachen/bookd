@@ -32,6 +32,7 @@ export interface User {
   followers: string[];
   expoPushToken: string | null;
   notificationPreferences: NotificationPreferences;
+  preferredLanguage: string;
   createdAt: Date;
 }
 

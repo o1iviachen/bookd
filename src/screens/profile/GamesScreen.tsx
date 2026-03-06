@@ -13,6 +13,7 @@ import { Select } from '../../components/ui/Select';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { ScreenHeader } from '../../components/ui/ScreenHeader';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { useTranslation } from 'react-i18next';
 import { Review } from '../../types/review';
 import { Match } from '../../types/match';
 
@@ -20,15 +21,8 @@ const PAGE_SIZE = 30;
 
 type SortKey = 'recent_logged' | 'recent_played' | 'rating_high' | 'rating_low' | 'avg_rating_high' | 'avg_rating_low' | 'popular';
 
-const SORT_OPTIONS: { value: SortKey; label: string }[] = [
-  { value: 'recent_logged', label: 'Recently Logged' },
-  { value: 'recent_played', label: 'Recently Played' },
-  { value: 'rating_high', label: 'Your Rating (High)' },
-  { value: 'rating_low', label: 'Your Rating (Low)' },
-  { value: 'avg_rating_high', label: 'Average Rating (High)' },
-  { value: 'avg_rating_low', label: 'Average Rating (Low)' },
-  { value: 'popular', label: 'Most Logged' },
-];
+// Sort options are built inside the component to access t()
+
 
 interface MatchEntry {
   matchId: number;
@@ -43,6 +37,7 @@ interface MatchEntry {
 }
 
 export function GamesScreen({ route, navigation }: any) {
+  const { t } = useTranslation();
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography } = theme;
   const { user } = useAuth();
@@ -50,6 +45,16 @@ export function GamesScreen({ route, navigation }: any) {
   const { width: screenWidth } = useWindowDimensions();
   const { data: targetProfile } = useUserProfile(targetUserId);
   const { data: reviews, isLoading } = useReviewsForUser(targetUserId);
+
+  const SORT_OPTIONS: { value: SortKey; label: string }[] = [
+    { value: 'recent_logged', label: t('profile.recentlyLogged') },
+    { value: 'recent_played', label: t('profile.recentlyPlayed') },
+    { value: 'rating_high', label: t('profile.yourRatingHigh') },
+    { value: 'rating_low', label: t('profile.yourRatingLow') },
+    { value: 'avg_rating_high', label: t('profile.averageRatingHigh') },
+    { value: 'avg_rating_low', label: t('profile.averageRatingLow') },
+    { value: 'popular', label: t('profile.mostLogged') },
+  ];
 
   // Unique match IDs from reviews (declared early for useAvgRatings)
   const matchIds = useMemo(
@@ -181,7 +186,7 @@ export function GamesScreen({ route, navigation }: any) {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
-      <ScreenHeader title="Matches" onBack={() => navigation.goBack()} />
+      <ScreenHeader title={t('common.matches')} onBack={() => navigation.goBack()} />
 
       {/* Filters — same component as browse screens */}
       <MatchFilters
@@ -194,13 +199,13 @@ export function GamesScreen({ route, navigation }: any) {
       {/* Sort + count row */}
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingVertical: spacing.sm }}>
         <Text style={{ ...typography.caption, color: colors.textSecondary }}>
-          {filtered.length} {filtered.length === 1 ? 'game' : 'games'}
+          {t('common.gameCount', { count: filtered.length })}
         </Text>
         <View style={{ width: 160 }}>
           <Select
             value={sort}
             onValueChange={(v) => setSort(v as SortKey)}
-            title="Sort By"
+            title={t('profile.sortBy')}
             options={SORT_OPTIONS}
           />
         </View>
@@ -210,8 +215,8 @@ export function GamesScreen({ route, navigation }: any) {
       {filtered.length === 0 ? (
         <EmptyState
           icon="football-outline"
-          title={entries.length === 0 ? 'No games logged yet' : 'No matches found'}
-          subtitle={entries.length === 0 ? 'Start reviewing matches to build your collection' : 'Try adjusting your filters'}
+          title={entries.length === 0 ? t('profile.noMatchesLoggedYet') : t('common.noResultsFound')}
+          subtitle={entries.length === 0 ? t('profile.startLoggingToSee') : t('team.tryAdjustingFilters')}
         />
       ) : (
         <FlatList showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'}

@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, ScrollView, Pressable, Modal } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { Avatar } from './Avatar';
 import { User } from '../../types/user';
@@ -14,6 +15,7 @@ interface LikedByModalProps {
 }
 
 export function LikedByModal({ visible, onClose, likers, isLoading, following, onUserPress }: LikedByModalProps) {
+  const { t } = useTranslation();
   const { theme } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
 
@@ -41,16 +43,16 @@ export function LikedByModal({ visible, onClose, likers, isLoading, following, o
         >
           <View style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.sm + 4, borderBottomWidth: 1, borderBottomColor: colors.border }}>
             <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 14 }}>
-              Liked by
+              {t('ui.likedBy')}
             </Text>
           </View>
           <ScrollView showsVerticalScrollIndicator={false} bounces={false} style={{ maxHeight: 340 }}>
             {isLoading ? (
               <View style={{ paddingVertical: spacing.xl, alignItems: 'center' }}>
-                <Text style={{ ...typography.body, color: colors.textSecondary }}>Loading...</Text>
+                <Text style={{ ...typography.body, color: colors.textSecondary }}>{t('common.loading')}</Text>
               </View>
             ) : likers.length === 0 ? (
-              <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', paddingVertical: spacing.xl }}>No likes yet</Text>
+              <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', paddingVertical: spacing.xl }}>{t('ui.noLikesYet')}</Text>
             ) : (
               likers.map((liker) => {
                 const isFollowing = following.includes(liker.id);
@@ -81,7 +83,7 @@ export function LikedByModal({ visible, onClose, likers, isLoading, following, o
                         </Text>
                       </View>
                       {isFollowing && (
-                        <Text style={{ ...typography.small, color: colors.textSecondary }}>Following</Text>
+                        <Text style={{ ...typography.small, color: colors.textSecondary }}>{t('common.following')}</Text>
                       )}
                     </View>
                   </Pressable>

@@ -3,6 +3,7 @@ import { View, Text, ScrollView, Pressable, useWindowDimensions } from 'react-na
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { updateUserProfile } from '../../services/firestore/users';
@@ -16,6 +17,7 @@ const MAX_FAVOURITES = 4;
 const NUM_COLUMNS = 3;
 
 export function OnboardingMatchesScreen() {
+  const { t } = useTranslation();
   const navigation = useNavigation<any>();
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
@@ -66,15 +68,15 @@ export function OnboardingMatchesScreen() {
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm }}>
           <Pressable onPress={() => navigation.goBack()} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
             <Ionicons name="chevron-back" size={22} color={colors.primary} />
-            <Text style={{ color: colors.primary, fontSize: 16 }}>Back</Text>
+            <Text style={{ color: colors.primary, fontSize: 16 }}>{t('common.back')}</Text>
           </Pressable>
           <Pressable onPress={handleSkip}>
-            <Text style={{ color: colors.textSecondary, fontSize: 16 }}>Skip</Text>
+            <Text style={{ color: colors.textSecondary, fontSize: 16 }}>{t('common.skip')}</Text>
           </Pressable>
         </View>
-        <Text style={{ ...typography.h3, color: colors.foreground, marginBottom: spacing.xs }}>Favourite Matches</Text>
+        <Text style={{ ...typography.h3, color: colors.foreground, marginBottom: spacing.xs }}>{t('onboarding.favouriteMatches')}</Text>
         <Text style={{ ...typography.body, color: colors.textSecondary }}>
-          Select up to {MAX_FAVOURITES} favourite matches. These will appear on your profile.
+          {t('onboarding.selectUpToFavourites', { max: MAX_FAVOURITES })}
         </Text>
       </View>
 
@@ -136,7 +138,7 @@ export function OnboardingMatchesScreen() {
             alignItems: 'center',
           }}
         >
-          <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>Done</Text>
+          <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>{t('common.done')}</Text>
         </Pressable>
       </View>
 

@@ -11,24 +11,19 @@ import { Avatar } from '../../components/ui/Avatar';
 import { formatRelativeTime } from '../../utils/formatDate';
 import { AppNotification } from '../../types/notification';
 import { User } from '../../types/user';
+import { useTranslation } from 'react-i18next';
 
-function getNotificationMessage(type: AppNotification['type'], username: string): React.ReactNode {
-  switch (type) {
-    case 'follow':
-      return <Text><Text style={{ fontWeight: '600' }}>{username}</Text> started following you</Text>;
-    case 'review_like':
-      return <Text><Text style={{ fontWeight: '600' }}>{username}</Text> liked your review</Text>;
-    case 'comment':
-      return <Text><Text style={{ fontWeight: '600' }}>{username}</Text> commented on your review</Text>;
-    case 'comment_like':
-      return <Text><Text style={{ fontWeight: '600' }}>{username}</Text> liked your comment</Text>;
-    case 'list_like':
-      return <Text><Text style={{ fontWeight: '600' }}>{username}</Text> liked your list</Text>;
-    case 'list_comment':
-      return <Text><Text style={{ fontWeight: '600' }}>{username}</Text> commented on your list</Text>;
-    default:
-      return <Text><Text style={{ fontWeight: '600' }}>{username}</Text> interacted with you</Text>;
-  }
+function getNotificationMessage(type: AppNotification['type'], username: string, t: (key: string) => string): React.ReactNode {
+  const NOTIFICATION_MESSAGES: Record<string, string> = {
+    follow: t('notifications.startedFollowingYou'),
+    review_like: t('notifications.likedYourReview'),
+    comment: t('notifications.commentedOnYourReview'),
+    comment_like: t('notifications.likedYourComment'),
+    list_like: t('notifications.likedYourList'),
+    list_comment: t('notifications.commentedOnYourList'),
+  };
+  const message = NOTIFICATION_MESSAGES[type] || 'interacted with you';
+  return <Text><Text style={{ fontWeight: '600' }}>{username}</Text> {message}</Text>;
 }
 
 function getNotificationIcon(type: AppNotification['type']): keyof typeof Ionicons.glyphMap {
@@ -50,6 +45,7 @@ function getNotificationIcon(type: AppNotification['type']): keyof typeof Ionico
 export function NotificationsScreen({ navigation }: any) {
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography } = theme;
+  const { t } = useTranslation();
   const { user } = useAuth();
   const { data: notifications, refetch } = useNotifications(user?.uid || '');
   const [refreshing, setRefreshing] = useState(false);
@@ -110,7 +106,7 @@ export function NotificationsScreen({ navigation }: any) {
       {/* Header */}
       <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }}>
         <Text style={{ ...typography.h2, color: colors.foreground, textAlign: 'center', marginBottom: spacing.md }}>
-          Activity
+          {t('notifications.activity')}
         </Text>
         {hasUnread && (
           <Pressable onPress={handleMarkAllRead} hitSlop={8} style={{ position: 'absolute', right: spacing.md, top: spacing.md + 2 }}>
@@ -126,10 +122,10 @@ export function NotificationsScreen({ navigation }: any) {
         >
           <Ionicons name="notifications-outline" size={48} color={colors.textSecondary} />
           <Text style={{ ...typography.h4, color: colors.foreground, marginTop: spacing.md }}>
-            No activity yet
+            {t('notifications.noActivityYet')}
           </Text>
           <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.xs }}>
-            When people interact with you, you'll see it here
+            {t('notifications.noActivityDescription')}
           </Text>
         </ScrollView>
       ) : (
@@ -179,7 +175,7 @@ export function NotificationsScreen({ navigation }: any) {
                 </View>
                 <View style={{ marginLeft: spacing.sm, flex: 1 }}>
                   <Text style={{ ...typography.body, color: colors.foreground, lineHeight: 20 }}>
-                    {getNotificationMessage(item.type, displayName)}
+                    {getNotificationMessage(item.type, displayName, t)}
                   </Text>
                   <Text style={{ ...typography.small, color: colors.textSecondary, marginTop: 2 }}>
                     {formatRelativeTime(item.createdAt)}

@@ -50,6 +50,7 @@ function docToUser(docSnap: any): User {
       follows: true,
       ...data.notificationPreferences,
     },
+    preferredLanguage: data.preferredLanguage || '',
     createdAt: data.createdAt?.toDate() || new Date(),
   };
 }
@@ -116,7 +117,7 @@ export async function getFollowedTeamIdsForUsers(userIds: string[]): Promise<Map
 
 export async function updateUserProfile(
   uid: string,
-  updates: Partial<Pick<User, 'username' | 'displayName' | 'bio' | 'location' | 'website' | 'avatar' | 'favoriteTeams' | 'favoriteCountry' | 'clubAffiliations' | 'followedLeagues' | 'followedTeamIds' | 'favoriteMatchIds' | 'watchedMatchIds' | 'likedMatchIds' | 'customTags' | 'expoPushToken' | 'notificationPreferences'>>
+  updates: Partial<Pick<User, 'username' | 'displayName' | 'bio' | 'location' | 'website' | 'avatar' | 'favoriteTeams' | 'favoriteCountry' | 'clubAffiliations' | 'followedLeagues' | 'followedTeamIds' | 'favoriteMatchIds' | 'watchedMatchIds' | 'likedMatchIds' | 'customTags' | 'expoPushToken' | 'notificationPreferences' | 'preferredLanguage'>>
 ): Promise<void> {
   const userRef = doc(db, 'users', uid);
   await updateDoc(userRef, updates);

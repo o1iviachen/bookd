@@ -13,17 +13,20 @@ import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { Avatar } from '../../components/ui/Avatar';
 import { shortName } from '../../utils/formatName';
 import { nationalityFlag } from '../../utils/flagEmoji';
+import { useTranslation } from 'react-i18next';
 
 type SortKey = 'recent_played' | 'oldest';
 
-const SORT_OPTIONS: { value: SortKey; label: string }[] = [
-  { value: 'recent_played', label: 'Most Recent' },
-  { value: 'oldest', label: 'Oldest First' },
+const SORT_OPTION_KEYS: { value: SortKey; i18nKey: string }[] = [
+  { value: 'recent_played', i18nKey: 'person.mostRecent' },
+  { value: 'oldest', i18nKey: 'person.oldestFirst' },
 ];
 
 export function PersonDetailScreen({ route, navigation }: any) {
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
+  const { t } = useTranslation();
+  const SORT_OPTIONS = useMemo(() => SORT_OPTION_KEYS.map((o) => ({ value: o.value, label: t(o.i18nKey) })), [t]);
   const { personId, personName, role } = route.params as {
     personId: number;
     personName: string;
@@ -156,10 +159,10 @@ export function PersonDetailScreen({ route, navigation }: any) {
   const positionLabel = (pos: string | null) => {
     if (!pos) return null;
     switch (pos) {
-      case 'Goalkeeper': return 'GK';
-      case 'Defence': case 'Defender': return 'DEF';
-      case 'Midfield': case 'Midfielder': return 'MID';
-      case 'Offence': case 'Attacker': return 'FWD';
+      case 'Goalkeeper': return t('person.positionGK');
+      case 'Defence': case 'Defender': return t('person.positionDEF');
+      case 'Midfield': case 'Midfielder': return t('person.positionMID');
+      case 'Offence': case 'Attacker': return t('person.positionFWD');
       default: return pos;
     }
   };
@@ -199,7 +202,7 @@ export function PersonDetailScreen({ route, navigation }: any) {
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginBottom: spacing.sm }}>
                   {coachAppearances.length > 0 && (
                     <View style={{ backgroundColor: colors.primary, paddingHorizontal: 10, paddingVertical: 3, borderRadius: borderRadius.full }}>
-                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#14181c' }}>Manager</Text>
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#14181c' }}>{t('person.manager')}</Text>
                     </View>
                   )}
                   {/* Show playing position badge: formerPosition for dual-role/corrupted managers, or position for players */}
@@ -254,7 +257,7 @@ export function PersonDetailScreen({ route, navigation }: any) {
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
                       <Ionicons name="calendar-outline" size={14} color={colors.textSecondary} />
                       <Text style={{ ...typography.caption, color: colors.textSecondary }}>
-                        Born {new Date(person.dateOfBirth).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
+                        {t('person.born', { date: new Date(person.dateOfBirth).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) })}
                       </Text>
                     </View>
                   )}
@@ -262,7 +265,7 @@ export function PersonDetailScreen({ route, navigation }: any) {
               </View>
             </View>
           ) : (
-            <Text style={{ ...typography.body, color: colors.textSecondary }}>Unable to load person info</Text>
+            <Text style={{ ...typography.body, color: colors.textSecondary }}>{t('person.unableToLoadPersonInfo')}</Text>
           )}
         </View>
 
@@ -285,15 +288,13 @@ export function PersonDetailScreen({ route, navigation }: any) {
           {!matchesLoading && allMatches.length > 0 && (
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm }}>
               <Text style={{ ...typography.caption, color: colors.textSecondary }}>
-                {isDualRole
-                  ? `${filteredCoachMatches.length + filteredPlayerMatches.length} matches`
-                  : `${filteredMatches.length} ${filteredMatches.length === 1 ? 'match' : 'matches'}`}
+                {t('common.matchCount', { count: isDualRole ? filteredCoachMatches.length + filteredPlayerMatches.length : filteredMatches.length })}
               </Text>
               <View style={{ width: 140 }}>
                 <Select
                   value={sort}
                   onValueChange={(v) => setSort(v as SortKey)}
-                  title="Sort By"
+                  title={t('person.sortBy')}
                   options={SORT_OPTIONS}
                 />
               </View>
@@ -306,7 +307,7 @@ export function PersonDetailScreen({ route, navigation }: any) {
             <View style={{ alignItems: 'center', paddingVertical: spacing.xxl }}>
               <Ionicons name="football-outline" size={48} color={colors.textSecondary} />
               <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.md }}>
-                No matches found
+                {t('person.noMatchesFound')}
               </Text>
             </View>
           ) : isDualRole ? (
@@ -315,7 +316,7 @@ export function PersonDetailScreen({ route, navigation }: any) {
               {filteredCoachMatches.length > 0 && (
                 <View style={{ marginBottom: spacing.lg }}>
                   <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textSecondary, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: spacing.sm }}>
-                    Manager of {coachAppearances.length} {coachAppearances.length === 1 ? 'match' : 'matches'}
+                    {t('person.managerOfMatches', { count: coachAppearances.length })}
                   </Text>
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: POSTER_GAP }}>
                     {filteredCoachMatches.slice(0, displayedCount).map((match) => (
@@ -332,7 +333,7 @@ export function PersonDetailScreen({ route, navigation }: any) {
               {filteredPlayerMatches.length > 0 && (
                 <View>
                   <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textSecondary, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: spacing.sm }}>
-                    Player in {playerAppearances.length} {playerAppearances.length === 1 ? 'match' : 'matches'}
+                    {t('person.playerInMatches', { count: playerAppearances.length })}
                   </Text>
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: POSTER_GAP }}>
                     {filteredPlayerMatches.slice(0, displayedCount).map((match) => (
@@ -353,7 +354,7 @@ export function PersonDetailScreen({ route, navigation }: any) {
                 <View style={{ alignItems: 'center', paddingVertical: spacing.xxl }}>
                   <Ionicons name="filter-outline" size={48} color={colors.textSecondary} />
                   <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.md }}>
-                    No matches match the filters
+                    {t('person.noMatchesMatchFilters')}
                   </Text>
                 </View>
               )}
@@ -362,7 +363,7 @@ export function PersonDetailScreen({ route, navigation }: any) {
             <View style={{ alignItems: 'center', paddingVertical: spacing.xxl }}>
               <Ionicons name="filter-outline" size={48} color={colors.textSecondary} />
               <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.md }}>
-                No matches match the filters
+                {t('person.noMatchesMatchFilters')}
               </Text>
             </View>
           ) : (

@@ -15,6 +15,7 @@ import { Select } from '../../components/ui/Select';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { ScreenHeader } from '../../components/ui/ScreenHeader';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { useTranslation } from 'react-i18next';
 import { Match } from '../../types/match';
 import { Review } from '../../types/review';
 
@@ -22,15 +23,8 @@ const PAGE_SIZE = 30;
 
 type SortKey = 'recent_tagged' | 'recent_played' | 'rating_high' | 'rating_low' | 'avg_rating_high' | 'avg_rating_low' | 'popular';
 
-const SORT_OPTIONS: { value: SortKey; label: string }[] = [
-  { value: 'recent_tagged', label: 'Recently Tagged' },
-  { value: 'recent_played', label: 'Recently Played' },
-  { value: 'rating_high', label: 'Your Rating (High)' },
-  { value: 'rating_low', label: 'Your Rating (Low)' },
-  { value: 'avg_rating_high', label: 'Average Rating (High)' },
-  { value: 'avg_rating_low', label: 'Average Rating (Low)' },
-  { value: 'popular', label: 'Most Logged' },
-];
+// Sort options are built inside the component to access t()
+
 
 interface TagMatchEntry {
   matchId: number;
@@ -42,6 +36,7 @@ interface TagMatchEntry {
 }
 
 export function TagMatchesScreen({ route, navigation }: any) {
+  const { t } = useTranslation();
   const { tag, userId } = route.params as { tag: string; userId?: string };
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography } = theme;
@@ -54,12 +49,22 @@ export function TagMatchesScreen({ route, navigation }: any) {
   const [showMenu, setShowMenu] = useState(false);
   const isOwnProfile = targetUserId === user?.uid;
 
+  const SORT_OPTIONS: { value: SortKey; label: string }[] = [
+    { value: 'recent_tagged', label: t('profile.recentlyLogged') },
+    { value: 'recent_played', label: t('profile.recentlyPlayed') },
+    { value: 'rating_high', label: t('profile.yourRatingHigh') },
+    { value: 'rating_low', label: t('profile.yourRatingLow') },
+    { value: 'avg_rating_high', label: t('profile.averageRatingHigh') },
+    { value: 'avg_rating_low', label: t('profile.averageRatingLow') },
+    { value: 'popular', label: t('profile.mostLogged') },
+  ];
+
   const handleRename = () => {
     setShowMenu(false);
-    Alert.prompt('Rename Tag', `Rename "${tag}" to:`, [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.prompt(t('profile.renameTag'), `Rename "${tag}" to:`, [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Rename',
+        text: t('common.rename'),
         onPress: (newName) => {
           const trimmed = newName?.trim();
           if (!trimmed || trimmed === tag || !user) return;
@@ -74,10 +79,10 @@ export function TagMatchesScreen({ route, navigation }: any) {
 
   const handleDelete = () => {
     setShowMenu(false);
-    Alert.alert('Delete Tag', `Remove "${tag}" from all your reviews?`, [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('profile.deleteTag'), `Remove "${tag}" from all your reviews?`, [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Delete',
+        text: t('common.delete'),
         style: 'destructive',
         onPress: () => {
           if (!user) return;
@@ -230,13 +235,13 @@ export function TagMatchesScreen({ route, navigation }: any) {
       {/* Sort + count row */}
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingVertical: spacing.sm }}>
         <Text style={{ ...typography.caption, color: colors.textSecondary }}>
-          {filtered.length} {filtered.length === 1 ? 'match' : 'matches'}
+          {t('common.matchCount', { count: filtered.length })}
         </Text>
         <View style={{ width: 160 }}>
           <Select
             value={sort}
             onValueChange={(v) => setSort(v as SortKey)}
-            title="Sort By"
+            title={t('profile.sortBy')}
             options={SORT_OPTIONS}
           />
         </View>
@@ -246,8 +251,8 @@ export function TagMatchesScreen({ route, navigation }: any) {
       {filtered.length === 0 ? (
         <EmptyState
           icon="pricetag-outline"
-          title="No matches found"
-          subtitle="Try adjusting your filters"
+          title={t('profile.noMatchesWithTag')}
+          subtitle={t('team.tryAdjustingFilters')}
         />
       ) : (
         <FlatList showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'}
@@ -274,8 +279,8 @@ export function TagMatchesScreen({ route, navigation }: any) {
         visible={showMenu}
         onClose={() => setShowMenu(false)}
         items={[
-          { label: 'Rename', icon: 'pencil-outline', onPress: handleRename },
-          { label: 'Delete', icon: 'trash-outline', onPress: handleDelete, destructive: true },
+          { label: t('common.rename'), icon: 'pencil-outline', onPress: handleRename },
+          { label: t('common.delete'), icon: 'trash-outline', onPress: handleDelete, destructive: true },
         ]}
       />
     </SafeAreaView>

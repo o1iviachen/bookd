@@ -18,24 +18,12 @@ import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { ScreenHeader } from '../../components/ui/ScreenHeader';
 import { SegmentedControl } from '../../components/ui/SegmentedControl';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { useTranslation } from 'react-i18next';
 import { Match } from '../../types/match';
 
 const PAGE_SIZE = 30;
 
-const TABS = ['Matches', 'Reviews', 'Lists'] as const;
-type Tab = (typeof TABS)[number];
-
 type SortKey = 'recent_liked' | 'recent_played' | 'rating_high' | 'rating_low' | 'avg_rating_high' | 'avg_rating_low' | 'popular';
-
-const SORT_OPTIONS: { value: SortKey; label: string }[] = [
-  { value: 'recent_liked', label: 'Recently Liked' },
-  { value: 'recent_played', label: 'Recently Played' },
-  { value: 'rating_high', label: 'Your Rating (High)' },
-  { value: 'rating_low', label: 'Your Rating (Low)' },
-  { value: 'avg_rating_high', label: 'Average Rating (High)' },
-  { value: 'avg_rating_low', label: 'Average Rating (Low)' },
-  { value: 'popular', label: 'Most Logged' },
-];
 
 interface LikedEntry {
   matchId: number;
@@ -47,6 +35,7 @@ interface LikedEntry {
 }
 
 export function LikesScreen({ route, navigation }: any) {
+  const { t } = useTranslation();
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography } = theme;
   const { user } = useAuth();
@@ -54,6 +43,18 @@ export function LikesScreen({ route, navigation }: any) {
   const { width: screenWidth } = useWindowDimensions();
   const { data: profile, isLoading: profileLoading } = useUserProfile(targetUserId);
   const { data: reviews } = useReviewsForUser(targetUserId);
+
+  const TABS = [t('common.matches'), t('common.reviews'), t('common.lists')] as const;
+
+  const SORT_OPTIONS: { value: SortKey; label: string }[] = [
+    { value: 'recent_liked', label: t('profile.recentlyLogged') },
+    { value: 'recent_played', label: t('profile.recentlyPlayed') },
+    { value: 'rating_high', label: t('profile.yourRatingHigh') },
+    { value: 'rating_low', label: t('profile.yourRatingLow') },
+    { value: 'avg_rating_high', label: t('profile.averageRatingHigh') },
+    { value: 'avg_rating_low', label: t('profile.averageRatingLow') },
+    { value: 'popular', label: t('profile.mostLogged') },
+  ];
 
   const [activeTabIndex, setActiveTabIndex] = useState(0);
   const pagerRef = useRef<PagerView>(null);
@@ -183,21 +184,21 @@ export function LikesScreen({ route, navigation }: any) {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
-      <ScreenHeader title="Likes" onBack={() => navigation.goBack()} />
+      <ScreenHeader title={t('common.likes')} onBack={() => navigation.goBack()} />
 
       {/* Counts summary */}
       <View style={{ flexDirection: 'row', justifyContent: 'center', gap: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.xs }}>
         <Pressable onPress={() => handleTabPress(0)} style={{ alignItems: 'center' }}>
           <Text style={{ ...typography.bodyBold, color: activeTabIndex === 0 ? colors.foreground : colors.textSecondary, fontSize: 16 }}>{likedMatchIds.length}</Text>
-          <Text style={{ ...typography.caption, color: colors.textSecondary, fontSize: 11 }}>Matches</Text>
+          <Text style={{ ...typography.caption, color: colors.textSecondary, fontSize: 11 }}>{t('common.matches')}</Text>
         </Pressable>
         <Pressable onPress={() => handleTabPress(1)} style={{ alignItems: 'center' }}>
           <Text style={{ ...typography.bodyBold, color: activeTabIndex === 1 ? colors.foreground : colors.textSecondary, fontSize: 16 }}>{likedReviews?.length ?? 0}</Text>
-          <Text style={{ ...typography.caption, color: colors.textSecondary, fontSize: 11 }}>Reviews</Text>
+          <Text style={{ ...typography.caption, color: colors.textSecondary, fontSize: 11 }}>{t('common.reviews')}</Text>
         </Pressable>
         <Pressable onPress={() => handleTabPress(2)} style={{ alignItems: 'center' }}>
           <Text style={{ ...typography.bodyBold, color: activeTabIndex === 2 ? colors.foreground : colors.textSecondary, fontSize: 16 }}>{likedLists?.length ?? 0}</Text>
-          <Text style={{ ...typography.caption, color: colors.textSecondary, fontSize: 11 }}>Lists</Text>
+          <Text style={{ ...typography.caption, color: colors.textSecondary, fontSize: 11 }}>{t('common.lists')}</Text>
         </Pressable>
       </View>
 
@@ -223,13 +224,13 @@ export function LikesScreen({ route, navigation }: any) {
 
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingVertical: spacing.sm }}>
             <Text style={{ ...typography.caption, color: colors.textSecondary }}>
-              {filtered.length} {filtered.length === 1 ? 'match' : 'matches'}
+              {t('common.matchCount', { count: filtered.length })}
             </Text>
             <View style={{ width: 160 }}>
               <Select
                 value={sort}
                 onValueChange={(v) => setSort(v as SortKey)}
-                title="Sort By"
+                title={t('profile.sortBy')}
                 options={SORT_OPTIONS}
               />
             </View>
@@ -238,8 +239,8 @@ export function LikesScreen({ route, navigation }: any) {
           {filtered.length === 0 ? (
             <EmptyState
               icon="heart-outline"
-              title={likedMatchIds.length === 0 ? 'No liked matches yet' : 'No matches found'}
-              subtitle={likedMatchIds.length === 0 ? 'Like matches to build your collection' : 'Try adjusting your filters'}
+              title={likedMatchIds.length === 0 ? t('profile.noLikedMatchesYet') : t('common.noResultsFound')}
+              subtitle={likedMatchIds.length === 0 ? '' : t('team.tryAdjustingFilters')}
             />
           ) : (
             <FlatList showsVerticalScrollIndicator={false}
@@ -272,8 +273,8 @@ export function LikesScreen({ route, navigation }: any) {
           ) : !likedReviews || likedReviews.length === 0 ? (
             <EmptyState
               icon="heart-outline"
-              title="No liked reviews yet"
-              subtitle="Like reviews to save them here"
+              title={t('profile.noLikedReviewsYet')}
+              subtitle=""
             />
           ) : (
             <ScrollView showsVerticalScrollIndicator={false}
@@ -300,8 +301,8 @@ export function LikesScreen({ route, navigation }: any) {
           ) : !likedLists || likedLists.length === 0 ? (
             <EmptyState
               icon="heart-outline"
-              title="No liked lists yet"
-              subtitle="Like lists to save them here"
+              title={t('profile.noLikedListsYet')}
+              subtitle=""
             />
           ) : (
             <ScrollView showsVerticalScrollIndicator={false}

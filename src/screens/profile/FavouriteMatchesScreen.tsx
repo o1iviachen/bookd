@@ -12,11 +12,13 @@ import { MatchPosterCard } from '../../components/match/MatchPosterCard';
 import { MatchPickerModal } from '../../components/match/MatchPickerModal';
 import { Match } from '../../types/match';
 import { useQueryClient, useQueries } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 
 const MAX_FAVOURITES = 3;
 const NUM_COLUMNS = 3;
 
 export function FavouriteMatchesScreen() {
+  const { t } = useTranslation();
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography } = theme;
   const navigation = useNavigation();
@@ -74,17 +76,17 @@ export function FavouriteMatchesScreen() {
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border }}>
         <Pressable onPress={() => navigation.goBack()} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
           <Ionicons name="chevron-back" size={22} color={colors.primary} />
-          <Text style={{ color: colors.primary, fontSize: 16 }}>Back</Text>
+          <Text style={{ color: colors.primary, fontSize: 16 }}>{t('common.back')}</Text>
         </Pressable>
-        <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 17 }}>Favourite Matches</Text>
+        <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 17 }}>{t('favourites.favouriteMatchesTitle')}</Text>
         <Pressable onPress={save}>
-          <Text style={{ color: colors.primary, fontSize: 16, fontWeight: '600' }}>Save</Text>
+          <Text style={{ color: colors.primary, fontSize: 16, fontWeight: '600' }}>{t('common.save')}</Text>
         </Pressable>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: 40, paddingTop: spacing.md }}>
         <Text style={{ ...typography.caption, color: colors.textSecondary, paddingHorizontal: spacing.md, marginBottom: spacing.md }}>
-          Select up to {MAX_FAVOURITES} favourite matches. These will appear on your profile.
+          {t('favourites.favouriteMatchesDescription', { max: MAX_FAVOURITES })}
         </Text>
 
         {/* Selected matches + add button in a poster grid */}
@@ -107,7 +109,7 @@ export function FavouriteMatchesScreen() {
                   }}
                 >
                   <Ionicons name="close-circle" size={14} color={colors.error} />
-                  <Text style={{ ...typography.small, color: colors.error, fontWeight: '600' }}>Remove</Text>
+                  <Text style={{ ...typography.small, color: colors.error, fontWeight: '600' }}>{t('favourites.remove')}</Text>
                 </Pressable>
               </View>
             ))}

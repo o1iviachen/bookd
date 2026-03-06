@@ -2,15 +2,16 @@ import React, { useState } from 'react';
 import { View, Text, Pressable, Modal, TextInput, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getFunctions, httpsCallable } from 'firebase/functions';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 
-const REASONS = [
-  'Spam or misleading',
-  'Inappropriate content',
-  'Harassment or bullying',
-  'Misinformation',
-  'Other',
-];
+const REASON_KEYS = [
+  'ui.reasonSpam',
+  'ui.reasonInappropriate',
+  'ui.reasonHarassment',
+  'ui.reasonMisinformation',
+  'ui.reasonOther',
+] as const;
 
 interface ReportModalProps {
   visible: boolean;
@@ -20,6 +21,7 @@ interface ReportModalProps {
 }
 
 export function ReportModal({ visible, onClose, contentType, contentId }: ReportModalProps) {
+  const { t } = useTranslation();
   const { theme } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
   const [selectedReason, setSelectedReason] = useState<string | null>(null);
@@ -39,10 +41,10 @@ export function ReportModal({ visible, onClose, contentType, contentId }: Report
       const fns = getFunctions();
       const submitReport = httpsCallable(fns, 'submitReport');
       await submitReport({ contentType, contentId, reason: selectedReason, note: note.trim() });
-      Alert.alert('Report Submitted', "Thank you. We'll review this content shortly.");
+      Alert.alert(t('ui.reportSubmitted'), t('ui.reportSubmittedBody'));
       handleClose();
     } catch {
-      Alert.alert('Error', 'Failed to submit report. Please try again.');
+      Alert.alert(t('common.error'), t('ui.failedToSubmitReport'));
     } finally {
       setSubmitting(false);
     }
@@ -69,16 +71,16 @@ export function ReportModal({ visible, onClose, contentType, contentId }: Report
           <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.border, alignSelf: 'center', marginBottom: spacing.md }} />
 
           <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 17, marginBottom: spacing.xs }}>
-            Report {contentType === 'review' ? 'Review' : contentType === 'comment' ? 'Comment' : 'Message'}
+            {contentType === 'review' ? t('ui.reportReview') : contentType === 'comment' ? t('ui.reportComment') : t('ui.reportMessage')}
           </Text>
           <Text style={{ ...typography.small, color: colors.textSecondary, marginBottom: spacing.lg }}>
-            Why are you reporting this?
+            {t('ui.whyReporting')}
           </Text>
 
-          {REASONS.map((reason) => (
+          {REASON_KEYS.map((reasonKey) => (
             <Pressable
-              key={reason}
-              onPress={() => setSelectedReason(reason)}
+              key={reasonKey}
+              onPress={() => setSelectedReason(reasonKey)}
               style={({ pressed }) => ({
                 flexDirection: 'row',
                 alignItems: 'center',
@@ -87,17 +89,17 @@ export function ReportModal({ visible, onClose, contentType, contentId }: Report
                 paddingHorizontal: spacing.sm,
                 backgroundColor: pressed
                   ? colors.muted
-                  : selectedReason === reason
+                  : selectedReason === reasonKey
                   ? colors.primaryLight
                   : 'transparent',
                 borderRadius: borderRadius.sm,
                 marginBottom: 4,
               })}
             >
-              <Text style={{ ...typography.body, color: selectedReason === reason ? colors.primary : colors.foreground }}>
-                {reason}
+              <Text style={{ ...typography.body, color: selectedReason === reasonKey ? colors.primary : colors.foreground }}>
+                {t(reasonKey)}
               </Text>
-              {selectedReason === reason && (
+              {selectedReason === reasonKey && (
                 <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
               )}
             </Pressable>
@@ -106,7 +108,7 @@ export function ReportModal({ visible, onClose, contentType, contentId }: Report
           <TextInput
             value={note}
             onChangeText={setNote}
-            placeholder="Add details (optional)"
+            placeholder={t('ui.addDetails')}
             placeholderTextColor={colors.textSecondary}
             multiline
             maxLength={300}
@@ -138,7 +140,7 @@ export function ReportModal({ visible, onClose, contentType, contentId }: Report
               <ActivityIndicator color="#fff" size="small" />
             ) : (
               <Text style={{ ...typography.bodyBold, color: selectedReason ? '#fff' : colors.textSecondary }}>
-                Submit Report
+                {t('ui.submitReport')}
               </Text>
             )}
           </Pressable>

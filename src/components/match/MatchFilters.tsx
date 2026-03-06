@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { Select } from '../ui/Select';
 import { SliderInput } from '../ui/SliderInput';
@@ -48,6 +49,7 @@ export function MatchFilters({
   showSeasonFilter = true,
   teamOptions: teamOptionsProp,
 }: MatchFiltersProps) {
+  const { t } = useTranslation();
   const { theme } = useTheme();
   const { colors, spacing, borderRadius } = theme;
 
@@ -108,7 +110,7 @@ export function MatchFilters({
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
           <Ionicons name="options-outline" size={16} color={colors.textSecondary} />
           <Text style={{ fontSize: 13, fontWeight: '500', color: colors.foreground }}>
-            Filters
+            {t('matches.filtersTitle')}
           </Text>
         </View>
         {hasActiveFilters && (
@@ -126,7 +128,7 @@ export function MatchFilters({
               opacity: pressed ? 0.7 : 1,
             })}
           >
-            <Text style={{ fontSize: 12, color: colors.textSecondary }}>Clear all</Text>
+            <Text style={{ fontSize: 12, color: colors.textSecondary }}>{t('matches.filtersClearAll')}</Text>
             <Ionicons name="close" size={14} color={colors.textSecondary} />
           </Pressable>
         )}
@@ -142,13 +144,13 @@ export function MatchFilters({
         {/* League */}
         <View style={{ flex: 1 }}>
           <Select
-            label="League"
-            title="Select League"
+            label={t('matches.filtersLeague')}
+            title={t('matches.filtersSelectLeague')}
             value={filters.league}
             onValueChange={(value) =>
               onFiltersChange({ ...filters, league: value, team: 'all' })
             }
-            options={[{ value: 'all', label: 'All Leagues' }, ...leagues]}
+            options={[{ value: 'all', label: t('matches.filtersAllLeagues') }, ...leagues]}
           />
         </View>
 
@@ -156,11 +158,11 @@ export function MatchFilters({
         {showTeamFilter && (
           <View style={{ flex: 1 }}>
             <Select
-              label="Team"
-              title="Select Team"
+              label={t('matches.filtersTeam')}
+              title={t('matches.filtersSelectTeam')}
               value={filters.team}
               onValueChange={(value) => onFiltersChange({ ...filters, team: value })}
-              options={[{ value: 'all', label: 'All Teams' }, ...teams]}
+              options={[{ value: 'all', label: t('matches.filtersAllTeams') }, ...teams]}
               disabled={!teamOptionsProp && filters.league === 'all'}
             />
           </View>
@@ -170,12 +172,12 @@ export function MatchFilters({
         {showSeasonFilter && (
           <View style={{ flex: 1 }}>
             <Select
-              label="Season"
-              title="Select Season"
+              label={t('matches.filtersSeason')}
+              title={t('matches.filtersSelectSeason')}
               value={filters.season}
               onValueChange={(value) => onFiltersChange({ ...filters, season: value })}
               options={[
-                { value: 'all', label: 'All Seasons' },
+                { value: 'all', label: t('matches.filtersAllSeasons') },
                 ...SEASONS.map((s) => ({ value: s, label: s })),
               ]}
             />
@@ -187,13 +189,13 @@ export function MatchFilters({
       {showMinLogs && onMinLogsChange && (
         <View style={{ marginTop: spacing.md }}>
           <SliderInput
-            label="Minimum Logs"
+            label={t('matches.filtersMinLogs')}
             value={minLogs ?? 0}
             onValueChange={onMinLogsChange}
             min={0}
             max={1000}
             step={10}
-            formatValue={(v) => `${v}+ logs`}
+            formatValue={(v) => t('matches.filtersMinLogsFormat', { count: v })}
           />
         </View>
       )}

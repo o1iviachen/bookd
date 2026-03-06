@@ -11,6 +11,7 @@ import { POPULAR_TEAMS } from '../../utils/constants';
 import { useSearchTeams } from '../../hooks/useTeams';
 import { nationalityFlag } from '../../utils/flagEmoji';
 import { useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 
 const POPULAR_COUNTRIES = [
   'England', 'Spain', 'Germany', 'France', 'Italy',
@@ -23,6 +24,7 @@ const POPULAR_COUNTRIES = [
 ];
 
 export function FollowedTeamsScreen({ navigation }: any) {
+  const { t } = useTranslation();
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
   const { user } = useAuth();
@@ -86,9 +88,9 @@ export function FollowedTeamsScreen({ navigation }: any) {
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border }}>
         <Pressable onPress={() => navigation.goBack()} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
           <Ionicons name="chevron-back" size={22} color={colors.primary} />
-          <Text style={{ color: colors.primary, fontSize: 16 }}>Back</Text>
+          <Text style={{ color: colors.primary, fontSize: 16 }}>{t('common.back')}</Text>
         </Pressable>
-        <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 17 }}>Follow Teams</Text>
+        <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 17 }}>{t('followedTeams.followTeams')}</Text>
         <View style={{ width: 60 }} />
       </View>
 
@@ -97,7 +99,7 @@ export function FollowedTeamsScreen({ navigation }: any) {
         <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.muted, borderRadius: borderRadius.md, paddingHorizontal: 12 }}>
           <Ionicons name="search" size={18} color={colors.textSecondary} />
           <RNTextInput
-            placeholder="Search any team..."
+            placeholder={t('followedTeams.searchAnyTeam')}
             placeholderTextColor={colors.textSecondary}
             value={search}
             onChangeText={setSearch}
@@ -118,7 +120,7 @@ export function FollowedTeamsScreen({ navigation }: any) {
       <ScrollView showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: spacing.xl }}>
         {leagues.length === 0 && extraTeams.length === 0 && filteredCountries.length === 0 && !searchLoading ? (
           <View style={{ alignItems: 'center', marginTop: spacing.xxl * 2 }}>
-            <Text style={{ ...typography.body, color: colors.textSecondary }}>No results found</Text>
+            <Text style={{ ...typography.body, color: colors.textSecondary }}>{t('followedTeams.noResultsFound')}</Text>
           </View>
         ) : (
           <>
@@ -166,7 +168,7 @@ export function FollowedTeamsScreen({ navigation }: any) {
             {extraTeams.length > 0 && (
               <View style={{ marginTop: spacing.lg, paddingHorizontal: spacing.md }}>
                 <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: spacing.sm, marginLeft: spacing.xs }}>
-                  More results
+                  {t('followedTeams.moreResults')}
                 </Text>
                 <View style={{ backgroundColor: colors.card, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' }}>
                   {extraTeams.map((team, i) => {
@@ -214,7 +216,7 @@ export function FollowedTeamsScreen({ navigation }: any) {
             {filteredCountries.length > 0 && (
               <View style={{ marginTop: spacing.lg, paddingHorizontal: spacing.md }}>
                 <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: spacing.sm, marginLeft: spacing.xs }}>
-                  Countries
+                  {t('followedTeams.countries')}
                 </Text>
                 <View style={{ backgroundColor: colors.card, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' }}>
                   {filteredCountries.map((country, i) => {

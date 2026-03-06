@@ -11,8 +11,10 @@ import { TeamLogo } from '../../components/match/TeamLogo';
 import { useFollowableLeagues } from '../../hooks/useLeagues';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 
 export function FavouriteLeaguesScreen() {
+  const { t } = useTranslation();
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
   const navigation = useNavigation();
@@ -47,16 +49,16 @@ export function FavouriteLeaguesScreen() {
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border }}>
         <Pressable onPress={() => navigation.goBack()} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
           <Ionicons name="chevron-back" size={22} color={colors.primary} />
-          <Text style={{ color: colors.primary, fontSize: 16 }}>Back</Text>
+          <Text style={{ color: colors.primary, fontSize: 16 }}>{t('common.back')}</Text>
         </Pressable>
-        <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 17 }}>Favourite Leagues</Text>
+        <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 17 }}>{t('favourites.favouriteLeagues')}</Text>
         <Pressable onPress={save}>
-          <Text style={{ color: colors.primary, fontSize: 16, fontWeight: '600' }}>Save</Text>
+          <Text style={{ color: colors.primary, fontSize: 16, fontWeight: '600' }}>{t('common.save')}</Text>
         </Pressable>
       </View>
 
       <Text style={{ ...typography.caption, color: colors.textSecondary, paddingHorizontal: spacing.md, paddingTop: spacing.md, paddingBottom: spacing.sm }}>
-        Matches from selected leagues will appear on your feed.
+        {t('favourites.favouriteLeaguesDescription')}
       </Text>
 
       <ScrollView showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: 100 }}>

@@ -7,6 +7,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { subDays } from 'date-fns';
 import { useQueries, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useUserProfile } from '../../hooks/useUser';
@@ -84,6 +85,7 @@ function FriendReviewCard({ item, match, onPress, colors, spacing, viewerLikedMa
 }
 
 export function FeedScreen() {
+  const { t } = useTranslation();
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
   const navigation = useNavigation<Nav>();
@@ -272,7 +274,7 @@ export function FeedScreen() {
                   color: activeTabIndex === i ? colors.foreground : colors.textSecondary,
                 }}
               >
-                {tab}
+                {tab === 'Matches' ? t('common.matches') : tab === 'Reviews' ? t('common.reviews') : t('common.lists')}
               </Text>
             </Pressable>
           ))}
@@ -299,7 +301,7 @@ export function FeedScreen() {
               <>
                 {/* Popular this week */}
                 <View style={{ paddingTop: spacing.sm, paddingBottom: spacing.sm }}>
-                  {renderSectionHeader('Popular this week')}
+                  {renderSectionHeader(t('feed.popularThisWeek'))}
                   {popularMatches.length > 0 ? (
                     <FlatList showsVerticalScrollIndicator={false}
                       horizontal
@@ -313,14 +315,14 @@ export function FeedScreen() {
                     />
                   ) : (
                     <Text style={{ ...typography.caption, color: colors.textSecondary, paddingHorizontal: spacing.md }}>
-                      No popular matches this week
+                      {t('feed.noPopularMatchesThisWeek')}
                     </Text>
                   )}
                 </View>
 
                 {/* New from friends */}
                 <View style={{ paddingTop: spacing.sm, paddingBottom: spacing.sm }}>
-                  {renderSectionHeader('New from friends')}
+                  {renderSectionHeader(t('feed.newFromFriends'))}
                   {friendReviews.length > 0 ? (
                     <FlatList showsVerticalScrollIndicator={false}
                       horizontal
@@ -341,7 +343,7 @@ export function FeedScreen() {
                     />
                   ) : (
                     <Text style={{ ...typography.caption, color: colors.textSecondary, paddingHorizontal: spacing.md }}>
-                      Follow friends to see their activity
+                      {t('feed.followFriendsToSeeActivity')}
                     </Text>
                   )}
                 </View>
@@ -378,7 +380,7 @@ export function FeedScreen() {
                   <View style={{ alignItems: 'center', paddingTop: spacing.lg, paddingHorizontal: spacing.xl }}>
                     <Ionicons name="football-outline" size={36} color={colors.textSecondary} />
                     <Text style={{ ...typography.caption, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.sm }}>
-                      Follow leagues to see matches here
+                      {t('feed.followLeaguesToSeeMatches')}
                     </Text>
                   </View>
                 )}
@@ -398,7 +400,7 @@ export function FeedScreen() {
             >
               <Ionicons name="chatbubbles-outline" size={48} color={colors.textSecondary} />
               <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.md }}>
-                Follow friends to see their reviews here
+                {t('feed.followFriendsToSeeReviews')}
               </Text>
             </ScrollView>
           ) : (
@@ -427,7 +429,7 @@ export function FeedScreen() {
                           {match.homeTeam.shortName}
                         </Text>
                         <Text style={{ ...typography.caption, color: colors.textSecondary, fontWeight: '500' }}>
-                          {match.homeScore != null ? `${match.homeScore} - ${match.awayScore}` : 'vs'}
+                          {match.homeScore != null ? `${match.homeScore} - ${match.awayScore}` : t('common.vs')}
                         </Text>
                         <Text style={{ ...typography.caption, color: colors.foreground, fontWeight: '600' }}>
                           {match.awayTeam.shortName}
@@ -448,7 +450,7 @@ export function FeedScreen() {
               }}
               ListHeaderComponent={
                 <Text style={{ ...typography.h4, color: colors.foreground, marginTop: spacing.sm, marginBottom: spacing.sm, paddingHorizontal: spacing.md }}>
-                  Recent reviews
+                  {t('feed.recentReviews')}
                 </Text>
               }
               contentContainerStyle={{ paddingBottom: spacing.xl }}
@@ -473,7 +475,7 @@ export function FeedScreen() {
             >
               <Ionicons name="list-outline" size={48} color={colors.textSecondary} />
               <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.md }}>
-                No lists yet. Create one from your profile!
+                {t('feed.noListsYetCreate')}
               </Text>
             </ScrollView>
           ) : (
@@ -489,7 +491,7 @@ export function FeedScreen() {
               )}
               ListHeaderComponent={
                 <Text style={{ ...typography.h4, color: colors.foreground, marginTop: spacing.sm, marginBottom: spacing.sm, paddingHorizontal: spacing.md }}>
-                  Popular lists
+                  {t('feed.popularLists')}
                 </Text>
               }
               contentContainerStyle={{ paddingBottom: spacing.xl }}

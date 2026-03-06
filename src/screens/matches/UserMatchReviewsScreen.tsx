@@ -9,10 +9,12 @@ import { DiaryEntryRow } from '../../components/diary/DiaryEntryRow';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { ScreenHeader } from '../../components/ui/ScreenHeader';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { useTranslation } from 'react-i18next';
 
 export function UserMatchReviewsScreen({ route, navigation }: any) {
   const { theme, isDark } = useTheme();
   const { colors, spacing } = theme;
+  const { t } = useTranslation();
   const { matchId, userId, username } = route.params as {
     matchId: number;
     userId: string;
@@ -34,14 +36,14 @@ export function UserMatchReviewsScreen({ route, navigation }: any) {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
-      <ScreenHeader title={`${username}'s diary`} onBack={() => navigation.goBack()} />
+      <ScreenHeader title={t('userMatchReviews.usersDiary', { username })} onBack={() => navigation.goBack()} />
 
       {isLoading ? (
         <View style={{ flex: 1, justifyContent: 'center' }}>
           <LoadingSpinner fullScreen={false} />
         </View>
       ) : userReviews.length === 0 ? (
-        <EmptyState icon="book-outline" title="No entries" />
+        <EmptyState icon="book-outline" title={t('userMatchReviews.noEntries')} />
       ) : (
         <FlatList showsVerticalScrollIndicator={false}
           indicatorStyle={isDark ? 'white' : 'default'}

@@ -19,6 +19,7 @@ import { MatchesStackParamList } from '../../types/navigation';
 import { Match } from '../../types/match';
 import { POPULAR_TEAMS } from '../../utils/constants';
 import { useLeagueMap } from '../../hooks/useLeagues';
+import { useTranslation } from 'react-i18next';
 
 type Nav = NativeStackNavigationProp<MatchesStackParamList, 'Matches'>;
 
@@ -44,6 +45,7 @@ const MatchDayPage = React.memo(function MatchDayPage({
 }) {
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
+  const { t } = useTranslation();
   const navigation = useNavigation<Nav>();
   const [favouritesExpanded, setFavouritesExpanded] = useState(true);
   const { data: leagueMap } = useLeagueMap();
@@ -119,7 +121,7 @@ const MatchDayPage = React.memo(function MatchDayPage({
         <View style={{ alignItems: 'center', marginTop: spacing.xxl * 2 }}>
           <Ionicons name="football-outline" size={48} color={colors.textSecondary} />
           <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.md }}>
-            {searchQuery ? `No matches found for "${searchQuery}"` : 'No matches on this date'}
+            {searchQuery ? t('matches.noMatchesFoundForSearch') : t('matches.noMatchesOnThisDate')}
           </Text>
         </View>
       ) : (
@@ -138,10 +140,10 @@ const MatchDayPage = React.memo(function MatchDayPage({
               >
                 <Ionicons name="star" size={18} color={colors.primary} style={{ marginRight: spacing.sm }} />
                 <Text style={{ ...typography.bodyBold, color: colors.foreground, flex: 1 }}>
-                  Following
+                  {t('common.following')}
                 </Text>
                 <Text style={{ ...typography.caption, color: colors.textSecondary, marginRight: spacing.xs }}>
-                  {favouriteMatches.length} {favouriteMatches.length === 1 ? 'match' : 'matches'}
+                  {t('common.matchCount', { count: favouriteMatches.length })}
                 </Text>
                 <Ionicons
                   name={favouritesExpanded ? 'chevron-up' : 'chevron-down'}
@@ -223,6 +225,7 @@ const MatchDayPage = React.memo(function MatchDayPage({
 export function MatchesScreen() {
   const { theme } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
+  const { t } = useTranslation();
   const { user } = useAuth();
   const { data: profile } = useUserProfile(user?.uid || '');
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -280,14 +283,14 @@ export function MatchesScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
       <Pressable onPress={Keyboard.dismiss} style={{ paddingHorizontal: spacing.md, paddingTop: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }}>
         <Text style={{ ...typography.h2, color: colors.foreground, textAlign: 'center', marginBottom: spacing.md }}>
-          Matches
+          {t('common.matches')}
         </Text>
 
         {/* Search bar */}
         <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.muted, borderRadius: borderRadius.md, marginBottom: spacing.sm, paddingHorizontal: 12 }}>
           <Ionicons name="search" size={18} color={colors.textSecondary} />
           <RNTextInput
-            placeholder="Search teams, leagues..."
+            placeholder={t('matches.searchTeamsLeagues')}
             placeholderTextColor={colors.textSecondary}
             value={searchQuery}
             onChangeText={setSearchQuery}

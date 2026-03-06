@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useQuery } from '@tanstack/react-query';
 import PagerView from 'react-native-pager-view';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { getCompetitionStandings, getCompetitionMatchesByCode } from '../../services/footballApi';
 import { TeamLogo } from '../../components/match/TeamLogo';
@@ -41,6 +42,7 @@ const KNOCKOUT_STAGES = [
   'FINAL',
 ];
 
+// STAGE_LABELS are set up with static English defaults; translated versions are used in the component via t()
 const STAGE_LABELS: Record<string, string> = {
   PLAYOFF_ROUND_1: 'Playoff Round 1',
   PLAYOFF_ROUND_2: 'Playoff Round 2',
@@ -72,6 +74,7 @@ function isValidFixture(match: Match): boolean {
 type Tab = 'table' | 'fixtures' | 'knockout';
 
 export function LeagueDetailScreen({ route, navigation }: any) {
+  const { t } = useTranslation();
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
   const { competitionCode, competitionName, competitionEmblem, initialTab } = route.params;
@@ -230,9 +233,9 @@ export function LeagueDetailScreen({ route, navigation }: any) {
   // Build tabs — only include knockout for cup competitions
   const isCup = leagueMap.get(competitionCode)?.isCup ?? false;
   const tabs: { key: Tab; label: string }[] = [
-    { key: 'table', label: 'Table' },
-    { key: 'fixtures', label: 'Fixtures' },
-    ...(isCup ? [{ key: 'knockout' as Tab, label: 'Knockout' }] : []),
+    { key: 'table', label: t('league.table') },
+    { key: 'fixtures', label: t('league.fixtures') },
+    ...(isCup ? [{ key: 'knockout' as Tab, label: t('league.knockout') }] : []),
   ];
 
   // Shared fixture row component — memoized to avoid recreation on tab changes
@@ -278,12 +281,12 @@ export function LeagueDetailScreen({ route, navigation }: any) {
             {(match.status === 'IN_PLAY' || match.status === 'PAUSED') && (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 }}>
                 <PulsingDot />
-                <Text style={{ fontSize: 10, fontWeight: '700', color: '#00e054' }}>LIVE</Text>
+                <Text style={{ fontSize: 10, fontWeight: '700', color: '#00e054' }}>{t('common.live')}</Text>
               </View>
             )}
           </>
         ) : (
-          <Text style={{ ...typography.caption, color: colors.textSecondary }}>vs</Text>
+          <Text style={{ ...typography.caption, color: colors.textSecondary }}>{t('common.vs')}</Text>
         )}
       </View>
 
@@ -303,7 +306,7 @@ export function LeagueDetailScreen({ route, navigation }: any) {
     if (!standings || standings.length === 0) {
       return (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <Text style={{ ...typography.body, color: colors.textSecondary }}>No standings available</Text>
+          <Text style={{ ...typography.body, color: colors.textSecondary }}>{t('league.noStandingsAvailable')}</Text>
         </View>
       );
     }
@@ -318,14 +321,14 @@ export function LeagueDetailScreen({ route, navigation }: any) {
           borderBottomWidth: 1,
           borderBottomColor: colors.border,
         }}>
-          <Text style={{ width: 28, ...typography.small, color: colors.textSecondary, fontWeight: '600' }}>#</Text>
-          <Text style={{ flex: 1, ...typography.small, color: colors.textSecondary, fontWeight: '600' }}>Team</Text>
-          <Text style={{ width: 30, textAlign: 'center', ...typography.small, color: colors.textSecondary, fontWeight: '600' }}>P</Text>
-          <Text style={{ width: 30, textAlign: 'center', ...typography.small, color: colors.textSecondary, fontWeight: '600' }}>W</Text>
-          <Text style={{ width: 30, textAlign: 'center', ...typography.small, color: colors.textSecondary, fontWeight: '600' }}>D</Text>
-          <Text style={{ width: 30, textAlign: 'center', ...typography.small, color: colors.textSecondary, fontWeight: '600' }}>L</Text>
-          <Text style={{ width: 34, textAlign: 'center', ...typography.small, color: colors.textSecondary, fontWeight: '600' }}>GD</Text>
-          <Text style={{ width: 34, textAlign: 'center', ...typography.small, color: colors.textSecondary, fontWeight: '600' }}>Pts</Text>
+          <Text style={{ width: 28, ...typography.small, color: colors.textSecondary, fontWeight: '600' }}>{t('league.rank')}</Text>
+          <Text style={{ flex: 1, ...typography.small, color: colors.textSecondary, fontWeight: '600' }}>{t('league.teamHeader')}</Text>
+          <Text style={{ width: 30, textAlign: 'center', ...typography.small, color: colors.textSecondary, fontWeight: '600' }}>{t('league.played')}</Text>
+          <Text style={{ width: 30, textAlign: 'center', ...typography.small, color: colors.textSecondary, fontWeight: '600' }}>{t('league.won')}</Text>
+          <Text style={{ width: 30, textAlign: 'center', ...typography.small, color: colors.textSecondary, fontWeight: '600' }}>{t('league.draw')}</Text>
+          <Text style={{ width: 30, textAlign: 'center', ...typography.small, color: colors.textSecondary, fontWeight: '600' }}>{t('league.lost')}</Text>
+          <Text style={{ width: 34, textAlign: 'center', ...typography.small, color: colors.textSecondary, fontWeight: '600' }}>{t('league.goalDifference')}</Text>
+          <Text style={{ width: 34, textAlign: 'center', ...typography.small, color: colors.textSecondary, fontWeight: '600' }}>{t('league.points')}</Text>
         </View>
 
         {/* Table rows */}
@@ -387,7 +390,7 @@ export function LeagueDetailScreen({ route, navigation }: any) {
     if (leagueFixtures.length === 0) {
       return (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <Text style={{ ...typography.body, color: colors.textSecondary }}>No fixtures available</Text>
+          <Text style={{ ...typography.body, color: colors.textSecondary }}>{t('league.noFixturesAvailable')}</Text>
         </View>
       );
     }
@@ -404,7 +407,7 @@ export function LeagueDetailScreen({ route, navigation }: any) {
                 paddingBottom: spacing.sm,
               }}>
                 <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1 }}>
-                  Matchday {matchday}
+                  {t('league.matchdayLabel', { matchday })}
                 </Text>
               </View>
 
@@ -505,7 +508,7 @@ export function LeagueDetailScreen({ route, navigation }: any) {
           ) : knockoutFixtures.length === 0 ? (
             <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
               <Ionicons name="trophy-outline" size={40} color={colors.textSecondary} />
-              <Text style={{ ...typography.body, color: colors.textSecondary, marginTop: spacing.sm }}>No knockout matches yet</Text>
+              <Text style={{ ...typography.body, color: colors.textSecondary, marginTop: spacing.sm }}>{t('league.noKnockoutMatchesYet')}</Text>
             </View>
           ) : (() => {
             const lineColor = colors.border;
@@ -589,7 +592,7 @@ export function LeagueDetailScreen({ route, navigation }: any) {
                     <View style={{ alignItems: 'center', marginVertical: spacing.sm }}>
                       <Ionicons name="trophy" size={32} color={colors.primary} style={{ marginBottom: 4 }} />
                       <Text style={{ ...typography.caption, fontWeight: '700', color: colors.primary, letterSpacing: 1.5, fontSize: 11, marginBottom: spacing.sm }}>
-                        FINAL
+                        {t('league.theFinal').toUpperCase()}
                       </Text>
 
                       <Pressable
@@ -620,7 +623,7 @@ export function LeagueDetailScreen({ route, navigation }: any) {
                           ) : (
                             <>
                               <Ionicons name="shield-outline" size={30} color={colors.textSecondary} style={{ opacity: 0.35 }} />
-                              <Text style={{ ...typography.caption, color: colors.textSecondary, opacity: 0.5, marginTop: 4 }}>TBD</Text>
+                              <Text style={{ ...typography.caption, color: colors.textSecondary, opacity: 0.5, marginTop: 4 }}>{t('league.tbd')}</Text>
                             </>
                           )}
                         </View>
@@ -638,7 +641,7 @@ export function LeagueDetailScreen({ route, navigation }: any) {
                               </Text>
                             </View>
                           ) : (
-                            <Text style={{ fontSize: 14, fontWeight: '600', color: colors.textSecondary }}>vs</Text>
+                            <Text style={{ fontSize: 14, fontWeight: '600', color: colors.textSecondary }}>{t('common.vs')}</Text>
                           )}
                         </View>
 
@@ -654,7 +657,7 @@ export function LeagueDetailScreen({ route, navigation }: any) {
                           ) : (
                             <>
                               <Ionicons name="shield-outline" size={30} color={colors.textSecondary} style={{ opacity: 0.35 }} />
-                              <Text style={{ ...typography.caption, color: colors.textSecondary, opacity: 0.5, marginTop: 4 }}>TBD</Text>
+                              <Text style={{ ...typography.caption, color: colors.textSecondary, opacity: 0.5, marginTop: 4 }}>{t('league.tbd')}</Text>
                             </>
                           )}
                         </View>
@@ -799,6 +802,18 @@ const BRACKET_ORDER = [
 /* ─── Bracket Round Label ─── */
 
 function BracketRoundLabel({ stage, isFinal, colors, typography }: { stage: string; isFinal: boolean; colors: any; typography: any }) {
+  const { t } = useTranslation();
+  const translatedStageLabels: Record<string, string> = {
+    PLAYOFF_ROUND_1: t('league.playoffRound1'),
+    PLAYOFF_ROUND_2: t('league.playoffRound2'),
+    PLAYOFFS: t('league.knockoutPlayoffs'),
+    LAST_32: t('league.roundOf32'),
+    LAST_16: t('league.roundOf16'),
+    QUARTER_FINALS: t('league.quarterFinals'),
+    SEMI_FINALS: t('league.semiFinals'),
+    THIRD_PLACE: t('league.thirdPlace'),
+    FINAL: t('league.theFinal'),
+  };
   return (
     <View style={{ alignItems: 'center', marginBottom: 6 }}>
       {isFinal && <Ionicons name="trophy" size={28} color={colors.primary} style={{ marginBottom: 4 }} />}
@@ -810,7 +825,7 @@ function BracketRoundLabel({ stage, isFinal, colors, typography }: { stage: stri
         textTransform: 'uppercase',
         fontSize: 11,
       }}>
-        {STAGE_LABELS[stage] || stage}
+        {translatedStageLabels[stage] || STAGE_LABELS[stage] || stage}
       </Text>
     </View>
   );
@@ -897,6 +912,7 @@ function BracketTieCard({
   navigation: any;
   isFinal: boolean;
 }) {
+  const { t } = useTranslation();
   // TBD placeholder card
   if (tie.matches.length === 0) {
     return (
@@ -910,12 +926,12 @@ function BracketTieCard({
       }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, paddingVertical: 5 }}>
           <Ionicons name="shield-outline" size={16} color={colors.textSecondary} style={{ opacity: 0.4 }} />
-          <Text style={{ flex: 1, marginLeft: 5, fontSize: 11, color: colors.textSecondary, opacity: 0.6 }}>TBD</Text>
+          <Text style={{ flex: 1, marginLeft: 5, fontSize: 11, color: colors.textSecondary, opacity: 0.6 }}>{t('league.tbd')}</Text>
         </View>
         <View style={{ height: 1, backgroundColor: colors.border, opacity: 0.5 }} />
         <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, paddingVertical: 5 }}>
           <Ionicons name="shield-outline" size={16} color={colors.textSecondary} style={{ opacity: 0.4 }} />
-          <Text style={{ flex: 1, marginLeft: 5, fontSize: 11, color: colors.textSecondary, opacity: 0.6 }}>TBD</Text>
+          <Text style={{ flex: 1, marginLeft: 5, fontSize: 11, color: colors.textSecondary, opacity: 0.6 }}>{t('league.tbd')}</Text>
         </View>
       </View>
     );
@@ -979,13 +995,13 @@ function BracketTieCard({
             {awayScore}
           </Text>
         ) : (
-          <Text style={{ fontSize: 9, color: colors.textSecondary }}>vs</Text>
+          <Text style={{ fontSize: 9, color: colors.textSecondary }}>{t('common.vs')}</Text>
         )}
       </View>
 
       {showAgg && (
         <View style={{ borderTopWidth: 1, borderTopColor: colors.border, paddingVertical: 2, alignItems: 'center' }}>
-          <Text style={{ fontSize: 9, color: colors.textSecondary }}>Agg {homeScore}-{awayScore}</Text>
+          <Text style={{ fontSize: 9, color: colors.textSecondary }}>{t('league.agg')} {homeScore}-{awayScore}</Text>
         </View>
       )}
     </Pressable>

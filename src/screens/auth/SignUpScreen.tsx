@@ -3,6 +3,7 @@ import { View, Text, KeyboardAvoidingView, Platform, ScrollView, Dimensions, Pre
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTranslation } from 'react-i18next';
 import { getAuthErrorMessage } from '../../utils/authErrors';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,6 +22,7 @@ type Props = NativeStackScreenProps<AuthStackParamList, 'SignUp'>;
 const { height } = Dimensions.get('window');
 
 export function SignUpScreen({ navigation }: Props) {
+  const { t } = useTranslation();
   const { theme, isDark } = useTheme();
   const { signUp } = useAuth();
   const { colors, spacing, typography } = theme;
@@ -48,27 +50,27 @@ export function SignUpScreen({ navigation }: Props) {
 
   const handleSignUp = async () => {
     if (!username || !email || !password || !confirmPassword) {
-      setError('Please fill in all fields');
+      setError(t('auth.pleaseFillInAllFields'));
       return;
     }
     if (password !== confirmPassword) {
-      setError('Passwords do not match');
+      setError(t('auth.passwordsDoNotMatch'));
       return;
     }
     if (password.length < 6) {
-      setError('Password must be at least 6 characters');
+      setError(t('auth.passwordMustBeAtLeast6'));
       return;
     }
     if (username.length < 3) {
-      setError('Username must be at least 3 characters');
+      setError(t('auth.usernameMustBeAtLeast3'));
       return;
     }
     if (!isUsernameClean(username)) {
-      setError('That username isn\'t allowed. Please choose another.');
+      setError(t('auth.usernameNotAllowed'));
       return;
     }
     if (isUsernameReserved(username)) {
-      setError('That username is reserved. Please choose another.');
+      setError(t('auth.usernameReserved'));
       return;
     }
 
@@ -123,7 +125,7 @@ export function SignUpScreen({ navigation }: Props) {
           }}
         >
           <Ionicons name="chevron-back" size={24} color={colors.foreground} />
-          <Text style={{ ...typography.body, color: colors.foreground }}>Back</Text>
+          <Text style={{ ...typography.body, color: colors.foreground }}>{t('common.back')}</Text>
         </Pressable>
 
         {/* Content pinned to bottom */}
@@ -142,7 +144,7 @@ export function SignUpScreen({ navigation }: Props) {
               marginBottom: spacing.sm,
             }}
           >
-            Create Account
+            {t('auth.createAccount')}
           </Text>
 
           {error ? (
@@ -158,8 +160,8 @@ export function SignUpScreen({ navigation }: Props) {
           ) : null}
 
           <TextInput
-            label="Username"
-            placeholder="Choose a username"
+            label={t('auth.username')}
+            placeholder={t('auth.chooseAUsernamePlaceholder')}
             value={username}
             onChangeText={setUsername}
             autoCapitalize="none"
@@ -169,8 +171,8 @@ export function SignUpScreen({ navigation }: Props) {
           />
           <TextInput
             ref={emailRef}
-            label="Email"
-            placeholder="you@example.com"
+            label={t('auth.email')}
+            placeholder={t('auth.emailPlaceholder')}
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"
@@ -181,8 +183,8 @@ export function SignUpScreen({ navigation }: Props) {
           />
           <TextInput
             ref={passwordRef}
-            label="Password"
-            placeholder="At least 6 characters"
+            label={t('auth.password')}
+            placeholder={t('auth.passwordPlaceholder')}
             value={password}
             onChangeText={setPassword}
             secureTextEntry
@@ -192,8 +194,8 @@ export function SignUpScreen({ navigation }: Props) {
           />
           <TextInput
             ref={confirmPasswordRef}
-            label="Confirm Password"
-            placeholder="Repeat your password"
+            label={t('auth.confirmPassword')}
+            placeholder={t('auth.confirmPasswordPlaceholder')}
             value={confirmPassword}
             onChangeText={setConfirmPassword}
             secureTextEntry
@@ -202,7 +204,7 @@ export function SignUpScreen({ navigation }: Props) {
           />
 
           <Button
-            title="Create Account"
+            title={t('auth.createAccount')}
             onPress={handleSignUp}
             loading={loading}
             size="lg"
@@ -212,7 +214,7 @@ export function SignUpScreen({ navigation }: Props) {
           {/* Divider */}
           <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: spacing.sm }}>
             <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
-            <Text style={{ ...typography.caption, color: colors.textSecondary, marginHorizontal: spacing.md }}>or</Text>
+            <Text style={{ ...typography.caption, color: colors.textSecondary, marginHorizontal: spacing.md }}>{t('common.or')}</Text>
             <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
           </View>
 
@@ -230,8 +232,8 @@ export function SignUpScreen({ navigation }: Props) {
             }}
             onPress={() => navigation.navigate('Login')}
           >
-            Already have an account?{' '}
-            <Text style={{ color: colors.primary, fontWeight: '600' }}>Log In</Text>
+            {t('auth.alreadyHaveAccount')}{' '}
+            <Text style={{ color: colors.primary, fontWeight: '600' }}>{t('common.logIn')}</Text>
           </Text>
         </View>
       </ScrollView>

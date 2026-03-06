@@ -17,8 +17,9 @@ import { SegmentedControl } from '../../components/ui/SegmentedControl';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { Review } from '../../types/review';
 import { User } from '../../types/user';
+import { useTranslation } from 'react-i18next';
 
-const TABS = ['Everyone', 'Friends'] as const;
+// Tab labels are set inside the component via useTranslation
 
 interface WatcherEntry {
   userId: string;
@@ -35,6 +36,8 @@ interface WatcherEntry {
 export function WatchedByScreen({ route, navigation }: any) {
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography } = theme;
+  const { t } = useTranslation();
+  const TABS = useMemo(() => [t('watchedBy.everyone'), t('watchedBy.friends')] as const, [t]);
   const { matchId, initialTab } = route.params;
   const { user } = useAuth();
   const { data: myProfile } = useUserProfile(user?.uid || '');
@@ -111,7 +114,7 @@ export function WatchedByScreen({ route, navigation }: any) {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
-      <ScreenHeader title="Watched by" onBack={() => navigation.goBack()} />
+      <ScreenHeader title={t('matches.watchedBy')} onBack={() => navigation.goBack()} />
 
       {/* Segmented control */}
       <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: spacing.sm }}>
@@ -136,7 +139,7 @@ export function WatchedByScreen({ route, navigation }: any) {
               ) : tabWatchers.length === 0 ? (
                 <EmptyState
                   icon="people-outline"
-                  title={tabIdx === 1 ? 'No friends have watched yet' : 'No one has watched yet'}
+                  title={tabIdx === 1 ? t('watchedBy.noFriendsWatchedYet') : t('watchedBy.noOneWatchedYet')}
                 />
               ) : (
                 <FlatList showsVerticalScrollIndicator={false}

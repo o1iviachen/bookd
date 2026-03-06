@@ -3,6 +3,7 @@ import { View, Text, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { updateUserProfile } from '../../services/firestore/users';
@@ -13,6 +14,7 @@ import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 const DEFAULT_LEAGUES = ['PL', 'BL1', 'PD', 'SA', 'FL1'];
 
 export function OnboardingLeaguesScreen() {
+  const { t } = useTranslation();
   const navigation = useNavigation<any>();
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
@@ -45,15 +47,15 @@ export function OnboardingLeaguesScreen() {
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm }}>
           <Pressable onPress={() => navigation.goBack()} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
             <Ionicons name="chevron-back" size={22} color={colors.primary} />
-            <Text style={{ color: colors.primary, fontSize: 16 }}>Back</Text>
+            <Text style={{ color: colors.primary, fontSize: 16 }}>{t('common.back')}</Text>
           </Pressable>
           <Pressable onPress={handleSkip}>
-            <Text style={{ color: colors.textSecondary, fontSize: 16 }}>Skip</Text>
+            <Text style={{ color: colors.textSecondary, fontSize: 16 }}>{t('common.skip')}</Text>
           </Pressable>
         </View>
-        <Text style={{ ...typography.h3, color: colors.foreground, marginBottom: spacing.xs }}>Follow Leagues</Text>
+        <Text style={{ ...typography.h3, color: colors.foreground, marginBottom: spacing.xs }}>{t('onboarding.followLeagues')}</Text>
         <Text style={{ ...typography.body, color: colors.textSecondary }}>
-          Select the leagues you want to follow. Matches from these leagues will appear in your feed.
+          {t('onboarding.followLeaguesDescription')}
         </Text>
       </View>
 
@@ -124,7 +126,7 @@ export function OnboardingLeaguesScreen() {
             alignItems: 'center',
           }}
         >
-          <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>Done</Text>
+          <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>{t('common.done')}</Text>
         </Pressable>
       </View>
     </SafeAreaView>

@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { Platform, Pressable, Text, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { firebaseAppleSignIn } from '../../services/appleAuth';
 
 export function AppleSignInButton({ compact = false }: { compact?: boolean } = {}) {
+  const { t } = useTranslation();
   const { theme } = useTheme();
   const { colors, spacing, borderRadius } = theme;
   const [loading, setLoading] = useState(false);
@@ -20,7 +22,7 @@ export function AppleSignInButton({ compact = false }: { compact?: boolean } = {
       // onAuthStateChanged handles profile check and routing
     } catch (err: any) {
       if (err.code !== 'ERR_REQUEST_CANCELED') {
-        setError(err.message || 'Apple sign-in failed');
+        setError(err.message || t('auth.appleSignInFailed'));
       }
     } finally {
       setLoading(false);
@@ -57,7 +59,7 @@ export function AppleSignInButton({ compact = false }: { compact?: boolean } = {
           <Ionicons name="logo-apple" size={compact ? 17 : 20} color={colors.foreground} />
         )}
         <Text style={{ color: colors.foreground, fontSize: compact ? 15 : 17, fontWeight: '600' }}>
-          Continue with Apple
+          {t('auth.continueWithApple')}
         </Text>
       </Pressable>
     </>

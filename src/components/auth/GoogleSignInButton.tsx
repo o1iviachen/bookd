@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { Pressable, Text, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useGoogleAuth } from '../../services/googleAuth';
 
 export function GoogleSignInButton({ compact = false }: { compact?: boolean } = {}) {
+  const { t } = useTranslation();
   const { theme } = useTheme();
   const { colors, spacing, borderRadius } = theme;
   const { signInWithGoogle } = useAuth();
@@ -20,7 +22,7 @@ export function GoogleSignInButton({ compact = false }: { compact?: boolean } = 
       setError('');
       signInWithGoogle(id_token)
         .catch((err) => {
-          setError(err.message || 'Google sign-in failed');
+          setError(err.message || t('auth.googleSignInFailed'));
         })
         .finally(() => setLoading(false));
     }
@@ -56,7 +58,7 @@ export function GoogleSignInButton({ compact = false }: { compact?: boolean } = 
           <Ionicons name="logo-google" size={compact ? 17 : 20} color={colors.foreground} />
         )}
         <Text style={{ color: colors.foreground, fontSize: compact ? 15 : 17, fontWeight: '600' }}>
-          Continue with Google
+          {t('auth.continueWithGoogle')}
         </Text>
       </Pressable>
     </>

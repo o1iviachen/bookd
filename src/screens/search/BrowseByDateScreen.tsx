@@ -13,6 +13,7 @@ import { Select } from '../../components/ui/Select';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { SearchStackParamList } from '../../types/navigation';
 import { Match } from '../../types/match';
+import { useTranslation } from 'react-i18next';
 
 type Nav = NativeStackNavigationProp<SearchStackParamList, 'BrowseByDate'>;
 const NUM_COLUMNS = 3;
@@ -34,6 +35,7 @@ export function BrowseByDateScreen() {
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography } = theme;
   const navigation = useNavigation<Nav>();
+  const { t } = useTranslation();
   const { width: screenWidth } = useWindowDimensions();
   const [selectedMonth, setSelectedMonth] = useState(new Date());
   const [filters, setFilters] = useState<MatchFilterState>({ league: 'all', team: 'all', season: 'all' });
@@ -117,9 +119,9 @@ export function BrowseByDateScreen() {
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border }}>
         <Pressable onPress={() => navigation.goBack()} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
           <Ionicons name="chevron-back" size={22} color={colors.primary} />
-          <Text style={{ color: colors.primary, fontSize: 16 }}>Search</Text>
+          <Text style={{ color: colors.primary, fontSize: 16 }}>{t('common.search')}</Text>
         </Pressable>
-        <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 17 }}>Browse by Date</Text>
+        <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 17 }}>{t('search.browseByDateTitle')}</Text>
         <View style={{ width: 60 }} />
       </View>
 
@@ -149,13 +151,13 @@ export function BrowseByDateScreen() {
       {/* Sort + count row */}
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border }}>
         <Text style={{ ...typography.caption, color: colors.textSecondary }}>
-          {filteredMatches.length} {filteredMatches.length === 1 ? 'match' : 'matches'}
+          {t('common.matchCount', { count: filteredMatches.length })}
         </Text>
         <View style={{ width: 150 }}>
           <Select
             value={sort}
             onValueChange={(v) => setSort(v as SortKey)}
-            title="Sort By"
+            title={t('profile.sortBy')}
             options={SORT_OPTIONS}
           />
         </View>
@@ -167,7 +169,7 @@ export function BrowseByDateScreen() {
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
           <Ionicons name="football-outline" size={48} color={colors.textSecondary} />
           <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.md }}>
-            No matches this month
+            {t('search.noMatchesThisMonth')}
           </Text>
         </View>
       ) : (

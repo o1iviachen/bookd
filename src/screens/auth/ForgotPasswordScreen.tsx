@@ -3,6 +3,7 @@ import { View, Text, KeyboardAvoidingView, Platform, ScrollView, Dimensions, Pre
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTranslation } from 'react-i18next';
 import { getAuthErrorMessage } from '../../utils/authErrors';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
@@ -16,6 +17,7 @@ type Props = NativeStackScreenProps<AuthStackParamList, 'ForgotPassword'>;
 const { height } = Dimensions.get('window');
 
 export function ForgotPasswordScreen({ navigation }: Props) {
+  const { t } = useTranslation();
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography } = theme;
 
@@ -26,7 +28,7 @@ export function ForgotPasswordScreen({ navigation }: Props) {
 
   const handleResetPassword = async () => {
     if (!email) {
-      setError('Please enter your email or username');
+      setError(t('auth.pleaseEnterEmailOrUsername'));
       return;
     }
     setError('');
@@ -78,7 +80,7 @@ export function ForgotPasswordScreen({ navigation }: Props) {
             }}
           >
             <Ionicons name="chevron-back" size={24} color={colors.foreground} />
-            <Text style={{ ...typography.body, color: colors.foreground }}>Back</Text>
+            <Text style={{ ...typography.body, color: colors.foreground }}>{t('common.back')}</Text>
           </Pressable>
         </View>
 
@@ -99,7 +101,7 @@ export function ForgotPasswordScreen({ navigation }: Props) {
               marginBottom: spacing.sm,
             }}
           >
-            Reset Password
+            {t('auth.resetPassword')}
           </Text>
 
           <Text
@@ -109,7 +111,7 @@ export function ForgotPasswordScreen({ navigation }: Props) {
               marginBottom: spacing.lg,
             }}
           >
-            Enter your email or username and we'll send you a link to reset your password.
+            {t('auth.resetPasswordDescription')}
           </Text>
 
           {error ? (
@@ -142,7 +144,7 @@ export function ForgotPasswordScreen({ navigation }: Props) {
                   textAlign: 'center',
                 }}
               >
-                Check Your Email
+                {t('auth.checkYourEmail')}
               </Text>
               <Text
                 style={{
@@ -151,10 +153,10 @@ export function ForgotPasswordScreen({ navigation }: Props) {
                   textAlign: 'center',
                 }}
               >
-                A password reset link has been sent. Check your inbox and follow the instructions.
+                {t('auth.passwordResetSent')}
               </Text>
               <Button
-                title="Back to Login"
+                title={t('auth.backToLogin')}
                 onPress={() => navigation.goBack()}
                 size="lg"
                 style={{ marginTop: spacing.md, width: '100%' }}
@@ -163,8 +165,8 @@ export function ForgotPasswordScreen({ navigation }: Props) {
           ) : (
             <>
               <TextInput
-                label="Email or Username"
-                placeholder="you@example.com or username"
+                label={t('auth.emailOrUsername')}
+                placeholder={t('auth.emailOrUsernamePlaceholder')}
                 value={email}
                 onChangeText={setEmail}
                 autoCapitalize="none"
@@ -174,7 +176,7 @@ export function ForgotPasswordScreen({ navigation }: Props) {
               />
 
               <Button
-                title="Send Reset Link"
+                title={t('auth.sendResetLink')}
                 onPress={handleResetPassword}
                 loading={loading}
                 size="lg"
@@ -192,8 +194,8 @@ export function ForgotPasswordScreen({ navigation }: Props) {
             }}
             onPress={() => navigation.goBack()}
           >
-            Remember your password?{' '}
-            <Text style={{ color: colors.primary, fontWeight: '600' }}>Log In</Text>
+            {t('auth.rememberYourPassword')}{' '}
+            <Text style={{ color: colors.primary, fontWeight: '600' }}>{t('common.logIn')}</Text>
           </Text>
         </View>
       </ScrollView>

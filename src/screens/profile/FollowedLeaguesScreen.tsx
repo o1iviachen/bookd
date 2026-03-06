@@ -11,8 +11,10 @@ import { ScreenHeader } from '../../components/ui/ScreenHeader';
 import { TeamLogo } from '../../components/match/TeamLogo';
 import { useFollowableLeagues } from '../../hooks/useLeagues';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
+import { useTranslation } from 'react-i18next';
 
 export function FollowedLeaguesScreen({ navigation }: any) {
+  const { t } = useTranslation();
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
   const { user } = useAuth();
@@ -42,17 +44,17 @@ export function FollowedLeaguesScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
-      <ScreenHeader title="Leagues" onBack={() => navigation.goBack()} />
+      <ScreenHeader title={t('followedLeagues.title')} onBack={() => navigation.goBack()} />
 
       <ScrollView showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'}
         style={{ flex: 1 }}
         contentContainerStyle={{ padding: spacing.md, paddingBottom: 60 }}
       >
         <Text style={{ ...typography.body, color: colors.textSecondary, marginBottom: spacing.md }}>
-          Select the leagues you want to follow. Matches from these leagues will appear in your feed.
+          {t('followedLeagues.description')}
         </Text>
         <TextInput
-          placeholder="Search leagues..."
+          placeholder={t('followedLeagues.searchLeagues')}
           value={search}
           onChangeText={setSearch}
           autoCapitalize="none"

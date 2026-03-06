@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { TeamLogo } from '../match/TeamLogo';
 import { StarRating } from '../ui/StarRating';
@@ -16,6 +17,7 @@ interface DiaryEntryRowProps {
 }
 
 export function DiaryEntryRow({ review, match, isLiked, onPress }: DiaryEntryRowProps) {
+  const { t } = useTranslation();
   const { theme } = useTheme();
   const { colors, spacing, typography } = theme;
 
@@ -64,7 +66,7 @@ export function DiaryEntryRow({ review, match, isLiked, onPress }: DiaryEntryRow
                 {match.homeTeam.shortName}{' '}
                 {isFinished
                   ? `${match.homeScore} - ${match.awayScore}`
-                  : 'vs'}{' '}
+                  : t('common.vs')}{' '}
                 {match.awayTeam.shortName}
               </Text>
               <TeamLogo uri={match.awayTeam.crest} size={18} />

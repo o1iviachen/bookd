@@ -3,6 +3,7 @@ import { View, Text, ScrollView, Pressable, TextInput as RNTextInput, ActivityIn
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { updateUserProfile } from '../../services/firestore/users';
@@ -24,6 +25,7 @@ const POPULAR_COUNTRIES = [
 ];
 
 export function OnboardingTeamsScreen() {
+  const { t } = useTranslation();
   const navigation = useNavigation<any>();
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
@@ -93,13 +95,13 @@ export function OnboardingTeamsScreen() {
       {/* Header */}
       <View style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.md }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm }}>
-          <Text style={{ ...typography.h3, color: colors.foreground }}>Pick Your Teams</Text>
+          <Text style={{ ...typography.h3, color: colors.foreground }}>{t('onboarding.pickYourTeams')}</Text>
           <Pressable onPress={handleSkip}>
-            <Text style={{ color: colors.textSecondary, fontSize: 16 }}>Skip</Text>
+            <Text style={{ color: colors.textSecondary, fontSize: 16 }}>{t('common.skip')}</Text>
           </Pressable>
         </View>
         <Text style={{ ...typography.body, color: colors.textSecondary }}>
-          Choose up to {MAX_CLUBS} clubs and 1 country. You can change this later.
+          {t('onboarding.chooseUpToClubsAndCountry', { max: MAX_CLUBS })}
         </Text>
       </View>
 
@@ -108,7 +110,7 @@ export function OnboardingTeamsScreen() {
         <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.muted, borderRadius: borderRadius.md, paddingHorizontal: 12 }}>
           <Ionicons name="search" size={18} color={colors.textSecondary} />
           <RNTextInput
-            placeholder="Search any team..."
+            placeholder={t('onboarding.searchAnyTeam')}
             placeholderTextColor={colors.textSecondary}
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -137,7 +139,7 @@ export function OnboardingTeamsScreen() {
         {leagues.length > 0 && (
           <View style={{ paddingHorizontal: spacing.md, marginTop: spacing.sm, marginBottom: -spacing.sm }}>
             <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginLeft: spacing.xs }}>
-              Clubs ({selectedClubs.length}/{MAX_CLUBS})
+              {t('onboarding.clubs', { selected: selectedClubs.length, max: MAX_CLUBS })}
             </Text>
           </View>
         )}
@@ -188,7 +190,7 @@ export function OnboardingTeamsScreen() {
         {extraTeams.length > 0 && (
           <View style={{ marginTop: spacing.lg, paddingHorizontal: spacing.md }}>
             <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: spacing.sm, marginLeft: spacing.xs }}>
-              More results
+              {t('onboarding.moreResults')}
             </Text>
             <View style={{ backgroundColor: colors.card, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' }}>
               {extraTeams.map((team, i) => {
@@ -238,7 +240,7 @@ export function OnboardingTeamsScreen() {
         {filteredCountries.length > 0 && (
           <View style={{ marginTop: spacing.lg, paddingHorizontal: spacing.md }}>
             <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: spacing.sm, marginLeft: spacing.xs }}>
-              Country {selectedCountry ? '(1/1)' : '(0/1)'}
+              {t('onboarding.countrySelected', { selected: selectedCountry ? 1 : 0 })}
             </Text>
             <View style={{ backgroundColor: colors.card, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' }}>
               {filteredCountries.map((country, i) => {
@@ -277,7 +279,7 @@ export function OnboardingTeamsScreen() {
 
         {leagues.length === 0 && extraTeams.length === 0 && filteredCountries.length === 0 && !searchLoading && (
           <View style={{ alignItems: 'center', marginTop: spacing.xxl * 2 }}>
-            <Text style={{ ...typography.body, color: colors.textSecondary }}>No results found</Text>
+            <Text style={{ ...typography.body, color: colors.textSecondary }}>{t('common.noResultsFound')}</Text>
           </View>
         )}
       </ScrollView>
@@ -293,7 +295,7 @@ export function OnboardingTeamsScreen() {
             alignItems: 'center',
           }}
         >
-          <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>Next</Text>
+          <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>{t('common.next')}</Text>
         </Pressable>
       </View>
     </SafeAreaView>

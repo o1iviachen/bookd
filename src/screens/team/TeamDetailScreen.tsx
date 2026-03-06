@@ -13,23 +13,26 @@ import { EmptyState } from '../../components/ui/EmptyState';
 import { shortName } from '../../utils/formatName';
 import { nationalityFlag } from '../../utils/flagEmoji';
 import { RatingChart } from '../../components/profile/RatingChart';
+import { useTranslation } from 'react-i18next';
 
 type SortKey = 'recent_played' | 'oldest';
 
-const SORT_OPTIONS: { value: SortKey; label: string }[] = [
-  { value: 'recent_played', label: 'Most Recent' },
-  { value: 'oldest', label: 'Oldest First' },
+const SORT_OPTION_KEYS: { value: SortKey; i18nKey: string }[] = [
+  { value: 'recent_played', i18nKey: 'team.mostRecent' },
+  { value: 'oldest', i18nKey: 'team.oldestFirst' },
 ];
 
-const TABS = [
-  { key: 'matches', label: 'Matches' },
-  { key: 'squad', label: 'Squad' },
-  { key: 'info', label: 'Info' },
+const TAB_KEYS = [
+  { key: 'matches', i18nKey: 'team.matchesTab' },
+  { key: 'squad', i18nKey: 'team.squadTab' },
+  { key: 'info', i18nKey: 'team.infoTab' },
 ];
 
 export function TeamDetailScreen({ route, navigation }: any) {
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
+  const { t } = useTranslation();
+  const SORT_OPTIONS = useMemo(() => SORT_OPTION_KEYS.map((o) => ({ value: o.value, label: t(o.i18nKey) })), [t]);
   const { teamId, teamName, teamCrest } = route.params;
   const [activeTabIndex, setActiveTabIndex] = useState(0);
   const horizontalRef = useRef<ScrollView>(null);
@@ -132,10 +135,10 @@ export function TeamDetailScreen({ route, navigation }: any) {
 
   const positionLabel = (pos: string) => {
     switch (pos) {
-      case 'Goalkeeper': return 'Goalkeepers';
-      case 'Defender': return 'Defenders';
-      case 'Midfielder': return 'Midfielders';
-      case 'Attacker': return 'Forwards';
+      case 'Goalkeeper': return t('person.goalkeepers');
+      case 'Defender': return t('person.defenders');
+      case 'Midfielder': return t('person.midfielders');
+      case 'Attacker': return t('person.forwards');
       default: return pos;
     }
   };
@@ -180,7 +183,7 @@ export function TeamDetailScreen({ route, navigation }: any) {
           showStats
           season={chartSeason}
           seasonOptions={[
-            { value: 'all', label: 'All Seasons' },
+            { value: 'all', label: t('team.allSeasons') },
             ...availableSeasons.map((s) => ({ value: s, label: s })),
           ]}
           onSeasonChange={setChartSeason}
@@ -189,7 +192,7 @@ export function TeamDetailScreen({ route, navigation }: any) {
 
         {/* Tab bar */}
         <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: colors.border, marginTop: spacing.md }}>
-          {TABS.map((tab, i) => {
+          {TAB_KEYS.map((tab, i) => {
             const isActive = activeTabIndex === i;
             return (
               <Pressable
@@ -209,7 +212,7 @@ export function TeamDetailScreen({ route, navigation }: any) {
                   color: isActive ? colors.foreground : colors.textSecondary,
                   fontSize: 15,
                 }}>
-                  {tab.label}
+                  {t(tab.i18nKey)}
                 </Text>
               </Pressable>
             );
@@ -238,13 +241,13 @@ export function TeamDetailScreen({ route, navigation }: any) {
             {/* Sort + count row */}
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingVertical: spacing.sm }}>
               <Text style={{ ...typography.caption, color: colors.textSecondary }}>
-                {filteredMatches.length} {filteredMatches.length === 1 ? 'match' : 'matches'}
+                {t('common.matchCount', { count: filteredMatches.length })}
               </Text>
               <View style={{ width: 140 }}>
                 <Select
                   value={sort}
                   onValueChange={(v) => setSort(v as SortKey)}
-                  title="Sort By"
+                  title={t('team.sortBy')}
                   options={SORT_OPTIONS}
                 />
               </View>
@@ -256,8 +259,8 @@ export function TeamDetailScreen({ route, navigation }: any) {
             ) : filteredMatches.length === 0 ? (
               <EmptyState
                 icon="football-outline"
-                title="No matches found"
-                subtitle="Try adjusting your filters"
+                title={t('team.noMatchesFound')}
+                subtitle={t('team.tryAdjustingFilters')}
               />
             ) : (
               <>
@@ -284,7 +287,7 @@ export function TeamDetailScreen({ route, navigation }: any) {
               {detailLoading ? (
                 <View style={{ paddingVertical: spacing.xxl }}><LoadingSpinner fullScreen={false} /></View>
               ) : squadByPosition.size === 0 ? (
-                <EmptyState icon="people-outline" title="No squad data available" />
+                <EmptyState icon="people-outline" title={t('team.noSquadDataAvailable')} />
               ) : (
                 Array.from(squadByPosition.entries()).map(([position, players], idx, arr) => (
                   <View key={position} style={{ marginBottom: idx < arr.length - 1 ? spacing.lg : 0 }}>
@@ -327,7 +330,7 @@ export function TeamDetailScreen({ route, navigation }: any) {
               ) : (
                 <View style={{ backgroundColor: colors.card, borderRadius: borderRadius.lg, borderWidth: 1, borderColor: colors.border, marginBottom: spacing.md, overflow: 'hidden' }}>
                   <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 15, paddingHorizontal: spacing.md, paddingTop: spacing.md, paddingBottom: spacing.sm }}>
-                    Team Information
+                    {t('team.teamInformation')}
                   </Text>
 
                   {/* Manager */}
@@ -345,7 +348,7 @@ export function TeamDetailScreen({ route, navigation }: any) {
                         opacity: pressed ? 0.7 : 1,
                       })}
                     >
-                      <Text style={{ ...typography.body, color: colors.textSecondary, fontSize: 14 }}>Manager</Text>
+                      <Text style={{ ...typography.body, color: colors.textSecondary, fontSize: 14 }}>{t('team.managerLabel')}</Text>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
                         <Text style={{ ...typography.body, color: colors.primary, fontSize: 14, fontWeight: '500' }}>{shortName(teamDetail.coach.name)}</Text>
                         <Ionicons name="chevron-forward" size={14} color={colors.textSecondary} />
@@ -353,27 +356,35 @@ export function TeamDetailScreen({ route, navigation }: any) {
                     </Pressable>
                   ) : (
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border }}>
-                      <Text style={{ ...typography.body, color: colors.textSecondary, fontSize: 14 }}>Manager</Text>
+                      <Text style={{ ...typography.body, color: colors.textSecondary, fontSize: 14 }}>{t('team.managerLabel')}</Text>
                       <Text style={{ ...typography.body, color: colors.foreground, fontSize: 14, fontWeight: '500' }}>—</Text>
                     </View>
                   )}
 
+                  {/* Country */}
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border }}>
+                    <Text style={{ ...typography.body, color: colors.textSecondary, fontSize: 14 }}>{t('team.countryLabel')}</Text>
+                    <Text style={{ ...typography.body, color: colors.foreground, fontSize: 14, fontWeight: '500' }}>
+                      {teamDetail?.country ? `${nationalityFlag(teamDetail.country)} ${teamDetail.country}` : '—'}
+                    </Text>
+                  </View>
+
                   {/* Founded */}
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border }}>
-                    <Text style={{ ...typography.body, color: colors.textSecondary, fontSize: 14 }}>Founded</Text>
+                    <Text style={{ ...typography.body, color: colors.textSecondary, fontSize: 14 }}>{t('team.founded')}</Text>
                     <Text style={{ ...typography.body, color: colors.foreground, fontSize: 14, fontWeight: '500' }}>{teamDetail?.founded ?? '—'}</Text>
                   </View>
 
                   {/* Venue */}
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border }}>
-                    <Text style={{ ...typography.body, color: colors.textSecondary, fontSize: 14 }}>Stadium</Text>
+                    <Text style={{ ...typography.body, color: colors.textSecondary, fontSize: 14 }}>{t('team.stadium')}</Text>
                     <Text style={{ ...typography.body, color: colors.foreground, fontSize: 14, fontWeight: '500', flex: 1, textAlign: 'right', marginLeft: spacing.md }}>{teamDetail?.venue || '—'}</Text>
                   </View>
 
                   {/* Competitions */}
                   {teamDetail && teamDetail.activeCompetitions.length > 0 && (
                     <View style={{ borderTopWidth: 1, borderTopColor: colors.border, paddingHorizontal: spacing.md, paddingVertical: spacing.sm }}>
-                      <Text style={{ ...typography.body, color: colors.textSecondary, fontSize: 14, marginBottom: spacing.xs }}>Competitions</Text>
+                      <Text style={{ ...typography.body, color: colors.textSecondary, fontSize: 14, marginBottom: spacing.xs }}>{t('team.competitions')}</Text>
                       {teamDetail.activeCompetitions.map((comp) => (
                         <View key={comp.id} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 6, paddingHorizontal: spacing.sm, backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)', borderRadius: borderRadius.sm, marginTop: 4 }}>
                           <Image source={{ uri: comp.emblem }} style={{ width: 18, height: 18 }} contentFit="contain" />
