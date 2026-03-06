@@ -11,7 +11,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useMatch, useMatchDetail } from '../../hooks/useMatches';
 import { useReviewsForMatch } from '../../hooks/useReviews';
-import { useUserProfile, useReviewerTeamIds } from '../../hooks/useUser';
+import { useUserProfile, useReviewerTeamIds, useBlockedUsers } from '../../hooks/useUser';
 import { getUserProfile, updateUserProfile } from '../../services/firestore/users';
 import { useListsForMatch } from '../../hooks/useLists';
 import { TeamLogo } from '../../components/match/TeamLogo';
@@ -107,8 +107,9 @@ export function MatchDetailScreen({ route, navigation }: Props) {
   }, [collapseDistance]);
 
   const { data: match, isLoading } = useMatch(matchId);
-  const { data: reviews } = useReviewsForMatch(matchId);
   const { data: profile } = useUserProfile(user?.uid || '');
+  const blockedUsers = useBlockedUsers(user?.uid);
+  const { data: reviews } = useReviewsForMatch(matchId, blockedUsers);
   const { data: matchLists } = useListsForMatch(matchId);
   const { data: matchDetail } = useMatchDetail(matchId);
 
@@ -185,7 +186,7 @@ export function MatchDetailScreen({ route, navigation }: Props) {
   const isDiscussionTabActive = MATCH_TABS[activeTabIndex]?.key === 'discussion';
 
   const { messages: discussionMessages, isLoading: discussionLoading } =
-    useDiscussion(matchId, isDiscussionTabActive && isDiscussionReadable);
+    useDiscussion(matchId, isDiscussionTabActive && isDiscussionReadable, blockedUsers);
 
   if (isLoading || !match) {
     return <LoadingSpinner />;

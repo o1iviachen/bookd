@@ -5,13 +5,15 @@ import {
   toggleCommentLike,
   deleteComment,
 } from '../services/firestore/comments';
+import { filterBlockedComments } from '../utils/blockFilter';
 
-export function useCommentsForReview(reviewId: string) {
+export function useCommentsForReview(reviewId: string, blockedUsers?: Set<string>) {
   return useQuery({
     queryKey: ['comments', reviewId],
     queryFn: () => getCommentsForReview(reviewId),
     staleTime: 5 * 60 * 1000,
     enabled: !!reviewId,
+    select: (data) => blockedUsers?.size ? filterBlockedComments(data, blockedUsers, (c) => c.userId) : data,
   });
 }
 

@@ -10,7 +10,7 @@ import { useQueries, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
-import { useUserProfile } from '../../hooks/useUser';
+import { useUserProfile, useBlockedUsers } from '../../hooks/useUser';
 import { useMatchesRange } from '../../hooks/useMatches';
 import { useRecentReviewsPaginated, usePopularMatchIdsThisWeek } from '../../hooks/useReviews';
 import { usePopularListsPaginated } from '../../hooks/useLists';
@@ -91,6 +91,7 @@ export function FeedScreen() {
   const navigation = useNavigation<Nav>();
   const { user } = useAuth();
   const { data: profile } = useUserProfile(user?.uid || '');
+  const blockedUsers = useBlockedUsers(user?.uid);
   const [activeTabIndex, setActiveTabIndex] = useState(0);
   const activeTab = TABS[activeTabIndex];
   const pagerRef = useRef<PagerView>(null);
@@ -115,7 +116,7 @@ export function FeedScreen() {
     fetchNextPage: fetchNextReviewPage,
     hasNextPage: hasNextReviewPage,
     isFetchingNextPage: isFetchingNextReviewPage,
-  } = useRecentReviewsPaginated();
+  } = useRecentReviewsPaginated(blockedUsers);
   const {
     data: listPages,
     isLoading: listsLoading,
@@ -139,6 +140,11 @@ export function FeedScreen() {
   const reviews = useMemo(() =>
     reviewPages?.pages.flatMap((p) => p.reviews) || [],
     [reviewPages]
+  );
+  const followingSet = useMemo(() => new Set(profile?.following || []), [profile?.following]);
+  const followingReviews = useMemo(() =>
+    reviews.filter((r) => followingSet.has(r.userId)),
+    [reviews, followingSet]
   );
   const lists = useMemo(() =>
     listPages?.pages.flatMap((p) => p.lists) || [],
@@ -393,7 +399,7 @@ export function FeedScreen() {
         <View key="reviews" style={{ flex: 1 }}>
           {reviewsLoading ? (
             <View style={{ flex: 1, justifyContent: 'center' }}><LoadingSpinner fullScreen={false} /></View>
-          ) : reviews.filter((r) => r.userId !== user?.uid).length === 0 ? (
+          ) : followingReviews.length === 0 ? (
             <ScrollView showsVerticalScrollIndicator={false}
               contentContainerStyle={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: spacing.xl }}
               refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#fff" colors={['#fff']} />}
@@ -405,7 +411,7 @@ export function FeedScreen() {
             </ScrollView>
           ) : (
             <FlatList showsVerticalScrollIndicator={false}
-              data={reviews.filter((r) => r.userId !== user?.uid)}
+              data={followingReviews}
               keyExtractor={(item) => item.id}
               renderItem={({ item, index }) => {
                 const match = reviewMatchMap.get(item.matchId);
@@ -443,7 +449,7 @@ export function FeedScreen() {
                     <ReviewCard
                       review={item}
                       onPress={() => navigation.navigate('ReviewDetail', { reviewId: item.id })}
-                      isLast={index === reviews.filter((r) => r.userId !== user?.uid).length - 1}
+                      isLast={index === followingReviews.length - 1}
                     />
                   </View>
                 );

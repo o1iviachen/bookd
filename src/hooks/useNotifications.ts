@@ -4,13 +4,15 @@ import {
   markNotificationRead,
   markAllNotificationsRead,
 } from '../services/firestore/notifications';
+import { filterBlockedContent } from '../utils/blockFilter';
 
-export function useNotifications(userId: string) {
+export function useNotifications(userId: string, blockedUsers?: Set<string>) {
   return useQuery({
     queryKey: ['notifications', userId],
     queryFn: () => getNotificationsForUser(userId),
     enabled: !!userId,
     staleTime: 30 * 1000,
+    select: (data) => blockedUsers?.size ? filterBlockedContent(data, blockedUsers, (n) => n.senderId) : data,
   });
 }
 

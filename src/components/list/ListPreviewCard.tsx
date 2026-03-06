@@ -7,7 +7,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { getMatchById } from '../../services/matchService';
 import { useListComments, useListLikedBy } from '../../hooks/useLists';
-import { useUserProfile } from '../../hooks/useUser';
+import { useUserProfile, useBlockedUsers } from '../../hooks/useUser';
 import { MatchPosterCard } from '../match/MatchPosterCard';
 import { TeamLogo } from '../match/TeamLogo';
 import { MatchList } from '../../types/list';
@@ -29,7 +29,8 @@ export function ListPreviewCard({ list, onPress, onMatchPress }: ListPreviewCard
   const { theme } = useTheme();
   const { colors, spacing, typography } = theme;
   const { user } = useAuth();
-  const { data: comments } = useListComments(list.id);
+  const blockedUsers = useBlockedUsers(user?.uid);
+  const { data: comments } = useListComments(list.id, blockedUsers);
   const { data: likedBy } = useListLikedBy(list.id);
   const { data: authorProfile } = useUserProfile(list.userId);
   const commentCount = comments?.length ?? 0;

@@ -1,4 +1,5 @@
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import { filterBlockedComments } from '../utils/blockFilter';
 import {
   getListsForUser,
   getRecentLists,
@@ -175,12 +176,13 @@ export function useToggleListLike() {
   });
 }
 
-export function useListComments(listId: string) {
+export function useListComments(listId: string, blockedUsers?: Set<string>) {
   return useQuery({
     queryKey: ['listComments', listId],
     queryFn: () => getCommentsForList(listId),
     enabled: !!listId,
     staleTime: 5 * 60 * 1000,
+    select: (data) => blockedUsers?.size ? filterBlockedComments(data, blockedUsers, (c) => c.userId) : data,
   });
 }
 

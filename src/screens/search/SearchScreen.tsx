@@ -6,7 +6,8 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../../context/ThemeContext';
-import { useSearchUsers } from '../../hooks/useUser';
+import { useAuth } from '../../context/AuthContext';
+import { useSearchUsers, useBlockedUsers } from '../../hooks/useUser';
 import { useSearchMatches } from '../../hooks/useMatches';
 import { useSearchTeams, useSearchPlayers } from '../../hooks/useTeams';
 import { useSearchReviews } from '../../hooks/useReviews';
@@ -82,6 +83,8 @@ export function SearchScreen() {
   const { colors, spacing, typography, borderRadius } = theme;
   const navigation = useNavigation<Nav>();
   const { t } = useTranslation();
+  const { user } = useAuth();
+  const blockedUsers = useBlockedUsers(user?.uid);
   const { width: screenWidth } = useWindowDimensions();
   const [queryStr, setQueryStr] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
@@ -133,7 +136,7 @@ export function SearchScreen() {
   const HORIZONTAL_PADDING = spacing.md;
   const CARD_WIDTH = (screenWidth - HORIZONTAL_PADDING * 2 - GAP * (NUM_COLUMNS - 1)) / NUM_COLUMNS;
 
-  const { data: users, isLoading: usersLoading } = useSearchUsers(debouncedQuery, activeCategory === 'members');
+  const { data: users, isLoading: usersLoading } = useSearchUsers(debouncedQuery, activeCategory === 'members', blockedUsers);
   const { data: matchPages, isLoading: matchesLoading, isFetching: matchesFetching, fetchNextPage: fetchNextMatchPage, hasNextPage: hasNextMatchPage, isFetchingNextPage: isFetchingNextMatchPage } = useSearchMatches(debouncedQuery, activeCategory === 'matches');
   const matchResults = useMemo(() => {
     if (!matchPages?.pages) return [];
@@ -161,7 +164,7 @@ export function SearchScreen() {
     if (!playerPages?.pages) return [];
     return playerPages.pages.flatMap((p) => p.players);
   }, [playerPages]);
-  const { data: reviewResults, isLoading: reviewsLoading, isFetching: reviewsFetching } = useSearchReviews(debouncedQuery, activeCategory === 'reviews');
+  const { data: reviewResults, isLoading: reviewsLoading, isFetching: reviewsFetching } = useSearchReviews(debouncedQuery, activeCategory === 'reviews', blockedUsers);
   const { data: listResults, isLoading: listsLoading, isFetching: listsFetching } = useSearchLists(debouncedQuery, activeCategory === 'lists');
 
   const hasQuery = isSearching && debouncedQuery.length >= 2;

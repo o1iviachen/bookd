@@ -42,6 +42,7 @@ function docToMessage(docSnap: any): DiscussionMessage {
 export function subscribeToDiscussion(
   matchId: number,
   callback: (messages: DiscussionMessage[]) => void,
+  blockedUsers?: Set<string>,
 ): () => void {
   const q = query(
     collection(db, COLLECTION),
@@ -50,7 +51,11 @@ export function subscribeToDiscussion(
     limit(200),
   );
   return onSnapshot(q, (snapshot) => {
-    callback(snapshot.docs.map(docToMessage));
+    let messages = snapshot.docs.map(docToMessage);
+    if (blockedUsers?.size) {
+      messages = messages.filter((m) => !blockedUsers.has(m.userId));
+    }
+    callback(messages);
   });
 }
 

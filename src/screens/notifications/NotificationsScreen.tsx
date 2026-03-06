@@ -6,6 +6,7 @@ import { useQueries } from '@tanstack/react-query';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useNotifications, useMarkNotificationRead, useMarkAllRead } from '../../hooks/useNotifications';
+import { useBlockedUsers } from '../../hooks/useUser';
 import { getUserProfile } from '../../services/firestore/users';
 import { Avatar } from '../../components/ui/Avatar';
 import { formatRelativeTime } from '../../utils/formatDate';
@@ -47,7 +48,8 @@ export function NotificationsScreen({ navigation }: any) {
   const { colors, spacing, typography } = theme;
   const { t } = useTranslation();
   const { user } = useAuth();
-  const { data: notifications, refetch } = useNotifications(user?.uid || '');
+  const blockedUsers = useBlockedUsers(user?.uid);
+  const { data: notifications, refetch } = useNotifications(user?.uid || '', blockedUsers);
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = useCallback(async () => {
     setRefreshing(true);

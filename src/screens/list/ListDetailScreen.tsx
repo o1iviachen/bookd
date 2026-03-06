@@ -6,7 +6,7 @@ import { useQueries } from '@tanstack/react-query';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { usePreferredLanguage } from '../../hooks/usePreferredLanguage';
-import { useUserProfile } from '../../hooks/useUser';
+import { useUserProfile, useBlockedUsers } from '../../hooks/useUser';
 import { useList, useDeleteList, useListLikedBy, useToggleListLike, useListComments, useCreateListComment, useToggleListCommentLike, useDeleteListComment } from '../../hooks/useLists';
 import { getMatchById } from '../../services/matchService';
 import { getUserProfile } from '../../services/firestore/users';
@@ -60,7 +60,8 @@ export function ListDetailScreen({ route, navigation }: any) {
   const deleteListMutation = useDeleteList();
   const { data: likedBy } = useListLikedBy(listId);
   const toggleLike = useToggleListLike();
-  const { data: comments } = useListComments(listId);
+  const blockedUsers = useBlockedUsers(user?.uid);
+  const { data: comments } = useListComments(listId, blockedUsers);
   const createComment = useCreateListComment();
   const toggleCommentLike = useToggleListCommentLike();
   const deleteCommentMutation = useDeleteListComment();

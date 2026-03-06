@@ -7,7 +7,7 @@ import { DiscussionMessage } from '../types/discussion';
  * Uses Firestore onSnapshot — NOT React Query — so updates push automatically.
  * Only subscribes when `enabled` is true (tab active + match readable).
  */
-export function useDiscussion(matchId: number, enabled: boolean) {
+export function useDiscussion(matchId: number, enabled: boolean, blockedUsers?: Set<string>) {
   const [messages, setMessages] = useState<DiscussionMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const initialLoad = useRef(true);
@@ -28,12 +28,12 @@ export function useDiscussion(matchId: number, enabled: boolean) {
         setIsLoading(false);
         initialLoad.current = false;
       }
-    });
+    }, blockedUsers);
 
     return () => {
       unsubscribe();
     };
-  }, [matchId, enabled]);
+  }, [matchId, enabled, blockedUsers]);
 
   return { messages, isLoading };
 }

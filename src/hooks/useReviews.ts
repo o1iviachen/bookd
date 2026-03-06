@@ -20,13 +20,15 @@ import {
 } from '../services/firestore/reviews';
 import { ReviewMedia } from '../types/review';
 import { useAuth } from '../context/AuthContext';
+import { filterBlockedContent } from '../utils/blockFilter';
 
-export function useReviewsForMatch(matchId: number) {
+export function useReviewsForMatch(matchId: number, blockedUsers?: Set<string>) {
   const { user } = useAuth();
   return useQuery({
     queryKey: ['reviews', 'match', matchId, user?.uid],
     queryFn: () => getReviewsForMatch(matchId, user?.uid),
     staleTime: 5 * 60 * 1000,
+    select: (data) => blockedUsers?.size ? filterBlockedContent(data, blockedUsers, (r) => r.userId) : data,
   });
 }
 
@@ -40,17 +42,18 @@ export function useReviewsForUser(userId: string) {
   });
 }
 
-export function useRecentReviews() {
+export function useRecentReviews(blockedUsers?: Set<string>) {
   const { user } = useAuth();
   return useQuery({
     queryKey: ['reviews', 'recent', user?.uid],
     queryFn: () => getRecentReviews(user?.uid),
     staleTime: 5 * 60 * 1000,
     retry: 2,
+    select: (data) => blockedUsers?.size ? filterBlockedContent(data, blockedUsers, (r) => r.userId) : data,
   });
 }
 
-export function useRecentReviewsPaginated() {
+export function useRecentReviewsPaginated(blockedUsers?: Set<string>) {
   const { user } = useAuth();
   return useInfiniteQuery({
     queryKey: ['reviews', 'recent', 'paginated', user?.uid],
@@ -59,6 +62,16 @@ export function useRecentReviewsPaginated() {
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     staleTime: 5 * 60 * 1000,
     retry: 2,
+    select: (data) => {
+      if (!blockedUsers?.size) return data;
+      return {
+        ...data,
+        pages: data.pages.map((page) => ({
+          ...page,
+          reviews: filterBlockedContent(page.reviews, blockedUsers, (r) => r.userId),
+        })),
+      };
+    },
   });
 }
 
@@ -221,13 +234,14 @@ export function useVoteOnReview() {
   });
 }
 
-export function useLikedReviews(userId: string) {
+export function useLikedReviews(userId: string, blockedUsers?: Set<string>) {
   const { user } = useAuth();
   return useQuery({
     queryKey: ['reviews', 'liked', userId],
     queryFn: () => getReviewsUpvotedByUser(userId, user?.uid),
     staleTime: 10 * 60 * 1000,
     enabled: !!userId,
+    select: (data) => blockedUsers?.size ? filterBlockedContent(data, blockedUsers, (r) => r.userId) : data,
   });
 }
 
@@ -272,12 +286,13 @@ export function useUserMotmVote(matchId: number, userId?: string) {
   });
 }
 
-export function useSearchReviews(queryStr: string, active = true) {
+export function useSearchReviews(queryStr: string, active = true, blockedUsers?: Set<string>) {
   return useQuery({
     queryKey: ['searchReviews', queryStr],
     queryFn: () => searchReviews(queryStr),
     enabled: queryStr.length >= 3 && active,
     staleTime: 2 * 60 * 1000,
     placeholderData: keepPreviousData,
+    select: (data) => blockedUsers?.size ? filterBlockedContent(data, blockedUsers, (r) => r.userId) : data,
   });
 }

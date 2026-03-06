@@ -8,7 +8,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useReview, useVoteOnReview, useDeleteReview, useReviewUpvoters } from '../../hooks/useReviews';
 import { useMatch } from '../../hooks/useMatches';
 import { useCommentsForReview, useCreateComment, useToggleCommentLike, useDeleteComment } from '../../hooks/useComments';
-import { useUserProfile } from '../../hooks/useUser';
+import { useUserProfile, useBlockUser, useBlockedUsers } from '../../hooks/useUser';
 import { getUserProfile } from '../../services/firestore/users';
 import { Avatar } from '../../components/ui/Avatar';
 import { StarRating } from '../../components/ui/StarRating';
@@ -45,12 +45,14 @@ export function ReviewDetailScreen({ route, navigation }: any) {
   const { language } = usePreferredLanguage();
   const { data: review, isLoading } = useReview(reviewId);
   const { data: profile } = useUserProfile(user?.uid || '');
+  const blockedUsers = useBlockedUsers(user?.uid);
   const voteMutation = useVoteOnReview();
-  const { data: comments } = useCommentsForReview(reviewId);
+  const { data: comments } = useCommentsForReview(reviewId, blockedUsers);
   const createComment = useCreateComment();
   const toggleLike = useToggleCommentLike();
   const deleteReview = useDeleteReview();
   const deleteCommentMutation = useDeleteComment();
+  const blockMutation = useBlockUser();
   const [commentText, setCommentText] = useState('');
   const [commentGif, setCommentGif] = useState<TenorGif | null>(null);
   const [showGifPicker, setShowGifPicker] = useState(false);
@@ -231,6 +233,28 @@ export function ReviewDetailScreen({ route, navigation }: any) {
     );
   };
 
+  const handleBlockUser = () => {
+    if (!user || !review) return;
+    setShowMenu(false);
+    setTimeout(() => {
+      Alert.alert(
+        t('block.confirmTitle', { username: review.username }),
+        t('block.confirmMessage'),
+        [
+          { text: t('common.cancel'), style: 'cancel' },
+          {
+            text: t('block.blockUser'),
+            style: 'destructive',
+            onPress: () => {
+              blockMutation.mutate({ currentUserId: user.uid, targetUserId: review.userId });
+              navigation.goBack();
+            },
+          },
+        ],
+      );
+    }, 300);
+  };
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
       <KeyboardAvoidingView
@@ -259,6 +283,7 @@ export function ReviewDetailScreen({ route, navigation }: any) {
                 ]
               : [
                   { label: t('common.report'), icon: 'flag-outline', onPress: () => { setShowMenu(false); setShowReport(true); } },
+                  { label: t('block.blockUser'), icon: 'ban-outline', onPress: handleBlockUser, destructive: true },
                 ]
           }
         />
@@ -540,6 +565,7 @@ export function ReviewDetailScreen({ route, navigation }: any) {
                   onChangeText={setCommentText}
                   placeholder={replyingTo ? t('review.replyToUser', { username: replyingTo.username }) : t('review.addAComment')}
                   maxLength={500}
+                  onFocus={() => setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 300)}
                   containerStyle={{ flex: 1 }}
                   inputStyle={{
                     paddingHorizontal: spacing.md,
