@@ -1474,8 +1474,118 @@ function InfoSection({ matchDetail, match, colors, spacing, typography, borderRa
     ...(matchDetail.attendance ? [{ label: t('matches.attendance'), value: matchDetail.attendance.toLocaleString() }] : []),
   ];
 
+  // Build timeline events: goals + missed pens + red cards
+  type TimelineEvent = { minute: number; teamId: number; type: 'goal' | 'penalty_goal' | 'own_goal' | 'missed_pen' | 'red_card'; playerName: string; assist?: string };
+  const timelineEvents: TimelineEvent[] = [
+    ...matchDetail.goals.map(g => ({
+      minute: g.minute,
+      teamId: g.team.id,
+      type: (g.detail === 'Missed Penalty' ? 'missed_pen'
+        : g.detail === 'Own Goal' ? 'own_goal'
+        : g.detail === 'Penalty' ? 'penalty_goal'
+        : 'goal') as TimelineEvent['type'],
+      playerName: g.scorer.name,
+      assist: g.assist?.name,
+    })),
+    ...matchDetail.bookings
+      .filter(b => b.card === 'RED' || b.card === 'YELLOW_RED')
+      .map(b => ({
+        minute: b.minute,
+        teamId: b.team.id,
+        type: 'red_card' as const,
+        playerName: b.player.name,
+      })),
+  ].sort((a, b) => a.minute - b.minute);
+
+  const eventIcon = (type: TimelineEvent['type']) => {
+    switch (type) {
+      case 'goal': return '⚽';
+      case 'penalty_goal': return '⚽';
+      case 'own_goal': return '⚽';
+      case 'missed_pen': return '❌';
+      case 'red_card': return '🟥';
+    }
+  };
+
+  const eventSuffix = (type: TimelineEvent['type']) => {
+    switch (type) {
+      case 'penalty_goal': return ' (P)';
+      case 'own_goal': return ' (OG)';
+      default: return '';
+    }
+  };
+
+  const homeTeamId = match.homeTeam.id;
+
   return (
     <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.sm }}>
+      {/* Key Events Timeline */}
+      {timelineEvents.length > 0 && (
+        <View style={{ backgroundColor: colors.card, borderRadius: borderRadius.lg, borderWidth: 1, borderColor: colors.border, marginBottom: spacing.lg, overflow: 'hidden' }}>
+          <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 15, textAlign: 'center', paddingTop: spacing.md, paddingBottom: spacing.sm }}>
+            {t('matches.keyEvents')}
+          </Text>
+
+          {/* Team headers */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.md, paddingBottom: spacing.sm }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+              <TeamLogo uri={match.homeTeam.crest} size={16} />
+              <Text style={{ ...typography.caption, color: colors.textSecondary }}>{match.homeTeam.shortName}</Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+              <Text style={{ ...typography.caption, color: colors.textSecondary }}>{match.awayTeam.shortName}</Text>
+              <TeamLogo uri={match.awayTeam.crest} size={16} />
+            </View>
+          </View>
+
+          {timelineEvents.map((event, idx) => {
+            const isHome = event.teamId === homeTeamId;
+            const icon = eventIcon(event.type);
+            const suffix = eventSuffix(event.type);
+            const nameColor = event.type === 'own_goal' ? '#ef4444' : event.type === 'red_card' ? '#ef4444' : colors.foreground;
+
+            return (
+              <View key={`${event.minute}-${event.playerName}-${idx}`} style={{ flexDirection: 'row', alignItems: 'center', minHeight: 36 }}>
+                {/* Home side */}
+                <View style={{ flex: 1, alignItems: 'flex-end', paddingRight: spacing.sm }}>
+                  {isHome && (
+                    <Text style={{ ...typography.body, color: nameColor, fontSize: 13 }} numberOfLines={1}>
+                      {icon} {shortName(event.playerName)}{suffix}
+                    </Text>
+                  )}
+                </View>
+
+                {/* Center minute with vertical line */}
+                <View style={{ width: 44, alignItems: 'center', position: 'relative' }}>
+                  {/* Top line */}
+                  {idx > 0 && (
+                    <View style={{ position: 'absolute', top: 0, width: 1, height: '50%', backgroundColor: colors.border }} />
+                  )}
+                  {/* Bottom line */}
+                  {idx < timelineEvents.length - 1 && (
+                    <View style={{ position: 'absolute', bottom: 0, width: 1, height: '50%', backgroundColor: colors.border }} />
+                  )}
+                  <View style={{ backgroundColor: colors.muted, borderRadius: 10, paddingHorizontal: 6, paddingVertical: 2, zIndex: 1 }}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textSecondary }}>{event.minute}'</Text>
+                  </View>
+                </View>
+
+                {/* Away side */}
+                <View style={{ flex: 1, alignItems: 'flex-start', paddingLeft: spacing.sm }}>
+                  {!isHome && (
+                    <Text style={{ ...typography.body, color: nameColor, fontSize: 13 }} numberOfLines={1}>
+                      {shortName(event.playerName)}{suffix} {icon}
+                    </Text>
+                  )}
+                </View>
+              </View>
+            );
+          })}
+
+          <View style={{ height: spacing.sm }} />
+        </View>
+      )}
+
       {/* Match Stats */}
       {stats ? (
         <View style={{ backgroundColor: colors.card, borderRadius: borderRadius.lg, padding: spacing.md, borderWidth: 1, borderColor: colors.border, marginBottom: spacing.lg }}>
