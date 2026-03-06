@@ -96,7 +96,7 @@ export async function sendPreMatchNotifications(): Promise<number> {
 
     await sendBatchPush(tokens, {
       title: 'Match Starting Soon',
-      body: `Discussion is open for ${match.homeTeam.name} vs ${match.awayTeam.name}`,
+      body: `Discussion is open for ${match.homeTeam.name} vs ${match.awayTeam.name}!`,
       data: { type: 'match_pre', matchId: match.id },
     });
 
@@ -135,7 +135,7 @@ export async function handleMatchStatusChange(
   const score = `${after.homeScore ?? '?'}-${after.awayScore ?? '?'}`;
   await sendBatchPush(tokens, {
     title: 'Full Time',
-    body: `Reviews are open for ${after.homeTeam.name} ${score} ${after.awayTeam.name}`,
+    body: `Reviews are open for ${after.homeTeam.name} ${score} ${after.awayTeam.name}!`,
     data: { type: 'match_post', matchId: after.id },
   });
 

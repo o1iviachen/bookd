@@ -229,6 +229,7 @@ export interface ApiTeamInfo {
   team: {
     id: number;
     name: string;
+    country?: string;
     logo: string;
     founded: number | null;
     colors?: {

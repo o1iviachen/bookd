@@ -120,7 +120,7 @@ async function sendPreMatchNotifications() {
         }
         await sendBatchPush(tokens, {
             title: 'Match Starting Soon',
-            body: `Discussion is open for ${match.homeTeam.name} vs ${match.awayTeam.name}`,
+            body: `Discussion is open for ${match.homeTeam.name} vs ${match.awayTeam.name}!`,
             data: { type: 'match_pre', matchId: match.id },
         });
         await matchDoc.ref.update({ notifiedPreMatch: true });
@@ -154,7 +154,7 @@ async function handleMatchStatusChange(change) {
     const score = `${(_a = after.homeScore) !== null && _a !== void 0 ? _a : '?'}-${(_b = after.awayScore) !== null && _b !== void 0 ? _b : '?'}`;
     await sendBatchPush(tokens, {
         title: 'Full Time',
-        body: `Reviews are open for ${after.homeTeam.name} ${score} ${after.awayTeam.name}`,
+        body: `Reviews are open for ${after.homeTeam.name} ${score} ${after.awayTeam.name}!`,
         data: { type: 'match_post', matchId: after.id },
     });
     await change.after.ref.update({ notifiedPostMatch: true });

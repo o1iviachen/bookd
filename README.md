@@ -7,7 +7,7 @@ Letterboxd for football. Track matches you've watched, write reviews, create cur
 ## Features
 
 - **Match browsing** — browse fixtures and results by date, league, or team across 26 competitions
-- **Reviews** — rate matches (1-5 stars), write reviews with text, tags, photos/videos, spoiler toggle, and MOTM voting
+- **Reviews** — rate matches (1-5 stars), write reviews with text, tags, photos/GIFs, spoiler toggle, and MOTM voting
 - **Lists** — create ranked or unranked match collections (e.g. "Best Champions League Finals")
 - **Social** — follow users, upvote/downvote reviews, comment on reviews and lists
 - **Search & discovery** — search matches, teams, players, users, reviews, and lists
@@ -174,6 +174,7 @@ bookd/
 │   │   ├── footballApi.ts    #   Match/team/player queries from Firestore
 │   │   ├── auth.ts           #   Firebase Auth (sign in/up/out, password reset)
 │   │   ├── storage.ts        #   Cloud Storage uploads (avatars, review media)
+│   │   ├── tenor.ts          #   GIF search via Klipy API
 │   │   └── pushNotifications.ts
 │   ├── hooks/                # React Query hooks
 │   │   ├── useMatches.ts     #   Match queries (by date, live polling, prefetch)
@@ -277,15 +278,16 @@ RootNavigator
 | `matches` | Match data synced from API-Football |
 | `matchDetails` | Lineups, match stats, goals, bookings, substitutions |
 | `standings` | League table standings |
-| `competitions` | League/cup metadata |
-| `teams` | Team metadata (name, crest, colors) |
-| `players` | Player data (name, position, nationality, photo) |
+| `leagues` | League/cup metadata (name, code, tier, country, emblem) |
+| `teams` | Team metadata (name, crest, colors, squad, coach, venue) |
+| `players` | Player data (name, position, nationality, photo, currentTeam) |
 | `users` | User profiles, preferences, follow lists, watched/liked matches |
 | `reviews` | Match reviews (rating, text, tags, media, votes) |
 | `reviews/{id}/votes` | Subcollection tracking per-user vote on each review |
 | `lists` | User-created match lists (ranked/unranked) |
-| `comments` | Comments on reviews |
+| `comments` | Comments on reviews (supports GIFs, threaded replies 1 level deep) |
 | `listComments` | Comments on lists |
+| `matchDiscussions` | Real-time match discussion messages |
 | `notifications` | In-app notifications (follows, likes, comments) |
 | `reports` | User-submitted content reports |
 
@@ -304,6 +306,11 @@ interface Match {
   venue: string | null;
   matchday: number | null;
   stage: string | null;
+  ratingSum?: number;           // Pre-computed aggregate — updated atomically on review write/delete
+  ratingCount?: number;
+  ratingBuckets?: Record<string, number>; // Per-bucket counts: key = rating × 10 (e.g. "35" for 3.5)
+  motmVotes?: Record<string, number>;     // Player ID → vote count
+  legacyId?: number;            // Old football-data.org ID for migration
 }
 
 interface Team {
@@ -313,11 +320,36 @@ interface Team {
   crest: string;
 }
 
+interface TeamDetail extends Team {
+  venue: string | null;
+  founded: number | null;
+  clubColors: string | null;
+  country: string;
+  competitionCodes: string[];
+  coach: Coach | null;
+  squad: { id: number; name: string; position: string; nationality: string }[];
+  activeCompetitions: { id: number; name: string; code: string; emblem: string }[];
+}
+
 interface Competition {
   id: number;
   name: string;
   emblem: string;
   code: string;
+}
+
+interface League {
+  code: string;
+  apiId: number;
+  name: string;
+  country: string;
+  emblem: string;
+  tier: number;
+  isCup: boolean;
+  seasonType: 'european' | 'calendar-year';
+  displayOrder: number;
+  enabled: boolean;
+  followable: boolean;
 }
 
 interface User {
@@ -330,6 +362,7 @@ interface User {
   location: string;
   website: string;
   favoriteTeams: string[];
+  favoriteCountry: string | null;
   clubAffiliations: string[];
   followedLeagues: string[];
   followedTeamIds: string[];
@@ -360,12 +393,15 @@ interface Review {
   createdAt: Date;
   editedAt: Date | null;
   userVote: 'up' | 'down' | null;
+  matchLabel?: string;
+  flagged?: boolean;
   motmPlayerId?: number;
+  motmPlayerName?: string;
 }
 
 interface ReviewMedia {
   url: string;
-  type: 'image' | 'video';
+  type: 'image' | 'gif';
   thumbnailUrl?: string;
 }
 
@@ -382,6 +418,20 @@ interface MatchList {
   coverImage: string | null;
 }
 
+interface Comment {
+  id: string;
+  reviewId: string;
+  parentId: string | null;       // Top-level comment ID for replies (1 level deep)
+  userId: string;
+  username: string;
+  userAvatar: string | null;
+  text: string;
+  gifUrl: string | null;         // Klipy GIF URL
+  likes: number;
+  likedBy: string[];
+  createdAt: Date;
+}
+
 interface AppNotification {
   id: string;
   recipientId: string;
@@ -394,6 +444,36 @@ interface AppNotification {
   listId: string | null;
   isRead: boolean;
   createdAt: Date;
+}
+
+interface PersonDetail {
+  id: number;
+  name: string;
+  photo: string | null;
+  dateOfBirth: string | null;
+  nationality: string | null;
+  position: string | null;
+  shirtNumber: number | null;
+  currentTeam: { id: number; name: string; crest: string } | null;
+}
+
+interface MatchDetail {
+  match: Match;
+  homeLineup: MatchPlayer[];
+  homeBench: MatchPlayer[];
+  awayLineup: MatchPlayer[];
+  awayBench: MatchPlayer[];
+  homeCoach: Coach | null;
+  awayCoach: Coach | null;
+  homeFormation: string | null;
+  awayFormation: string | null;
+  goals: MatchGoal[];
+  referee: string | null;
+  stats: MatchStats | null;
+  bookings: MatchBooking[];
+  substitutions: MatchSubstitution[];
+  halfTimeScore: { home: number | null; away: number | null } | null;
+  attendance: number | null;
 }
 ```
 

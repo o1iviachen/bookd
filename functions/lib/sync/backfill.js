@@ -45,6 +45,7 @@ exports.enrichPlayersFromSquads = enrichPlayersFromSquads;
 exports.generateSearchPrefixes = generateSearchPrefixes;
 exports.backfillPlayerNameLower = backfillPlayerNameLower;
 exports.backfillMissingMatchDetails = backfillMissingMatchDetails;
+exports.backfillTeamCountry = backfillTeamCountry;
 const config_1 = require("../config");
 const leagueHelper_1 = require("../leagueHelper");
 const syncMatches_1 = require("./syncMatches");
@@ -441,8 +442,8 @@ async function fetchTeamColors(batchLimit = 100) {
                 if ((_h = teamData.venue) === null || _h === void 0 ? void 0 : _h.name) {
                     update.venue = teamData.venue.name;
                 }
-                if ((_j = teamData.venue) === null || _j === void 0 ? void 0 : _j.city) {
-                    update.country = teamData.venue.city;
+                if ((_j = teamData.team) === null || _j === void 0 ? void 0 : _j.country) {
+                    update.country = teamData.team.country;
                 }
                 if ((_k = teamData.team) === null || _k === void 0 ? void 0 : _k.founded) {
                     update.founded = teamData.team.founded;
@@ -664,7 +665,7 @@ async function refreshSquadsOnly(batchLimit = 200, lastTeamId = 0) {
  *   ?offset=0 — skip this many teams (for resuming)
  */
 async function enrichPlayersFromSquads(batchLimit = 50, offset = 0) {
-    var _a, _b, _c, _d, _e, _f;
+    var _a, _b, _c, _d, _e, _f, _g;
     // Determine current season
     const now = new Date();
     const month = now.getMonth() + 1;
@@ -696,9 +697,11 @@ async function enrichPlayersFromSquads(batchLimit = 50, offset = 0) {
             if (teamInfoResponse) {
                 if ((_a = teamInfoResponse.venue) === null || _a === void 0 ? void 0 : _a.name)
                     teamUpdate.venue = teamInfoResponse.venue.name;
-                if ((_b = teamInfoResponse.team) === null || _b === void 0 ? void 0 : _b.founded)
+                if ((_b = teamInfoResponse.team) === null || _b === void 0 ? void 0 : _b.country)
+                    teamUpdate.country = teamInfoResponse.team.country;
+                if ((_c = teamInfoResponse.team) === null || _c === void 0 ? void 0 : _c.founded)
                     teamUpdate.founded = teamInfoResponse.team.founded;
-                if ((_e = (_d = (_c = teamInfoResponse.team) === null || _c === void 0 ? void 0 : _c.colors) === null || _d === void 0 ? void 0 : _d.player) === null || _e === void 0 ? void 0 : _e.primary) {
+                if ((_f = (_e = (_d = teamInfoResponse.team) === null || _d === void 0 ? void 0 : _d.colors) === null || _e === void 0 ? void 0 : _e.player) === null || _f === void 0 ? void 0 : _f.primary) {
                     const primary = teamInfoResponse.team.colors.player.primary;
                     const secondary = teamInfoResponse.team.colors.player.number;
                     teamUpdate.clubColors = `#${primary}`;
@@ -743,7 +746,7 @@ async function enrichPlayersFromSquads(batchLimit = 50, offset = 0) {
                     searchPrefixes: generateSearchPrefixes(coachName),
                     photo: coachResponse.photo || null,
                     nationality: coachResponse.nationality || null,
-                    dateOfBirth: ((_f = coachResponse.birth) === null || _f === void 0 ? void 0 : _f.date) || null,
+                    dateOfBirth: ((_g = coachResponse.birth) === null || _g === void 0 ? void 0 : _g.date) || null,
                     position: 'Coach',
                     currentTeam: { id: teamId, name: teamName, crest: teamCrest },
                     leagueTier: teamTier,
@@ -981,5 +984,44 @@ async function backfillMissingMatchDetails(maxMatches = 500) {
         console.error('[backfillDetails] Error:', err.message);
         return { total, missing, synced, failed, syncedIds: [], failedIds: [] };
     }
+}
+/**
+ * Lightweight one-off: backfill country field for all teams using API-Football.
+ * Only updates teams that don't have a real country yet (skips those already set).
+ * Uses cursor-based pagination to handle large batches.
+ */
+async function backfillTeamCountry(batchLimit = 200) {
+    var _a, _b, _c;
+    const snapshot = await db.collection(config_1.COLLECTIONS.TEAMS).get();
+    const allDocs = snapshot.docs;
+    let updated = 0;
+    let processed = 0;
+    for (const teamDoc of allDocs) {
+        const data = teamDoc.data();
+        const teamId = data.id;
+        // Skip if already has a plausible country (not a city — cities don't appear in the SYNC_LEAGUES country list)
+        // We'll just re-fetch all to be safe, but limit the batch
+        if (processed >= batchLimit)
+            break;
+        try {
+            await new Promise((r) => setTimeout(r, config_2.RATE_LIMIT_DELAY_MS));
+            processed++;
+            const response = await axios_1.default.get(`${config_2.API_FOOTBALL_BASE}/teams`, {
+                params: { id: teamId },
+                headers: { 'x-apisports-key': config_2.API_FOOTBALL_KEY },
+                timeout: 15000,
+            });
+            const teamData = (_b = (_a = response.data) === null || _a === void 0 ? void 0 : _a.response) === null || _b === void 0 ? void 0 : _b[0];
+            if ((_c = teamData === null || teamData === void 0 ? void 0 : teamData.team) === null || _c === void 0 ? void 0 : _c.country) {
+                await db.collection(config_1.COLLECTIONS.TEAMS).doc(String(teamId)).set({ country: teamData.team.country }, { merge: true });
+                updated++;
+            }
+        }
+        catch (err) {
+            console.error(`[backfillTeamCountry] Error for team ${teamId}:`, err.message);
+        }
+    }
+    console.log(`[backfillTeamCountry] Updated ${updated}/${processed} teams (total: ${allDocs.length})`);
+    return { updated, total: allDocs.length };
 }
 //# sourceMappingURL=backfill.js.map

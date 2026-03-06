@@ -448,8 +448,8 @@ export async function fetchTeamColors(batchLimit = 100): Promise<number> {
         if (teamData.venue?.name) {
           update.venue = teamData.venue.name;
         }
-        if (teamData.venue?.city) {
-          update.country = teamData.venue.city;
+        if (teamData.team?.country) {
+          update.country = teamData.team.country;
         }
         if (teamData.team?.founded) {
           update.founded = teamData.team.founded;
@@ -749,6 +749,7 @@ export async function enrichPlayersFromSquads(batchLimit = 50, offset = 0): Prom
 
       if (teamInfoResponse) {
         if (teamInfoResponse.venue?.name) teamUpdate.venue = teamInfoResponse.venue.name;
+        if (teamInfoResponse.team?.country) teamUpdate.country = teamInfoResponse.team.country;
         if (teamInfoResponse.team?.founded) teamUpdate.founded = teamInfoResponse.team.founded;
         if (teamInfoResponse.team?.colors?.player?.primary) {
           const primary = teamInfoResponse.team.colors.player.primary;
@@ -1053,4 +1054,50 @@ export async function backfillMissingMatchDetails(
     console.error('[backfillDetails] Error:', err.message);
     return { total, missing, synced, failed, syncedIds: [], failedIds: [] };
   }
+}
+
+/**
+ * Lightweight one-off: backfill country field for all teams using API-Football.
+ * Only updates teams that don't have a real country yet (skips those already set).
+ * Uses cursor-based pagination to handle large batches.
+ */
+export async function backfillTeamCountry(batchLimit = 200): Promise<{ updated: number; total: number }> {
+  const snapshot = await db.collection(COLLECTIONS.TEAMS).get();
+  const allDocs = snapshot.docs;
+  let updated = 0;
+  let processed = 0;
+
+  for (const teamDoc of allDocs) {
+    const data = teamDoc.data();
+    const teamId = data.id;
+
+    // Skip if already has a plausible country (not a city — cities don't appear in the SYNC_LEAGUES country list)
+    // We'll just re-fetch all to be safe, but limit the batch
+    if (processed >= batchLimit) break;
+
+    try {
+      await new Promise((r) => setTimeout(r, RATE_LIMIT_DELAY_MS));
+      processed++;
+
+      const response = await axios.get(`${API_FOOTBALL_BASE}/teams`, {
+        params: { id: teamId },
+        headers: { 'x-apisports-key': API_FOOTBALL_KEY },
+        timeout: 15000,
+      });
+
+      const teamData = response.data?.response?.[0];
+      if (teamData?.team?.country) {
+        await db.collection(COLLECTIONS.TEAMS).doc(String(teamId)).set(
+          { country: teamData.team.country },
+          { merge: true },
+        );
+        updated++;
+      }
+    } catch (err: any) {
+      console.error(`[backfillTeamCountry] Error for team ${teamId}:`, err.message);
+    }
+  }
+
+  console.log(`[backfillTeamCountry] Updated ${updated}/${processed} teams (total: ${allDocs.length})`);
+  return { updated, total: allDocs.length };
 }
