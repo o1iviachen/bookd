@@ -16,12 +16,12 @@ type Props = NativeStackScreenProps<AuthStackParamList, 'ForgotPassword'>;
 
 const { height } = Dimensions.get('window');
 
-export function ForgotPasswordScreen({ navigation }: Props) {
+export function ForgotPasswordScreen({ route, navigation }: Props) {
   const { t } = useTranslation();
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography } = theme;
 
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(route.params?.email || '');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
@@ -55,7 +55,7 @@ export function ForgotPasswordScreen({ navigation }: Props) {
         keyboardShouldPersistTaps="handled"
       >
         {/* Hero image area */}
-        <View style={{ height: height * 0.55 }}>
+        <View style={{ height: height * 0.35 }}>
           <Image
             source={require('../../../assets/stadium-background.jpg')}
             style={{ width: '100%', height: '100%' }}

@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, KeyboardAvoidingView, Platform, ScrollView, Dimensions, Pressable, Keyboard, TextInput as RNTextInput } from 'react-native';
+import React, { useRef, useState } from 'react';
+import { View, Text, KeyboardAvoidingView, Platform, ScrollView, Dimensions, Pressable, TextInput as RNTextInput } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -29,13 +29,6 @@ export function LoginScreen({ navigation }: Props) {
   const scrollRef = useRef<ScrollView>(null);
   const passwordRef = useRef<RNTextInput>(null);
 
-  useEffect(() => {
-    const event = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const sub = Keyboard.addListener(event, () => {
-      setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
-    });
-    return () => sub.remove();
-  }, []);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -153,7 +146,7 @@ export function LoginScreen({ navigation }: Props) {
             onSubmitEditing={handleLogin}
           />
 
-          <Pressable onPress={() => navigation.navigate('ForgotPassword')} style={{ alignSelf: 'flex-end', marginTop: -spacing.sm, marginBottom: spacing.md }}>
+          <Pressable onPress={() => navigation.navigate('ForgotPassword', { email })} style={{ alignSelf: 'flex-end', marginTop: -spacing.sm, marginBottom: spacing.md }}>
             <Text style={{ ...typography.caption, color: colors.primary, fontWeight: '600' }}>
               {t('auth.forgotPassword')}
             </Text>
