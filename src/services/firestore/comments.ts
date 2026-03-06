@@ -27,6 +27,7 @@ export interface Comment {
   likes: number;
   likedBy: string[];
   createdAt: Date;
+  language?: string;
 }
 
 function docToComment(docSnap: any): Comment {
@@ -43,6 +44,7 @@ function docToComment(docSnap: any): Comment {
     likes: data.likes || 0,
     likedBy: data.likedBy || [],
     createdAt: data.createdAt?.toDate() || new Date(),
+    language: data.language || undefined,
   };
 }
 
@@ -54,6 +56,7 @@ export async function createComment(
   text: string,
   parentId: string | null = null,
   gifUrl: string | null = null,
+  language?: string,
 ): Promise<string> {
   const ref = await addDoc(collection(db, 'comments'), {
     reviewId,
@@ -66,6 +69,7 @@ export async function createComment(
     likes: 0,
     likedBy: [],
     createdAt: serverTimestamp(),
+    ...(language && { language }),
   });
 
   // Notify review author

@@ -26,6 +26,7 @@ export function useCreateComment() {
       text: string;
       parentId?: string | null;
       gifUrl?: string | null;
+      language?: string;
     }) => createComment(
       params.reviewId,
       params.userId,
@@ -34,6 +35,7 @@ export function useCreateComment() {
       params.text,
       params.parentId || null,
       params.gifUrl || null,
+      params.language,
     ),
     onSuccess: (_, params) => {
       queryClient.invalidateQueries({ queryKey: ['comments', params.reviewId] });

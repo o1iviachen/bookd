@@ -7,6 +7,7 @@ import { Image } from 'expo-image';
 import { useQueries } from '@tanstack/react-query';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
+import { usePreferredLanguage } from '../../hooks/usePreferredLanguage';
 import { useUserProfile } from '../../hooks/useUser';
 import { useCreateList } from '../../hooks/useLists';
 import { getMatchById } from '../../services/matchService';
@@ -16,13 +17,16 @@ import { MatchPickerModal } from '../../components/match/MatchPickerModal';
 import { Match } from '../../types/match';
 import { ProfileStackParamList } from '../../types/navigation';
 import { isTextClean } from '../../utils/moderation';
+import { useTranslation } from 'react-i18next';
 
 type Props = NativeStackScreenProps<ProfileStackParamList, 'CreateList'>;
 
 export function CreateListScreen({ navigation }: Props) {
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
+  const { t } = useTranslation();
   const { user } = useAuth();
+  const { language } = usePreferredLanguage();
   const { data: profile } = useUserProfile(user?.uid || '');
   const createList = useCreateList();
 
@@ -52,11 +56,11 @@ export function CreateListScreen({ navigation }: Props) {
 
   const handleCreate = () => {
     if (!name.trim()) {
-      Alert.alert('Name Required', 'Please enter a list name.');
+      Alert.alert(t('common.error'), t('list.listName'));
       return;
     }
     if (!isTextClean(name) || !isTextClean(description)) {
-      Alert.alert('Content Warning', 'Your list contains inappropriate language. Please revise.');
+      Alert.alert(t('review.contentWarning'), t('review.reviewContainsInappropriate'));
       return;
     }
     if (!user || !profile) return;
@@ -69,10 +73,11 @@ export function CreateListScreen({ navigation }: Props) {
         description: description.trim(),
         matchIds,
         ranked,
+        language,
       },
       {
         onSuccess: (listId) => navigation.replace('ListDetail', { listId }),
-        onError: () => Alert.alert('Error', 'Failed to create list. Try again.'),
+        onError: () => Alert.alert(t('common.error'), t('common.error')),
       }
     );
   };
@@ -111,7 +116,7 @@ export function CreateListScreen({ navigation }: Props) {
           <Ionicons name="close" size={24} color={colors.foreground} />
         </Pressable>
         <Text style={{ ...typography.h4, color: colors.foreground, flex: 1, textAlign: 'center' }}>
-          New List
+          {t('list.newList')}
         </Text>
         <View style={{ width: 24 }} />
       </View>
@@ -123,12 +128,12 @@ export function CreateListScreen({ navigation }: Props) {
       >
         {/* List info fields */}
         <View style={{ padding: spacing.md }}>
-          <TextInput label="List Name" value={name} onChangeText={setName} placeholder="e.g. Best UCL Finals" />
+          <TextInput label={t('list.listName')} value={name} onChangeText={setName} placeholder={t('list.listNamePlaceholder')} />
           <TextInput
-            label="Description (optional)"
+            label={t('list.descriptionOptional')}
             value={description}
             onChangeText={setDescription}
-            placeholder="What's this list about?"
+            placeholder={t('list.descriptionPlaceholder')}
             multiline
             numberOfLines={3}
           />
@@ -143,9 +148,9 @@ export function CreateListScreen({ navigation }: Props) {
             }}
           >
             <View style={{ flex: 1, marginRight: spacing.md }}>
-              <Text style={{ ...typography.bodyBold, color: colors.foreground }}>Ranked list</Text>
+              <Text style={{ ...typography.bodyBold, color: colors.foreground }}>{t('list.rankedList')}</Text>
               <Text style={{ ...typography.caption, color: colors.textSecondary, marginTop: 2 }}>
-                Manually order matches by your ranking
+                {t('list.rankedListDescription')}
               </Text>
             </View>
             <Switch
@@ -161,7 +166,7 @@ export function CreateListScreen({ navigation }: Props) {
         <View style={{ borderTopWidth: 1, borderTopColor: colors.border }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingVertical: spacing.md }}>
             <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 16 }}>
-              Matches ({matchIds.length})
+              {t('list.matchesCount', { count: matchIds.length })}
             </Text>
             <Pressable
               onPress={() => setShowPicker(true)}
@@ -176,7 +181,7 @@ export function CreateListScreen({ navigation }: Props) {
               }}
             >
               <Ionicons name="add" size={16} color="#fff" />
-              <Text style={{ ...typography.caption, color: '#fff', fontWeight: '600' }}>Add</Text>
+              <Text style={{ ...typography.caption, color: '#fff', fontWeight: '600' }}>{t('common.add')}</Text>
             </Pressable>
           </View>
 
@@ -185,7 +190,7 @@ export function CreateListScreen({ navigation }: Props) {
             <View style={{ alignItems: 'center', paddingVertical: spacing.xl, paddingHorizontal: spacing.xl }}>
               <Ionicons name="list-outline" size={36} color={colors.textSecondary} />
               <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.sm }}>
-                No matches yet. Tap Add to get started.
+                {t('list.noMatchesYet')}
               </Text>
             </View>
           ) : (
@@ -235,7 +240,7 @@ export function CreateListScreen({ navigation }: Props) {
                     </View>
                   ) : (
                     <View style={{ flex: 1 }}>
-                      <Text style={{ ...typography.body, color: colors.textSecondary }}>Loading...</Text>
+                      <Text style={{ ...typography.body, color: colors.textSecondary }}>{t('common.loading')}</Text>
                     </View>
                   )}
 
@@ -274,7 +279,7 @@ export function CreateListScreen({ navigation }: Props) {
         }}
       >
         <Button
-          title="Create List"
+          title={t('list.createList')}
           onPress={handleCreate}
           loading={createList.isPending}
           disabled={!name.trim()}

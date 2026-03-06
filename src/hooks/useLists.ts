@@ -78,7 +78,8 @@ export function useCreateList() {
       description: string;
       matchIds: number[];
       ranked?: boolean;
-    }) => createList(params.userId, params.username, params.name, params.description, params.matchIds, params.ranked),
+      language?: string;
+    }) => createList(params.userId, params.username, params.name, params.description, params.matchIds, params.ranked, params.language),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['lists'] });
     },
@@ -88,7 +89,7 @@ export function useCreateList() {
 export function useUpdateList() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (params: { listId: string; data: { name?: string; description?: string; ranked?: boolean } }) =>
+    mutationFn: (params: { listId: string; data: { name?: string; description?: string; ranked?: boolean; language?: string } }) =>
       updateList(params.listId, params.data),
     onSuccess: (_, params) => {
       queryClient.invalidateQueries({ queryKey: ['lists'] });
@@ -193,7 +194,8 @@ export function useCreateListComment() {
       userAvatar: string | null;
       text: string;
       parentId?: string | null;
-    }) => createListComment(params.listId, params.userId, params.username, params.userAvatar, params.text, params.parentId || null),
+      language?: string;
+    }) => createListComment(params.listId, params.userId, params.username, params.userAvatar, params.text, params.parentId || null, params.language),
     onSuccess: (_, params) => {
       queryClient.invalidateQueries({ queryKey: ['listComments', params.listId] });
       queryClient.invalidateQueries({ queryKey: ['lists'] });

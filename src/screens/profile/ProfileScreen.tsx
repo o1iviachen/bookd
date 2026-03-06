@@ -20,11 +20,14 @@ import { RatingChart } from '../../components/profile/RatingChart';
 import { ProfileStackParamList } from '../../types/navigation';
 import { POPULAR_TEAMS } from '../../utils/constants';
 import { nationalityFlag } from '../../utils/flagEmoji';
+import { TranslateButton } from '../../components/ui/TranslateButton';
+import { useTranslation } from 'react-i18next';
 import { Match } from '../../types/match';
 
 type Nav = NativeStackNavigationProp<ProfileStackParamList, 'Profile'>;
 
 export function ProfileScreen() {
+  const { t } = useTranslation();
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
   const navigation = useNavigation<Nav>();
@@ -96,13 +99,13 @@ export function ProfileScreen() {
     return team ? { id: team.id, name: team.name, crest: team.crest } : null;
   }).filter(Boolean) as { id: string; name: string; crest: string }[];
 
-  const navLinks: { label: string; count: number | string; icon: keyof typeof Ionicons.glyphMap }[] = [
-    { label: 'Matches', count: `${new Set((reviews || []).map((r) => r.matchId)).size} this year`, icon: 'football-outline' },
-    { label: 'Diary', count: reviews?.length || 0, icon: 'book-outline' },
-    { label: 'Reviews', count: (reviews || []).filter((r) => r.text?.trim().length > 0).length, icon: 'reorder-three-outline' },
-    { label: 'Lists', count: lists?.length || 0, icon: 'list-outline' },
-    { label: 'Likes', count: (profile?.likedMatchIds?.length || 0) + (likedReviews?.length || 0) + (likedLists?.length || 0), icon: 'heart-outline' },
-    { label: 'Tags', count: new Set((reviews || []).flatMap((r) => r.tags)).size, icon: 'pricetag-outline' },
+  const navLinks: { label: string; count: number | string; icon: keyof typeof Ionicons.glyphMap; screen: string }[] = [
+    { label: t('common.matches'), count: `${new Set((reviews || []).map((r) => r.matchId)).size} ${t('profile.thisYear')}`, icon: 'football-outline', screen: 'Games' },
+    { label: t('common.diary'), count: reviews?.length || 0, icon: 'book-outline', screen: 'Diary' },
+    { label: t('common.reviews'), count: (reviews || []).filter((r) => r.text?.trim().length > 0).length, icon: 'reorder-three-outline', screen: 'Reviews' },
+    { label: t('common.lists'), count: lists?.length || 0, icon: 'list-outline', screen: 'MyLists' },
+    { label: t('common.likes'), count: (profile?.likedMatchIds?.length || 0) + (likedReviews?.length || 0) + (likedLists?.length || 0), icon: 'heart-outline', screen: 'Likes' },
+    { label: t('common.tags'), count: new Set((reviews || []).flatMap((r) => r.tags)).size, icon: 'pricetag-outline', screen: 'Tags' },
   ];
 
   return (
@@ -149,9 +152,12 @@ export function ProfileScreen() {
 
         {/* Bio */}
         {profile?.bio ? (
-          <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.sm, paddingHorizontal: spacing.xl }}>
-            {profile.bio}
-          </Text>
+          <View style={{ marginTop: spacing.sm, paddingHorizontal: spacing.xl, alignItems: 'center' }}>
+            <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center' }}>
+              {profile.bio}
+            </Text>
+            <TranslateButton text={profile.bio} contentLanguage={profile.preferredLanguage} />
+          </View>
         ) : null}
 
         {/* Location & Website */}
@@ -185,13 +191,13 @@ export function ProfileScreen() {
 
         {/* Stats row — Instagram-style */}
         <View style={{ flexDirection: 'row', justifyContent: 'center', gap: spacing.xxl, marginTop: spacing.sm, paddingVertical: spacing.sm }}>
-          <Pressable onPress={() => navigation.navigate('FollowList', { userIds: profile?.following || [], title: 'Following' })} style={{ alignItems: 'center' }}>
+          <Pressable onPress={() => navigation.navigate('FollowList', { userIds: profile?.following || [], title: t('common.following') })} style={{ alignItems: 'center' }}>
             <Text style={{ ...typography.h4, color: colors.foreground }}>{profile?.following?.length || 0}</Text>
-            <Text style={{ ...typography.small, color: colors.textSecondary }}>Following</Text>
+            <Text style={{ ...typography.small, color: colors.textSecondary }}>{t('common.following')}</Text>
           </Pressable>
-          <Pressable onPress={() => navigation.navigate('FollowList', { userIds: profile?.followers || [], title: 'Followers' })} style={{ alignItems: 'center' }}>
+          <Pressable onPress={() => navigation.navigate('FollowList', { userIds: profile?.followers || [], title: t('common.followers') })} style={{ alignItems: 'center' }}>
             <Text style={{ ...typography.h4, color: colors.foreground }}>{profile?.followers?.length || 0}</Text>
-            <Text style={{ ...typography.small, color: colors.textSecondary }}>Followers</Text>
+            <Text style={{ ...typography.small, color: colors.textSecondary }}>{t('common.followers')}</Text>
           </Pressable>
         </View>
 
@@ -199,7 +205,7 @@ export function ProfileScreen() {
         <View style={{ marginTop: spacing.md, paddingHorizontal: HORIZONTAL_PADDING, paddingVertical: spacing.md, backgroundColor: `${colors.accent}30`, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.border }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm }}>
             <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1 }}>
-              Favourite Matches
+              {t('profile.favouriteMatches')}
             </Text>
           </View>
           {favoriteMatchIds.length > 0 && favoriteMatchQueries.some((q) => q.isLoading) ? (
@@ -234,7 +240,7 @@ export function ProfileScreen() {
             >
               <Ionicons name="add" size={22} color={colors.textSecondary} />
               <Text style={{ ...typography.caption, color: colors.textSecondary, fontSize: 9 }}>
-                Add favourites
+                {t('profile.addFavourites')}
               </Text>
             </Pressable>
           )}
@@ -245,10 +251,10 @@ export function ProfileScreen() {
           <View style={{ paddingHorizontal: HORIZONTAL_PADDING, paddingVertical: spacing.md, backgroundColor: `${colors.accent}30`, borderColor: colors.border }}>
             <Pressable onPress={() => navigation.navigate('Diary', {})} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm }}>
               <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1 }}>
-                Recent Activity
+                {t('profile.recentActivity')}
               </Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-                <Text style={{ ...typography.caption, color: colors.primary }}>More</Text>
+                <Text style={{ ...typography.caption, color: colors.primary }}>{t('common.more')}</Text>
                 <Ionicons name="chevron-forward" size={14} color={colors.primary} />
               </View>
             </Pressable>
@@ -336,14 +342,7 @@ export function ProfileScreen() {
             {navLinks.map((link, i) => (
               <Pressable
                 key={link.label}
-                onPress={() => {
-                  if (link.label === 'Matches') navigation.navigate('Games', {});
-                  else if (link.label === 'Diary') navigation.navigate('Diary', {});
-                  else if (link.label === 'Reviews') navigation.navigate('Reviews', {});
-                  else if (link.label === 'Lists') navigation.navigate('MyLists', {});
-                  else if (link.label === 'Likes') navigation.navigate('Likes', {});
-                  else if (link.label === 'Tags') navigation.navigate('Tags', {});
-                }}
+                onPress={() => navigation.navigate(link.screen as any, {})}
                 style={({ pressed }) => ({
                   flexDirection: 'row',
                   alignItems: 'center',

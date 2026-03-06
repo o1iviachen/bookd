@@ -19,9 +19,12 @@ import { ScreenHeader } from '../../components/ui/ScreenHeader';
 import { RatingChart } from '../../components/profile/RatingChart';
 import { POPULAR_TEAMS } from '../../utils/constants';
 import { nationalityFlag } from '../../utils/flagEmoji';
+import { TranslateButton } from '../../components/ui/TranslateButton';
+import { useTranslation } from 'react-i18next';
 import { Match } from '../../types/match';
 
 export function UserProfileScreen({ route, navigation }: any) {
+  const { t } = useTranslation();
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
   const { userId } = route.params;
@@ -140,12 +143,12 @@ export function UserProfileScreen({ route, navigation }: any) {
   }).filter(Boolean) as { id: string; name: string; crest: string }[];
 
   const navLinks: { label: string; count: number | string; icon: keyof typeof Ionicons.glyphMap; screen: string }[] = [
-    { label: 'Matches', count: `${new Set((reviews || []).map((r) => r.matchId)).size} this year`, icon: 'football-outline', screen: 'Games' },
-    { label: 'Diary', count: reviews?.length || 0, icon: 'book-outline', screen: 'Diary' },
-    { label: 'Reviews', count: (reviews || []).filter((r) => r.text?.trim().length > 0).length, icon: 'reorder-three-outline', screen: 'Reviews' },
-    { label: 'Lists', count: lists?.length || 0, icon: 'list-outline', screen: 'MyLists' },
-    { label: 'Likes', count: (profile?.likedMatchIds?.length || 0) + (likedReviews?.length || 0) + (likedLists?.length || 0), icon: 'heart-outline', screen: 'Likes' },
-    { label: 'Tags', count: new Set((reviews || []).flatMap((r) => r.tags)).size, icon: 'pricetag-outline', screen: 'Tags' },
+    { label: t('common.matches'), count: `${new Set((reviews || []).map((r) => r.matchId)).size} ${t('profile.thisYear')}`, icon: 'football-outline', screen: 'Games' },
+    { label: t('common.diary'), count: reviews?.length || 0, icon: 'book-outline', screen: 'Diary' },
+    { label: t('common.reviews'), count: (reviews || []).filter((r) => r.text?.trim().length > 0).length, icon: 'reorder-three-outline', screen: 'Reviews' },
+    { label: t('common.lists'), count: lists?.length || 0, icon: 'list-outline', screen: 'MyLists' },
+    { label: t('common.likes'), count: (profile?.likedMatchIds?.length || 0) + (likedReviews?.length || 0) + (likedLists?.length || 0), icon: 'heart-outline', screen: 'Likes' },
+    { label: t('common.tags'), count: new Set((reviews || []).flatMap((r) => r.tags)).size, icon: 'pricetag-outline', screen: 'Tags' },
   ];
 
   return (
@@ -183,9 +186,12 @@ export function UserProfileScreen({ route, navigation }: any) {
 
         {/* Bio */}
         {profile.bio ? (
-          <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.sm, paddingHorizontal: spacing.xl }}>
-            {profile.bio}
-          </Text>
+          <View style={{ marginTop: spacing.sm, paddingHorizontal: spacing.xl, alignItems: 'center' }}>
+            <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center' }}>
+              {profile.bio}
+            </Text>
+            <TranslateButton text={profile.bio} contentLanguage={profile.preferredLanguage} />
+          </View>
         ) : null}
 
         {/* Location & Website */}
@@ -221,7 +227,7 @@ export function UserProfileScreen({ route, navigation }: any) {
         {!isOwnProfile && (
           <View style={{ alignItems: 'center', marginTop: spacing.md }}>
             <Button
-              title={isFollowing ? 'Following' : 'Follow'}
+              title={isFollowing ? t('common.following') : t('common.follow')}
               onPress={handleFollowToggle}
               variant={isFollowing ? 'outline' : 'primary'}
               size="sm"
@@ -232,13 +238,13 @@ export function UserProfileScreen({ route, navigation }: any) {
 
         {/* Stats row — Instagram-style */}
         <View style={{ flexDirection: 'row', justifyContent: 'center', gap: spacing.xxl, marginTop: spacing.sm, paddingVertical: spacing.sm }}>
-          <Pressable onPress={() => navigation.navigate('FollowList', { userIds: profile.following || [], title: 'Following' })} style={{ alignItems: 'center' }}>
+          <Pressable onPress={() => navigation.navigate('FollowList', { userIds: profile.following || [], title: t('common.following') })} style={{ alignItems: 'center' }}>
             <Text style={{ ...typography.h4, color: colors.foreground }}>{profile.following?.length || 0}</Text>
-            <Text style={{ ...typography.small, color: colors.textSecondary }}>Following</Text>
+            <Text style={{ ...typography.small, color: colors.textSecondary }}>{t('common.following')}</Text>
           </Pressable>
-          <Pressable onPress={() => navigation.navigate('FollowList', { userIds: profile.followers || [], title: 'Followers' })} style={{ alignItems: 'center' }}>
+          <Pressable onPress={() => navigation.navigate('FollowList', { userIds: profile.followers || [], title: t('common.followers') })} style={{ alignItems: 'center' }}>
             <Text style={{ ...typography.h4, color: colors.foreground }}>{profile.followers?.length || 0}</Text>
-            <Text style={{ ...typography.small, color: colors.textSecondary }}>Followers</Text>
+            <Text style={{ ...typography.small, color: colors.textSecondary }}>{t('common.followers')}</Text>
           </Pressable>
         </View>
 
@@ -246,7 +252,7 @@ export function UserProfileScreen({ route, navigation }: any) {
         {favoriteMatches.length > 0 && (
           <View style={{ marginTop: spacing.md, paddingHorizontal: HORIZONTAL_PADDING, paddingVertical: spacing.md, backgroundColor: `${colors.accent}30`, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.border }}>
             <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: spacing.sm }}>
-              Favourite Matches
+              {t('profile.favouriteMatches')}
             </Text>
             {favoriteMatchQueries.some((q) => q.isLoading) ? (
               <View style={{ paddingVertical: spacing.lg, alignItems: 'center' }}>
@@ -271,7 +277,7 @@ export function UserProfileScreen({ route, navigation }: any) {
         {recentReviews.length > 0 && (
           <View style={{ paddingHorizontal: HORIZONTAL_PADDING, paddingVertical: spacing.md, backgroundColor: `${colors.accent}30`, borderColor: colors.border }}>
             <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: spacing.sm }}>
-              Recent Activity
+              {t('profile.recentActivity')}
             </Text>
             {recentMatchQueries.some((q) => q.isLoading) && recentMatchMap.size === 0 ? (
               <View style={{ paddingVertical: spacing.lg, alignItems: 'center' }}>

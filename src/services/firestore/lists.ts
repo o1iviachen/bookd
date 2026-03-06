@@ -32,6 +32,7 @@ function docToList(docSnap: any): MatchList {
     likes: data.likes || 0,
     createdAt: data.createdAt?.toDate() || new Date(),
     coverImage: data.coverImage || null,
+    language: data.language || undefined,
   };
 }
 
@@ -41,7 +42,8 @@ export async function createList(
   name: string,
   description: string,
   matchIds: number[],
-  ranked: boolean = false
+  ranked: boolean = false,
+  language?: string,
 ): Promise<string> {
   const ref = await addDoc(collection(db, 'lists'), {
     userId,
@@ -53,6 +55,7 @@ export async function createList(
     likes: 0,
     createdAt: serverTimestamp(),
     coverImage: null,
+    ...(language && { language }),
   });
   return ref.id;
 }
@@ -205,6 +208,7 @@ export interface ListComment {
   likes: number;
   likedBy: string[];
   createdAt: Date;
+  language?: string;
 }
 
 function docToListComment(docSnap: any): ListComment {
@@ -220,6 +224,7 @@ function docToListComment(docSnap: any): ListComment {
     likes: data.likes || 0,
     likedBy: data.likedBy || [],
     createdAt: data.createdAt?.toDate() || new Date(),
+    language: data.language || undefined,
   };
 }
 
@@ -230,6 +235,7 @@ export async function createListComment(
   userAvatar: string | null,
   text: string,
   parentId: string | null = null,
+  language?: string,
 ): Promise<string> {
   const ref = await addDoc(collection(db, 'listComments'), {
     listId,
@@ -241,6 +247,7 @@ export async function createListComment(
     likes: 0,
     likedBy: [],
     createdAt: serverTimestamp(),
+    ...(language && { language }),
   });
 
   try {
@@ -301,7 +308,7 @@ export async function deleteListComment(commentId: string): Promise<void> {
 
 export async function updateList(
   listId: string,
-  data: { name?: string; description?: string; ranked?: boolean }
+  data: { name?: string; description?: string; ranked?: boolean; language?: string }
 ): Promise<void> {
   await updateDoc(doc(db, 'lists', listId), data);
 }

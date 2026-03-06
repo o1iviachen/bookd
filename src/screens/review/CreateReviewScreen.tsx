@@ -7,6 +7,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
+import { usePreferredLanguage } from '../../hooks/usePreferredLanguage';
 import { useMatch, useMatchDetail } from '../../hooks/useMatches';
 import { useCreateReview, useUpdateReview, useReview, useUserMotmVote } from '../../hooks/useReviews';
 import { MOTMPickerModal } from '../../components/review/MOTMPickerModal';
@@ -24,6 +25,7 @@ import { shortName } from '../../utils/formatName';
 import { nationalityFlag } from '../../utils/flagEmoji';
 import { GifPickerModal } from '../../components/ui/GifPickerModal';
 import { TenorGif } from '../../services/tenor';
+import { useTranslation } from 'react-i18next';
 
 interface LocalMedia {
   uri: string;
@@ -37,6 +39,8 @@ export function CreateReviewScreen({ route, navigation }: any) {
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
   const { user } = useAuth();
+  const { t } = useTranslation();
+  const { language } = usePreferredLanguage();
   const { matchId, reviewId } = route.params;
   const isEditMode = !!reviewId;
   const { data: match, isLoading } = useMatch(matchId);
@@ -136,14 +140,14 @@ export function CreateReviewScreen({ route, navigation }: any) {
   const handlePickMedia = async () => {
     const totalMedia = mediaItems.length + existingMedia.length;
     if (totalMedia >= 4) {
-      Alert.alert('Limit Reached', 'You can attach up to 4 photos.');
+      Alert.alert(t('review.limitReached'), t('review.limitReachedMessage'));
       return;
     }
 
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Please allow access to your photo library in Settings.');
+        Alert.alert(t('review.permissionRequired'), t('review.permissionRequiredMessage'));
         return;
       }
 
@@ -157,7 +161,7 @@ export function CreateReviewScreen({ route, navigation }: any) {
       }
     } catch (err: any) {
       console.error('Pick media error:', err);
-      Alert.alert('Error', 'Failed to pick photo. Please try again.');
+      Alert.alert(t('common.error'), t('review.failedToPickPhoto'));
     }
   };
 
@@ -343,7 +347,7 @@ export function CreateReviewScreen({ route, navigation }: any) {
     if (!user) return;
 
     if (!isTextClean(text)) {
-      Alert.alert('Content Warning', 'Your review contains inappropriate language. Please revise before posting.');
+      Alert.alert(t('review.contentWarning'), t('review.reviewContainsInappropriate'));
       return;
     }
 
@@ -375,6 +379,7 @@ export function CreateReviewScreen({ route, navigation }: any) {
             isSpoiler,
             motmPlayerId: motmPlayerId ?? null,
             motmPlayerName: motmData?.selectedName ?? null,
+            language,
           },
           matchId,
           userId: user.uid,
@@ -395,13 +400,14 @@ export function CreateReviewScreen({ route, navigation }: any) {
           media: allMedia,
           isSpoiler,
           ...(motmPlayerId !== null && { motmPlayerId, motmPlayerName: motmData?.selectedName }),
+          language,
         });
       }
 
       navigation.goBack();
     } catch (err) {
       console.error('Review submission error:', err);
-      Alert.alert('Error', `Failed to ${isEditMode ? 'update' : 'submit'} review. Please try again.`);
+      Alert.alert(t('common.error'), t('review.failedToSubmitReview'));
     } finally {
       setUploading(false);
     }
@@ -420,7 +426,7 @@ export function CreateReviewScreen({ route, navigation }: any) {
             <Ionicons name="close" size={24} color={colors.foreground} />
           </Pressable>
           <Text style={{ ...typography.h4, color: colors.foreground, flex: 1, textAlign: 'center' }}>
-            {isEditMode ? 'Edit Review' : hasReviewText ? 'Write Review' : 'Log Match'}
+            {isEditMode ? t('review.editReview') : hasReviewText ? t('review.writeReview') : t('review.logMatch')}
           </Text>
           <View style={{ width: 24 }} />
         </View>
@@ -462,12 +468,12 @@ export function CreateReviewScreen({ route, navigation }: any) {
 
           {/* Review text (optional) */}
           <Text style={{ ...typography.bodyBold, color: colors.foreground, marginBottom: spacing.sm }}>
-            Your Review
+            {t('review.yourReview')}
           </Text>
           <MentionInput
             value={text}
             onChangeText={setText}
-            placeholder="What did you think of this match?"
+            placeholder={t('review.whatDidYouThink')}
             multiline
             maxLength={250}
             containerStyle={{ marginBottom: spacing.xs, zIndex: 10 }}
@@ -488,7 +494,7 @@ export function CreateReviewScreen({ route, navigation }: any) {
 
           {/* Media attachments */}
           <Text style={{ ...typography.bodyBold, color: colors.foreground, marginBottom: spacing.sm }}>
-            Media
+            {t('review.media')}
           </Text>
           <View
             ref={mediaContainerRef}
@@ -609,7 +615,7 @@ export function CreateReviewScreen({ route, navigation }: any) {
                   }}
                 >
                   <Ionicons name="camera-outline" size={24} color={colors.textSecondary} />
-                  <Text style={{ ...typography.small, color: colors.textSecondary, marginTop: 2 }}>Photo</Text>
+                  <Text style={{ ...typography.small, color: colors.textSecondary, marginTop: 2 }}>{t('common.photo')}</Text>
                 </Pressable>
                 <Pressable
                   onPress={() => setShowGifPicker(true)}
@@ -624,7 +630,7 @@ export function CreateReviewScreen({ route, navigation }: any) {
                     justifyContent: 'center',
                   }}
                 >
-                  <Text style={{ fontSize: 18, fontWeight: '800', color: colors.textSecondary }}>GIF</Text>
+                  <Text style={{ fontSize: 18, fontWeight: '800', color: colors.textSecondary }}>{t('common.gif')}</Text>
                 </Pressable>
               </>
             )}
@@ -645,11 +651,11 @@ export function CreateReviewScreen({ route, navigation }: any) {
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
                 <Text style={{ fontSize: 16 }}>⭐</Text>
-                <Text style={{ ...typography.body, color: colors.foreground }}>Man of the Match</Text>
+                <Text style={{ ...typography.body, color: colors.foreground }}>{t('review.manOfTheMatch')}</Text>
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
                 <Text style={{ ...typography.body, color: motmData.selectedName ? colors.primary : colors.textSecondary }}>
-                  {motmData.selectedName || 'Select player'}
+                  {motmData.selectedName || t('review.selectPlayer')}
                 </Text>
                 <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
               </View>
@@ -657,13 +663,13 @@ export function CreateReviewScreen({ route, navigation }: any) {
           )}
           {isEditMode && motmData && (
             <Text style={{ ...typography.small, color: colors.textSecondary, marginTop: -spacing.md, marginBottom: spacing.lg }}>
-              Only your latest vote counts toward the final MOTM result.
+              {t('review.onlyLatestVoteCounts')}
             </Text>
           )}
 
           {/* Tags — user custom */}
           <Text style={{ ...typography.bodyBold, color: colors.foreground, marginBottom: spacing.sm }}>
-            Tags
+            {t('common.tags')}
           </Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.sm }}>
             {userTags.map((tag) => {
@@ -709,7 +715,7 @@ export function CreateReviewScreen({ route, navigation }: any) {
             >
               <Ionicons name="add" size={14} color={colors.textSecondary} />
               <Text style={{ ...typography.caption, color: colors.textSecondary }}>
-                Add tag
+                {t('review.addTag')}
               </Text>
             </Pressable>
           </View>
@@ -718,7 +724,7 @@ export function CreateReviewScreen({ route, navigation }: any) {
           {showTagInput && (
             <View style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.lg }}>
               <RNTextInput
-                placeholder="Enter tag name..."
+                placeholder={t('review.enterTagName')}
                 placeholderTextColor={colors.textSecondary}
                 value={newTagInput}
                 onChangeText={setNewTagInput}
@@ -746,7 +752,7 @@ export function CreateReviewScreen({ route, navigation }: any) {
                   justifyContent: 'center',
                 }}
               >
-                <Text style={{ color: '#fff', fontWeight: '600', fontSize: 14 }}>Add</Text>
+                <Text style={{ color: '#fff', fontWeight: '600', fontSize: 14 }}>{t('common.add')}</Text>
               </Pressable>
               <Pressable
                 onPress={() => { setShowTagInput(false); setNewTagInput(''); }}
@@ -769,7 +775,7 @@ export function CreateReviewScreen({ route, navigation }: any) {
           }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
               <Ionicons name="eye-off-outline" size={18} color={colors.textSecondary} />
-              <Text style={{ ...typography.body, color: colors.foreground }}>Contains spoilers</Text>
+              <Text style={{ ...typography.body, color: colors.foreground }}>{t('review.containsSpoilers')}</Text>
             </View>
             <Switch
               value={isSpoiler}
@@ -781,7 +787,7 @@ export function CreateReviewScreen({ route, navigation }: any) {
 
           {/* Submit — dynamic label */}
           <Button
-            title={isEditMode ? 'Save Changes' : hasReviewText ? 'Post Review' : 'Log Match'}
+            title={isEditMode ? t('common.save') : hasReviewText ? t('review.postReview') : t('review.logMatch')}
             onPress={handleSubmit}
             loading={createReview.isPending || updateReviewMutation.isPending || uploading}
             disabled={uploading}

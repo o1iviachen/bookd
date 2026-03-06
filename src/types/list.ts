@@ -9,4 +9,5 @@ export interface MatchList {
   likes: number;
   createdAt: Date;
   coverImage: string | null;
+  language?: string;
 }

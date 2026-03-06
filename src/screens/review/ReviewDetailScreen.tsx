@@ -24,6 +24,7 @@ import { TeamLogo } from '../../components/match/TeamLogo';
 import { MediaViewer } from '../../components/ui/MediaViewer';
 import { POPULAR_TEAMS } from '../../utils/constants';
 import { useAuth } from '../../context/AuthContext';
+import { usePreferredLanguage } from '../../hooks/usePreferredLanguage';
 import { formatRelativeTime, formatMatchDate } from '../../utils/formatDate';
 import { isTextClean } from '../../utils/moderation';
 import { buildReplyMap } from '../../utils/comments';
@@ -31,13 +32,17 @@ import { MOTMBadge } from '../../components/review/MOTMBadge';
 import { Comment } from '../../services/firestore/comments';
 import { GifPickerModal } from '../../components/ui/GifPickerModal';
 import { TenorGif } from '../../services/tenor';
+import { TranslateButton } from '../../components/ui/TranslateButton';
 import { User } from '../../types/user';
+import { useTranslation } from 'react-i18next';
 
 export function ReviewDetailScreen({ route, navigation }: any) {
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
   const { reviewId } = route.params;
+  const { t } = useTranslation();
   const { user } = useAuth();
+  const { language } = usePreferredLanguage();
   const { data: review, isLoading } = useReview(reviewId);
   const { data: profile } = useUserProfile(user?.uid || '');
   const voteMutation = useVoteOnReview();
@@ -148,7 +153,7 @@ export function ReviewDetailScreen({ route, navigation }: any) {
   const handleSubmitComment = async () => {
     if (!user || (!commentText.trim() && !commentGif)) return;
     if (commentText.trim() && !isTextClean(commentText)) {
-      Alert.alert('Content Warning', 'Your comment contains inappropriate language. Please revise.');
+      Alert.alert(t('review.contentWarning'), t('review.commentContainsInappropriate'));
       return;
     }
     try {
@@ -160,6 +165,7 @@ export function ReviewDetailScreen({ route, navigation }: any) {
         text: commentText.trim(),
         parentId: replyingTo?.id || null,
         gifUrl: commentGif?.url || null,
+        language,
       });
       setCommentText('');
       setCommentGif(null);
@@ -170,12 +176,12 @@ export function ReviewDetailScreen({ route, navigation }: any) {
 
   const handleDeleteComment = (commentId: string) => {
     Alert.alert(
-      'Delete Comment',
-      'Are you sure you want to delete this comment?',
+      t('review.deleteComment'),
+      t('review.deleteCommentConfirm'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: t('common.delete'),
           style: 'destructive',
           onPress: () => deleteCommentMutation.mutate(commentId),
         },
@@ -205,19 +211,19 @@ export function ReviewDetailScreen({ route, navigation }: any) {
   const handleDelete = () => {
     setShowMenu(false);
     Alert.alert(
-      'Delete Review',
-      'Are you sure you want to delete this review? This cannot be undone.',
+      t('review.deleteReview'),
+      t('review.deleteReviewConfirm'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: t('common.delete'),
           style: 'destructive',
           onPress: async () => {
             try {
               await deleteReview.mutateAsync(review.id);
               navigation.goBack();
             } catch {
-              Alert.alert('Error', 'Failed to delete review.');
+              Alert.alert(t('common.error'), t('review.failedToDeleteReview'));
             }
           },
         },
@@ -233,7 +239,7 @@ export function ReviewDetailScreen({ route, navigation }: any) {
         keyboardVerticalOffset={0}
       >
         <ScreenHeader
-          title="Review"
+          title={t('common.reviews')}
           onBack={() => navigation.goBack()}
           rightElement={
             <Pressable onPress={() => setShowMenu(true)} hitSlop={8}>
@@ -248,11 +254,11 @@ export function ReviewDetailScreen({ route, navigation }: any) {
           items={
             isOwnReview
               ? [
-                  { label: 'Edit review', icon: 'create-outline', onPress: handleEdit },
-                  { label: 'Delete review', icon: 'trash-outline', onPress: handleDelete, destructive: true },
+                  { label: t('review.editReviewAction'), icon: 'create-outline', onPress: handleEdit },
+                  { label: t('review.deleteReviewAction'), icon: 'trash-outline', onPress: handleDelete, destructive: true },
                 ]
               : [
-                  { label: 'Report', icon: 'flag-outline', onPress: () => { setShowMenu(false); setShowReport(true); } },
+                  { label: t('common.report'), icon: 'flag-outline', onPress: () => { setShowMenu(false); setShowReport(true); } },
                 ]
           }
         />
@@ -309,7 +315,7 @@ export function ReviewDetailScreen({ route, navigation }: any) {
                   )}
                   <Text style={{ ...typography.caption, color: colors.textSecondary }}>
                     {formatRelativeTime(review.createdAt)}
-                    {review.editedAt ? ' (edited)' : ''}
+                    {review.editedAt ? ` ${t('common.edited')}` : ''}
                   </Text>
                 </View>
               </View>
@@ -331,17 +337,20 @@ export function ReviewDetailScreen({ route, navigation }: any) {
               >
                 <Ionicons name="eye-off-outline" size={24} color={colors.textSecondary} />
                 <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center' }}>
-                  This review contains spoilers. Tap to reveal.
+                  {t('review.thisReviewContainsSpoilers')}
                 </Text>
               </Pressable>
             ) : (
               <>
             {review.text ? (
-              <MentionText
-                text={review.text}
-                fontSize={16}
-                style={{ lineHeight: 24, marginBottom: spacing.md }}
-              />
+              <View style={{ marginBottom: spacing.md }}>
+                <MentionText
+                  text={review.text}
+                  fontSize={16}
+                  style={{ lineHeight: 24 }}
+                />
+                <TranslateButton text={review.text} fontSize={16} contentLanguage={review.language} />
+              </View>
             ) : null}
 
             {/* Media gallery */}
@@ -439,14 +448,14 @@ export function ReviewDetailScreen({ route, navigation }: any) {
           {/* ---- Comments ---- */}
           <View style={{ borderTopWidth: 1, borderTopColor: colors.border, marginTop: spacing.md }}>
             <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 15, marginBottom: spacing.md, paddingTop: spacing.lg, paddingHorizontal: spacing.md }}>
-              Comments
+              {t('list.comments')}
             </Text>
           </View>
 
           {totalCount === 0 ? (
             <EmptyState
               icon="chatbubbles-outline"
-              title="No comments yet. Start the conversation!"
+              title={t('review.noCommentsYet')}
             />
           ) : (
             (() => {
@@ -495,7 +504,7 @@ export function ReviewDetailScreen({ route, navigation }: any) {
             {replyingTo && (
               <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingTop: spacing.sm, gap: spacing.xs }}>
                 <Text style={{ ...typography.small, color: colors.textSecondary }}>
-                  Replying to <Text style={{ fontWeight: '600', color: colors.foreground }}>@{replyingTo.username}</Text>
+                  {t('review.replyingTo')} <Text style={{ fontWeight: '600', color: colors.foreground }}>@{replyingTo.username}</Text>
                 </Text>
                 <Pressable onPress={() => setReplyingTo(null)} hitSlop={8}>
                   <Ionicons name="close-circle" size={16} color={colors.textSecondary} />
@@ -529,7 +538,7 @@ export function ReviewDetailScreen({ route, navigation }: any) {
                   inputRef={inputRef}
                   value={commentText}
                   onChangeText={setCommentText}
-                  placeholder={replyingTo ? `Reply to @${replyingTo.username}...` : 'Add a comment...'}
+                  placeholder={replyingTo ? t('review.replyToUser', { username: replyingTo.username }) : t('review.addAComment')}
                   maxLength={500}
                   containerStyle={{ flex: 1 }}
                   inputStyle={{
@@ -542,7 +551,7 @@ export function ReviewDetailScreen({ route, navigation }: any) {
                   style={{ opacity: commentGif ? 0.4 : 1, paddingLeft: 4 }}
                   disabled={!!commentGif}
                 >
-                  <Text style={{ fontSize: 13, fontWeight: '800', color: colors.textSecondary }}>GIF</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '800', color: colors.textSecondary }}>{t('common.gif')}</Text>
                 </Pressable>
               </View>
               <Pressable
@@ -606,6 +615,7 @@ function CommentRow({
   navigation: any;
   authorMap: Map<string, { username: string; displayName: string; avatar: string | null; favoriteTeams: string[] }>;
 }) {
+  const { t } = useTranslation();
   const [showCommentReport, setShowCommentReport] = React.useState(false);
   const isLiked = userId ? comment.likedBy.includes(userId) : false;
   const isOwn = userId === comment.userId;
@@ -648,11 +658,16 @@ function CommentRow({
             {formatRelativeTime(comment.createdAt)}
           </Text>
         </View>
-        {comment.text ? <MentionText text={comment.text} fontSize={isReply ? 14 : 15} style={{ marginTop: 2 }} /> : null}
+        {comment.text ? (
+          <View style={{ marginTop: 2 }}>
+            <MentionText text={comment.text} fontSize={isReply ? 14 : 15} />
+            <TranslateButton text={comment.text} fontSize={isReply ? 14 : 15} contentLanguage={comment.language} />
+          </View>
+        ) : null}
         {comment.gifUrl && (
           <View style={{ marginTop: 4 }}>
             <Image source={{ uri: comment.gifUrl }} style={{ width: 200, height: 150, borderRadius: 8 }} contentFit="cover" autoplay />
-            <Text style={{ fontSize: 8, color: colors.textSecondary, marginTop: 2 }}>via Klipy</Text>
+            <Text style={{ fontSize: 8, color: colors.textSecondary, marginTop: 2 }}>{t('common.viaKlipy')}</Text>
           </View>
         )}
 
@@ -679,7 +694,7 @@ function CommentRow({
             style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}
           >
             <Ionicons name="chatbubble-outline" size={13} color={colors.textSecondary} />
-            <Text style={{ fontSize: 11, color: colors.textSecondary }}>Reply</Text>
+            <Text style={{ fontSize: 11, color: colors.textSecondary }}>{t('common.reply')}</Text>
           </Pressable>
 
           {isOwn ? (
@@ -688,7 +703,7 @@ function CommentRow({
               style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}
             >
               <Ionicons name="trash-outline" size={13} color={colors.textSecondary} />
-              <Text style={{ fontSize: 11, color: colors.textSecondary }}>Delete</Text>
+              <Text style={{ fontSize: 11, color: colors.textSecondary }}>{t('common.delete')}</Text>
             </Pressable>
           ) : (
             <Pressable
@@ -696,7 +711,7 @@ function CommentRow({
               style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}
             >
               <Ionicons name="flag-outline" size={13} color={colors.textSecondary} />
-              <Text style={{ fontSize: 11, color: colors.textSecondary }}>Report</Text>
+              <Text style={{ fontSize: 11, color: colors.textSecondary }}>{t('common.report')}</Text>
             </Pressable>
           )}
         </View>

@@ -2,6 +2,7 @@ import React, { useState, useMemo, useRef, useCallback } from 'react';
 import { View, Text, Pressable, Alert, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useQueries } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { MentionText } from '../ui/MentionText';
 import { MentionInput } from '../ui/MentionInput';
 import { Avatar } from '../ui/Avatar';
@@ -13,6 +14,8 @@ import { createDiscussionMessage, toggleDiscussionLike, deleteDiscussionMessage 
 import { isTextClean } from '../../utils/moderation';
 import { formatRelativeTime } from '../../utils/formatDate';
 import { POPULAR_TEAMS } from '../../utils/constants';
+import { TranslateButton } from '../ui/TranslateButton';
+import { usePreferredLanguage } from '../../hooks/usePreferredLanguage';
 import { DiscussionMessage } from '../../types/discussion';
 import { Match } from '../../types/match';
 
@@ -39,6 +42,7 @@ function DiscussionMessageRow({
   navigation: any;
   authorMap: Map<string, { username: string; displayName: string; avatar: string | null; favoriteTeams: string[] }>;
 }) {
+  const { t } = useTranslation();
   const [showReport, setShowReport] = useState(false);
   const isLiked = userId ? message.likedBy.includes(userId) : false;
   const isOwn = userId === message.userId;
@@ -73,7 +77,10 @@ function DiscussionMessageRow({
             {formatRelativeTime(message.createdAt)}
           </Text>
         </View>
-        <MentionText text={message.text} fontSize={15} style={{ marginTop: 2 }} />
+        <View style={{ marginTop: 2 }}>
+          <MentionText text={message.text} fontSize={15} />
+          <TranslateButton text={message.text} fontSize={15} contentLanguage={message.language} />
+        </View>
 
         {/* Like + Delete/Report actions */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: 6 }}>
@@ -99,7 +106,7 @@ function DiscussionMessageRow({
               style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}
             >
               <Ionicons name="trash-outline" size={13} color={colors.textSecondary} />
-              <Text style={{ fontSize: 11, color: colors.textSecondary }}>Delete</Text>
+              <Text style={{ fontSize: 11, color: colors.textSecondary }}>{t('common.delete')}</Text>
             </Pressable>
           ) : (
             <Pressable
@@ -107,7 +114,7 @@ function DiscussionMessageRow({
               style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}
             >
               <Ionicons name="flag-outline" size={13} color={colors.textSecondary} />
-              <Text style={{ fontSize: 11, color: colors.textSecondary }}>Report</Text>
+              <Text style={{ fontSize: 11, color: colors.textSecondary }}>{t('common.report')}</Text>
             </Pressable>
           )}
         </View>
@@ -139,6 +146,8 @@ export function DiscussionInputBar({
   spacing: any;
   borderRadius: any;
 }) {
+  const { t } = useTranslation();
+  const { language } = usePreferredLanguage();
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const inputRef = useRef<TextInput>(null);
@@ -148,7 +157,7 @@ export function DiscussionInputBar({
     if (!trimmed || sending) return;
 
     if (!isTextClean(trimmed)) {
-      Alert.alert('Hold on', 'Your message contains inappropriate language. Please revise.');
+      Alert.alert(t('discussion.moderationTitle'), t('discussion.moderationBody'));
       return;
     }
 
@@ -160,12 +169,13 @@ export function DiscussionInputBar({
         profile?.username || 'Anonymous',
         profile?.avatar || null,
         trimmed,
+        language,
       );
       setText('');
     } finally {
       setSending(false);
     }
-  }, [text, sending, matchId, userId, profile]);
+  }, [text, sending, matchId, userId, profile, language]);
 
   return (
     <View style={{ borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.background, zIndex: 10 }}>
@@ -181,7 +191,7 @@ export function DiscussionInputBar({
           inputRef={inputRef}
           value={text}
           onChangeText={setText}
-          placeholder="Say something..."
+          placeholder={t('discussion.inputPlaceholder')}
           maxLength={500}
           containerStyle={{ flex: 1 }}
           inputStyle={{
@@ -238,6 +248,9 @@ export function DiscussionSection({
   borderRadius,
   navigation,
 }: DiscussionSectionProps) {
+  const { t } = useTranslation();
+  const { language } = usePreferredLanguage();
+
   // Fetch current profiles for all message authors
   const authorIds = useMemo(
     () => [...new Set(messages.map((m) => m.userId))],
@@ -287,9 +300,9 @@ export function DiscussionSection({
   }, [userId]);
 
   const handleDelete = useCallback((messageId: string) => {
-    Alert.alert('Delete message', 'Are you sure?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => deleteDiscussionMessage(messageId) },
+    Alert.alert(t('discussion.deleteMessage'), t('discussion.areYouSure'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('common.delete'), style: 'destructive', onPress: () => deleteDiscussionMessage(messageId) },
     ]);
   }, []);
 
@@ -299,7 +312,7 @@ export function DiscussionSection({
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.xl * 2 }}>
         <Ionicons name="chatbubbles-outline" size={40} color={colors.textSecondary} style={{ marginBottom: spacing.md }} />
         <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center' }}>
-          Discussion opens 30 minutes before kickoff
+          {t('discussion.opensBeforeKickoff')}
         </Text>
       </View>
     );
@@ -329,7 +342,7 @@ export function DiscussionSection({
         }}>
           <Ionicons name="lock-closed" size={16} color={colors.textSecondary} />
           <Text style={{ ...typography.body, color: colors.textSecondary, flex: 1 }}>
-            Discussion closed — this match has ended
+            {t('discussion.closedBanner')}
           </Text>
         </View>
       )}
@@ -337,11 +350,11 @@ export function DiscussionSection({
       {/* Header */}
       <View style={{ paddingHorizontal: spacing.md, marginTop: spacing.md, marginBottom: spacing.sm }}>
         <Text style={{ ...typography.h4, color: colors.foreground }}>
-          Discussion{sortedMessages.length > 0 ? ` (${sortedMessages.length})` : ''}
+          {sortedMessages.length > 0 ? t('discussion.sectionTitleWithCount', { count: sortedMessages.length }) : t('discussion.sectionTitle')}
         </Text>
         {isFinished && sortedMessages.length > 0 && (
           <Text style={{ ...typography.small, color: colors.textSecondary, marginTop: 2 }}>
-            Sorted by most liked
+            {t('discussion.sortedByMostLiked')}
           </Text>
         )}
       </View>
@@ -350,7 +363,7 @@ export function DiscussionSection({
       {sortedMessages.length === 0 ? (
         <View style={{ alignItems: 'center', paddingVertical: spacing.xl, paddingHorizontal: spacing.lg }}>
           <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center' }}>
-            {isOpen ? 'No messages yet. Be the first to start the discussion!' : 'No messages were posted during this match.'}
+            {isOpen ? t('discussion.emptyOpen') : t('discussion.emptyClosed')}
           </Text>
         </View>
       ) : (

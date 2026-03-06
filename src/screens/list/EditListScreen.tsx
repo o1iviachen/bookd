@@ -6,6 +6,7 @@ import { Image } from 'expo-image';
 import { useQueries } from '@tanstack/react-query';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
 import { useTheme } from '../../context/ThemeContext';
+import { usePreferredLanguage } from '../../hooks/usePreferredLanguage';
 import { useList, useUpdateList, useUpdateMatchOrder, useRemoveMatchFromList } from '../../hooks/useLists';
 import { getMatchById } from '../../services/matchService';
 import { TextInput } from '../../components/ui/TextInput';
@@ -14,6 +15,7 @@ import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { MatchPickerModal } from '../../components/match/MatchPickerModal';
 import { Match } from '../../types/match';
 import { isTextClean } from '../../utils/moderation';
+import { useTranslation } from 'react-i18next';
 
 function SwipeableMatchRow({
   children,
@@ -24,6 +26,7 @@ function SwipeableMatchRow({
 }) {
   const swipeableRef = useRef<Swipeable>(null);
   const { theme } = useTheme();
+  const { t } = useTranslation();
 
   const renderRightActions = (
     _progress: Animated.AnimatedInterpolation<number>,
@@ -50,7 +53,7 @@ function SwipeableMatchRow({
       >
         <Animated.View style={{ transform: [{ scale }] }}>
           <Ionicons name="trash" size={22} color="#fff" />
-          <Text style={{ color: '#fff', fontSize: 12, marginTop: 2, fontWeight: '600' }}>Delete</Text>
+          <Text style={{ color: '#fff', fontSize: 12, marginTop: 2, fontWeight: '600' }}>{t('common.delete')}</Text>
         </Animated.View>
       </Pressable>
     );
@@ -71,6 +74,8 @@ function SwipeableMatchRow({
 export function EditListScreen({ route, navigation }: any) {
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
+  const { t } = useTranslation();
+  const { language } = usePreferredLanguage();
   const { listId } = route.params;
   const { data: list, isLoading } = useList(listId);
   const updateList = useUpdateList();
@@ -116,11 +121,11 @@ export function EditListScreen({ route, navigation }: any) {
 
   const handleSave = () => {
     if (!name.trim()) {
-      Alert.alert('Name Required', 'Please enter a list name.');
+      Alert.alert(t('common.error'), t('list.listName'));
       return;
     }
     if (!isTextClean(name) || !isTextClean(description)) {
-      Alert.alert('Content Warning', 'Your list contains inappropriate language. Please revise.');
+      Alert.alert(t('review.contentWarning'), t('review.reviewContainsInappropriate'));
       return;
     }
 
@@ -131,11 +136,12 @@ export function EditListScreen({ route, navigation }: any) {
           name: name.trim(),
           description: description.trim(),
           ranked,
+          language,
         },
       },
       {
         onSuccess: () => navigation.goBack(),
-        onError: () => Alert.alert('Error', 'Failed to update list. Try again.'),
+        onError: () => Alert.alert(t('common.error'), t('list.editList')),
       }
     );
   };
@@ -176,7 +182,7 @@ export function EditListScreen({ route, navigation }: any) {
           <Ionicons name="close" size={24} color={colors.foreground} />
         </Pressable>
         <Text style={{ ...typography.h4, color: colors.foreground, flex: 1, textAlign: 'center' }}>
-          Edit List
+          {t('list.editList')}
         </Text>
         <View style={{ width: 24 }} />
       </View>
@@ -188,12 +194,12 @@ export function EditListScreen({ route, navigation }: any) {
       >
         {/* List info fields */}
         <View style={{ padding: spacing.md }}>
-          <TextInput label="List Name" value={name} onChangeText={setName} placeholder="e.g. Best UCL Finals" />
+          <TextInput label={t('list.listName')} value={name} onChangeText={setName} placeholder={t('list.listNamePlaceholder')} />
           <TextInput
-            label="Description (optional)"
+            label={t('list.descriptionOptional')}
             value={description}
             onChangeText={setDescription}
-            placeholder="What's this list about?"
+            placeholder={t('list.descriptionPlaceholder')}
             multiline
             numberOfLines={3}
           />
@@ -208,9 +214,9 @@ export function EditListScreen({ route, navigation }: any) {
             }}
           >
             <View style={{ flex: 1, marginRight: spacing.md }}>
-              <Text style={{ ...typography.bodyBold, color: colors.foreground }}>Ranked list</Text>
+              <Text style={{ ...typography.bodyBold, color: colors.foreground }}>{t('list.rankedList')}</Text>
               <Text style={{ ...typography.caption, color: colors.textSecondary, marginTop: 2 }}>
-                Manually order matches by your ranking
+                {t('list.rankedListDescription')}
               </Text>
             </View>
             <Switch
@@ -226,7 +232,7 @@ export function EditListScreen({ route, navigation }: any) {
         <View style={{ borderTopWidth: 1, borderTopColor: colors.border }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingVertical: spacing.md }}>
             <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 16 }}>
-              Matches ({localMatchIds.length})
+              {t('list.matchesCount', { count: localMatchIds.length })}
             </Text>
             <Pressable
               onPress={() => setShowPicker(true)}
@@ -241,7 +247,7 @@ export function EditListScreen({ route, navigation }: any) {
               }}
             >
               <Ionicons name="add" size={16} color="#fff" />
-              <Text style={{ ...typography.caption, color: '#fff', fontWeight: '600' }}>Add</Text>
+              <Text style={{ ...typography.caption, color: '#fff', fontWeight: '600' }}>{t('common.add')}</Text>
             </Pressable>
           </View>
 
@@ -250,7 +256,7 @@ export function EditListScreen({ route, navigation }: any) {
             <View style={{ alignItems: 'center', paddingVertical: spacing.xl, paddingHorizontal: spacing.xl }}>
               <Ionicons name="list-outline" size={36} color={colors.textSecondary} />
               <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.sm }}>
-                No matches yet. Tap Add to get started.
+                {t('list.noMatchesYet')}
               </Text>
             </View>
           ) : (
@@ -308,7 +314,7 @@ export function EditListScreen({ route, navigation }: any) {
                       </View>
                     ) : (
                       <View style={{ flex: 1 }}>
-                        <Text style={{ ...typography.body, color: colors.textSecondary }}>Loading...</Text>
+                        <Text style={{ ...typography.body, color: colors.textSecondary }}>{t('common.loading')}</Text>
                       </View>
                     )}
 
@@ -353,7 +359,7 @@ export function EditListScreen({ route, navigation }: any) {
         }}
       >
         <Button
-          title="Save Changes"
+          title={t('list.saveChanges')}
           onPress={handleSave}
           loading={updateList.isPending}
           disabled={!name.trim()}

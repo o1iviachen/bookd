@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, Pressable, Share, ScrollView } from 'react-native';
 import { useQueries } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { getMatchById } from '../../services/matchService';
@@ -11,6 +12,7 @@ import { MatchPosterCard } from '../match/MatchPosterCard';
 import { TeamLogo } from '../match/TeamLogo';
 import { MatchList } from '../../types/list';
 import { Match } from '../../types/match';
+import { TranslateButton } from '../ui/TranslateButton';
 import { POPULAR_TEAMS } from '../../utils/constants';
 
 const POSTER_WIDTH = 70;
@@ -23,6 +25,7 @@ interface ListPreviewCardProps {
 }
 
 export function ListPreviewCard({ list, onPress, onMatchPress }: ListPreviewCardProps) {
+  const { t } = useTranslation();
   const { theme } = useTheme();
   const { colors, spacing, typography } = theme;
   const { user } = useAuth();
@@ -74,9 +77,12 @@ export function ListPreviewCard({ list, onPress, onMatchPress }: ListPreviewCard
           {list.name}
         </Text>
         {list.description ? (
-          <Text style={{ ...typography.body, color: colors.textSecondary, marginTop: 2 }} numberOfLines={1}>
-            {list.description}
-          </Text>
+          <View style={{ marginTop: 2 }}>
+            <Text style={{ ...typography.body, color: colors.textSecondary }} numberOfLines={1}>
+              {list.description}
+            </Text>
+            <TranslateButton text={list.description} contentLanguage={list.language} />
+          </View>
         ) : null}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
           <Text style={{ ...typography.small, color: colors.foreground, fontWeight: '600' }} numberOfLines={1}>
@@ -89,7 +95,7 @@ export function ListPreviewCard({ list, onPress, onMatchPress }: ListPreviewCard
             <TeamLogo key={t.id} uri={t.crest} size={14} />
           ))}
           <Text style={{ ...typography.small, color: colors.textSecondary }}>
-            · {list.matchIds.length} {list.matchIds.length === 1 ? 'match' : 'matches'}
+            · {t('common.matchCount', { count: list.matchIds.length })}
           </Text>
         </View>
       </Pressable>

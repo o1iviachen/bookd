@@ -44,6 +44,7 @@ function docToReview(docSnap: any, userVote: 'up' | 'down' | null = null): Revie
     flagged: data.flagged || false,
     motmPlayerId: data.motmPlayerId ?? undefined,
     motmPlayerName: data.motmPlayerName ?? undefined,
+    language: data.language || undefined,
   };
 }
 
@@ -126,6 +127,7 @@ export async function createReview(
   isSpoiler: boolean = false,
   motmPlayerId?: number,
   motmPlayerName?: string,
+  language?: string,
 ): Promise<string> {
   const reviewRef = await addDoc(collection(db, 'reviews'), {
     matchId,
@@ -142,6 +144,7 @@ export async function createReview(
     createdAt: serverTimestamp(),
     ...(motmPlayerId !== undefined && { motmPlayerId }),
     ...(motmPlayerName !== undefined && { motmPlayerName }),
+    ...(language && { language }),
   });
   
   // Update match aggregate stats atomically
@@ -394,6 +397,7 @@ export async function updateReview(
     isSpoiler?: boolean;
     motmPlayerId?: number | null;
     motmPlayerName?: string | null;
+    language?: string;
   },
   matchId?: number,
   userId?: string,

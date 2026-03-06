@@ -8,4 +8,5 @@ export interface DiscussionMessage {
   likes: number;
   likedBy: string[];
   createdAt: Date;
+  language?: string;
 }

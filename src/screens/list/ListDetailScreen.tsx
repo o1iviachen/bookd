@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQueries } from '@tanstack/react-query';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
+import { usePreferredLanguage } from '../../hooks/usePreferredLanguage';
 import { useUserProfile } from '../../hooks/useUser';
 import { useList, useDeleteList, useListLikedBy, useToggleListLike, useListComments, useCreateListComment, useToggleListCommentLike, useDeleteListComment } from '../../hooks/useLists';
 import { getMatchById } from '../../services/matchService';
@@ -29,19 +30,23 @@ import { EmptyState } from '../../components/ui/EmptyState';
 import { ListComment } from '../../services/firestore/lists';
 import { isTextClean } from '../../utils/moderation';
 import { buildReplyMap } from '../../utils/comments';
+import { TranslateButton } from '../../components/ui/TranslateButton';
+import { useTranslation } from 'react-i18next';
 
 const NUM_COLUMNS = 3;
 
 type SortBy = 'list' | 'date' | 'competition';
-const SORT_OPTIONS: { value: SortBy; label: string }[] = [
-  { value: 'list', label: 'List Order' },
-  { value: 'date', label: 'Date' },
-  { value: 'competition', label: 'Competition' },
+const SORT_OPTION_KEYS: { value: SortBy; i18nKey: string }[] = [
+  { value: 'list', i18nKey: 'list.sortListOrder' },
+  { value: 'date', i18nKey: 'list.sortDate' },
+  { value: 'competition', i18nKey: 'list.sortCompetition' },
 ];
 
 export function ListDetailScreen({ route, navigation }: any) {
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
+  const { t } = useTranslation();
+  const SORT_OPTIONS = useMemo(() => SORT_OPTION_KEYS.map((o) => ({ value: o.value, label: t(o.i18nKey) })), [t]);
   const { width: screenWidth } = useWindowDimensions();
   const { listId } = route.params;
 
@@ -49,6 +54,7 @@ export function ListDetailScreen({ route, navigation }: any) {
   const HORIZONTAL_PADDING = spacing.md;
   const CARD_WIDTH = (screenWidth - HORIZONTAL_PADDING * 2 - GAP * (NUM_COLUMNS - 1)) / NUM_COLUMNS;
   const { user } = useAuth();
+  const { language } = usePreferredLanguage();
   const { data: profile } = useUserProfile(user?.uid || '');
   const { data: list, isLoading } = useList(listId);
   const deleteListMutation = useDeleteList();
@@ -179,19 +185,19 @@ export function ListDetailScreen({ route, navigation }: any) {
   const handleDelete = () => {
     setShowMenu(false);
     Alert.alert(
-      'Delete List',
-      'Are you sure you want to delete this list? This cannot be undone.',
+      t('list.deleteListConfirmTitle'),
+      t('list.deleteListConfirmMessage'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: t('common.delete'),
           style: 'destructive',
           onPress: async () => {
             try {
               await deleteListMutation.mutateAsync(list.id);
               navigation.goBack();
             } catch {
-              Alert.alert('Error', 'Failed to delete list.');
+              Alert.alert(t('common.error'), t('list.deleteList'));
             }
           },
         },
@@ -208,7 +214,7 @@ export function ListDetailScreen({ route, navigation }: any) {
   const handleSubmitComment = async () => {
     if (!user || !commentText.trim() || !profile) return;
     if (!isTextClean(commentText)) {
-      Alert.alert('Content Warning', 'Your comment contains inappropriate language. Please revise.');
+      Alert.alert(t('review.contentWarning'), t('review.commentContainsInappropriate'));
       return;
     }
     createComment.mutate({
@@ -218,25 +224,26 @@ export function ListDetailScreen({ route, navigation }: any) {
       userAvatar: profile.avatar,
       text: commentText.trim(),
       parentId: replyingTo?.id || null,
+      language,
     }, {
       onSuccess: () => {
         setCommentText('');
         setReplyingTo(null);
       },
       onError: () => {
-        Alert.alert('Error', 'Failed to post comment. Please try again.');
+        Alert.alert(t('common.error'), t('list.failedToPostComment'));
       },
     });
   };
 
   const handleDeleteComment = (commentId: string) => {
     Alert.alert(
-      'Delete Comment',
-      'Are you sure you want to delete this comment?',
+      t('review.deleteComment'),
+      t('review.deleteCommentConfirm'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: t('common.delete'),
           style: 'destructive',
           onPress: () => deleteCommentMutation.mutate({ commentId, listId }),
         },
@@ -255,7 +262,7 @@ export function ListDetailScreen({ route, navigation }: any) {
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={0}>
       <ScreenHeader
-        title="List"
+        title={t('list.newList')}
         onBack={() => navigation.goBack()}
         rightElement={
           isOwner ? (
@@ -270,8 +277,8 @@ export function ListDetailScreen({ route, navigation }: any) {
         visible={showMenu}
         onClose={() => setShowMenu(false)}
         items={[
-          { label: 'Edit list', icon: 'create-outline', onPress: handleEdit },
-          { label: 'Delete list', icon: 'trash-outline', onPress: handleDelete, destructive: true },
+          { label: t('list.editList'), icon: 'create-outline', onPress: handleEdit },
+          { label: t('list.deleteList'), icon: 'trash-outline', onPress: handleDelete, destructive: true },
         ]}
       />
 
@@ -300,12 +307,12 @@ export function ListDetailScreen({ route, navigation }: any) {
             {list.ranked && (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.primaryLight, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderRadius: borderRadius.full }}>
                 <Ionicons name="trophy-outline" size={12} color={colors.primary} />
-                <Text style={{ ...typography.small, color: colors.primary, fontWeight: '600' }}>Ranked</Text>
+                <Text style={{ ...typography.small, color: colors.primary, fontWeight: '600' }}>{t('list.ranked')}</Text>
               </View>
             )}
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: spacing.xs, flexWrap: 'wrap' }}>
-            <Text style={{ ...typography.caption, color: colors.textSecondary }}>by</Text>
+            <Text style={{ ...typography.caption, color: colors.textSecondary }}>{t('list.by')}</Text>
             <Text style={{ ...typography.caption, color: colors.foreground, fontWeight: '600' }}>{listAuthorName}</Text>
             <Text style={{ ...typography.caption, color: colors.textSecondary }}>@{listAuthorUsername}</Text>
             {(listAuthorProfile?.favoriteTeams || []).slice(0, 3).map((id) => {
@@ -315,9 +322,12 @@ export function ListDetailScreen({ route, navigation }: any) {
             <Text style={{ ...typography.caption, color: colors.textSecondary }}>&middot; {formatRelativeTime(list.createdAt)}</Text>
           </View>
           {list.description ? (
-            <Text style={{ ...typography.body, color: colors.textSecondary, marginTop: spacing.sm }}>
-              {list.description}
-            </Text>
+            <View style={{ marginTop: spacing.sm }}>
+              <Text style={{ ...typography.body, color: colors.textSecondary }}>
+                {list.description}
+              </Text>
+              <TranslateButton text={list.description} contentLanguage={list.language} />
+            </View>
           ) : null}
           {/* Like + stats row */}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: spacing.md }}>
@@ -365,13 +375,13 @@ export function ListDetailScreen({ route, navigation }: any) {
             {/* Sort + count row */}
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingVertical: spacing.sm }}>
               <Text style={{ ...typography.caption, color: colors.textSecondary }}>
-                {displayMatches.length} {displayMatches.length === 1 ? 'match' : 'matches'}
+                {t('common.matchCount', { count: displayMatches.length })}
               </Text>
               <View style={{ width: 160 }}>
                 <Select
                   value={sortBy}
                   onValueChange={(v) => setSortBy(v as SortBy)}
-                  title="Sort By"
+                  title={t('matches.sortBy')}
                   options={SORT_OPTIONS}
                 />
               </View>
@@ -384,10 +394,10 @@ export function ListDetailScreen({ route, navigation }: any) {
           <View style={{ alignItems: 'center', paddingTop: spacing.xxl, paddingHorizontal: spacing.xl }}>
             <Ionicons name="list-outline" size={48} color={colors.textSecondary} />
             <Text style={{ ...typography.h4, color: colors.foreground, marginTop: spacing.md }}>
-              No matches yet
+              {t('list.noMatchesYet')}
             </Text>
             <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.xs }}>
-              {isOwner ? 'Add matches to start building your list' : 'This list has no matches yet'}
+              {isOwner ? t('list.addMatchesToBuild') : t('list.thisListHasNoMatches')}
             </Text>
           </View>
         ) : (
@@ -435,14 +445,14 @@ export function ListDetailScreen({ route, navigation }: any) {
         {/* ---- Comments ---- */}
         <View style={{ borderTopWidth: 1, borderTopColor: colors.border, marginTop: spacing.lg }}>
           <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 15, marginBottom: spacing.md, paddingTop: spacing.lg, paddingHorizontal: spacing.md }}>
-            Comments
+            {t('list.comments')}
           </Text>
         </View>
 
         {sortedComments.length === 0 ? (
           <EmptyState
             icon="chatbubbles-outline"
-            title="No comments yet. Start the conversation!"
+            title={t('list.noCommentsYet')}
           />
         ) : (
           (() => {
@@ -490,7 +500,7 @@ export function ListDetailScreen({ route, navigation }: any) {
           {replyingTo && (
             <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingTop: spacing.sm, gap: spacing.xs }}>
               <Text style={{ ...typography.small, color: colors.textSecondary }}>
-                Replying to <Text style={{ fontWeight: '600', color: colors.foreground }}>@{replyingTo.username}</Text>
+                {t('list.replyingTo')} <Text style={{ fontWeight: '600', color: colors.foreground }}>@{replyingTo.username}</Text>
               </Text>
               <Pressable onPress={() => setReplyingTo(null)} hitSlop={8}>
                 <Ionicons name="close-circle" size={16} color={colors.textSecondary} />
@@ -508,7 +518,7 @@ export function ListDetailScreen({ route, navigation }: any) {
             <MentionInput
               value={commentText}
               onChangeText={setCommentText}
-              placeholder={replyingTo ? `Reply to @${replyingTo.username}...` : 'Add a comment...'}
+              placeholder={replyingTo ? t('list.replyToUser', { username: replyingTo.username }) : t('list.addAComment')}
               maxLength={500}
               inputRef={commentInputRef}
               onFocus={() => setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 300)}
@@ -563,6 +573,7 @@ function ListCommentRow({
   navigation: any;
   authorMap: Map<string, { username: string; displayName: string; avatar: string | null; favoriteTeams: string[] }>;
 }) {
+  const { t } = useTranslation();
   const [showReport, setShowReport] = React.useState(false);
   const isLiked = userId ? comment.likedBy.includes(userId) : false;
   const isOwn = userId === comment.userId;
@@ -605,7 +616,10 @@ function ListCommentRow({
             {formatRelativeTime(comment.createdAt)}
           </Text>
         </View>
-        <MentionText text={comment.text} fontSize={isReply ? 14 : 15} style={{ marginTop: 2 }} />
+        <View style={{ marginTop: 2 }}>
+          <MentionText text={comment.text} fontSize={isReply ? 14 : 15} />
+          <TranslateButton text={comment.text} fontSize={isReply ? 14 : 15} contentLanguage={comment.language} />
+        </View>
 
         {/* Like + Reply + Delete actions */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: 6 }}>
@@ -630,7 +644,7 @@ function ListCommentRow({
             style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}
           >
             <Ionicons name="chatbubble-outline" size={13} color={colors.textSecondary} />
-            <Text style={{ fontSize: 11, color: colors.textSecondary }}>Reply</Text>
+            <Text style={{ fontSize: 11, color: colors.textSecondary }}>{t('common.reply')}</Text>
           </Pressable>
 
           {isOwn ? (
@@ -639,7 +653,7 @@ function ListCommentRow({
               style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}
             >
               <Ionicons name="trash-outline" size={13} color={colors.textSecondary} />
-              <Text style={{ fontSize: 11, color: colors.textSecondary }}>Delete</Text>
+              <Text style={{ fontSize: 11, color: colors.textSecondary }}>{t('common.delete')}</Text>
             </Pressable>
           ) : (
             <Pressable
@@ -647,7 +661,7 @@ function ListCommentRow({
               style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}
             >
               <Ionicons name="flag-outline" size={13} color={colors.textSecondary} />
-              <Text style={{ fontSize: 11, color: colors.textSecondary }}>Report</Text>
+              <Text style={{ fontSize: 11, color: colors.textSecondary }}>{t('common.report')}</Text>
             </Pressable>
           )}
         </View>

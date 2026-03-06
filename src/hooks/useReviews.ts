@@ -110,6 +110,7 @@ export function useCreateReview() {
       media?: ReviewMedia[];
       isSpoiler?: boolean;
       motmPlayerId?: number;
+      language?: string;
     }) =>
       createReview(
         params.matchId,
@@ -122,6 +123,8 @@ export function useCreateReview() {
         params.media || [],
         params.isSpoiler || false,
         params.motmPlayerId,
+        undefined,
+        params.language,
       ),
     onSuccess: (_, params) => {
       queryClient.invalidateQueries({ queryKey: ['reviews', 'match', params.matchId] });
@@ -149,6 +152,7 @@ export function useUpdateReview() {
         isSpoiler?: boolean;
         motmPlayerId?: number | null;
         motmPlayerName?: string | null;
+        language?: string;
       };
       matchId?: number;
       userId?: string;

@@ -24,4 +24,5 @@ export interface Review {
   flagged?: boolean;
   motmPlayerId?: number;
   motmPlayerName?: string;
+  language?: string;
 }

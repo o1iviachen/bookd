@@ -9,8 +9,10 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
+import { usePreferredLanguage } from '../../hooks/usePreferredLanguage';
 import { useUserProfile } from '../../hooks/useUser';
 import { useListsForUser, useCreateList, useAddMatchToList, useRemoveMatchFromList } from '../../hooks/useLists';
 
@@ -22,9 +24,11 @@ interface AddToListModalProps {
 }
 
 export function AddToListModal({ visible, onClose, matchId, navigation }: AddToListModalProps) {
+  const { t } = useTranslation();
   const { theme } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
   const { user } = useAuth();
+  const { language } = usePreferredLanguage();
   const { data: profile } = useUserProfile(user?.uid || '');
   const { data: lists } = useListsForUser(user?.uid || '');
   const createList = useCreateList();
@@ -62,6 +66,7 @@ export function AddToListModal({ visible, onClose, matchId, navigation }: AddToL
         name: newListName.trim(),
         description: '',
         matchIds: [matchId],
+        language,
       },
       {
         onSuccess: () => {
@@ -119,7 +124,7 @@ export function AddToListModal({ visible, onClose, matchId, navigation }: AddToL
             }}
           >
             <Text style={{ ...typography.bodyBold, color: colors.foreground, fontSize: 14 }}>
-              Add to List
+              {t('list.addToList')}
             </Text>
             <Pressable onPress={onClose} hitSlop={8}>
               <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
@@ -154,7 +159,7 @@ export function AddToListModal({ visible, onClose, matchId, navigation }: AddToL
                         {list.name}
                       </Text>
                       <Text style={{ ...typography.small, color: colors.textSecondary }}>
-                        {list.matchIds.length} {list.matchIds.length === 1 ? 'match' : 'matches'}
+                        {t('common.matchCount', { count: list.matchIds.length })}
                       </Text>
                     </View>
                     {navigation ? (
@@ -175,7 +180,7 @@ export function AddToListModal({ visible, onClose, matchId, navigation }: AddToL
             ) : (
               <View style={{ alignItems: 'center', paddingVertical: spacing.lg }}>
                 <Text style={{ ...typography.body, color: colors.textSecondary }}>
-                  No lists yet. Create your first!
+                  {t('list.noListsYetCreate')}
                 </Text>
               </View>
             )}
@@ -184,7 +189,7 @@ export function AddToListModal({ visible, onClose, matchId, navigation }: AddToL
             {showNewList ? (
               <View style={{ padding: spacing.md, borderTopWidth: 1, borderTopColor: colors.border }}>
                 <RNTextInput
-                  placeholder="List name..."
+                  placeholder={t('list.listNameInputPlaceholder')}
                   placeholderTextColor={colors.textSecondary}
                   value={newListName}
                   onChangeText={setNewListName}
@@ -210,7 +215,7 @@ export function AddToListModal({ visible, onClose, matchId, navigation }: AddToL
                       alignItems: 'center',
                     }}
                   >
-                    <Text style={{ ...typography.body, color: colors.textSecondary }}>Cancel</Text>
+                    <Text style={{ ...typography.body, color: colors.textSecondary }}>{t('common.cancel')}</Text>
                   </Pressable>
                   <Pressable
                     onPress={handleCreateList}
@@ -223,7 +228,7 @@ export function AddToListModal({ visible, onClose, matchId, navigation }: AddToL
                     }}
                   >
                     <Text style={{ ...typography.bodyBold, color: newListName.trim() ? '#14181c' : colors.textSecondary }}>
-                      Create
+                      {t('list.createList')}
                     </Text>
                   </Pressable>
                 </View>
@@ -241,7 +246,7 @@ export function AddToListModal({ visible, onClose, matchId, navigation }: AddToL
                 })}
               >
                 <Ionicons name="add-circle-outline" size={22} color={colors.primary} />
-                <Text style={{ ...typography.body, color: colors.primary }}>New List</Text>
+                <Text style={{ ...typography.body, color: colors.primary }}>{t('list.newListButton')}</Text>
               </Pressable>
             )}
           </ScrollView>

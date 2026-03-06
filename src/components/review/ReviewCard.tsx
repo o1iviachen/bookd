@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, Pressable, ScrollView, Share } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useVoteOnReview } from '../../hooks/useReviews';
@@ -16,6 +17,7 @@ import { MediaViewer } from '../ui/MediaViewer';
 import { Review } from '../../types/review';
 import { formatRelativeTime } from '../../utils/formatDate';
 import { TeamLogo } from '../match/TeamLogo';
+import { TranslateButton } from '../ui/TranslateButton';
 import { POPULAR_TEAMS } from '../../utils/constants';
 
 interface ReviewCardProps {
@@ -26,6 +28,7 @@ interface ReviewCardProps {
 }
 
 export function ReviewCard({ review, onPress, commentCount: commentCountProp, isLast }: ReviewCardProps) {
+  const { t } = useTranslation();
   const { theme } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
   const { user } = useAuth();
@@ -98,7 +101,7 @@ export function ReviewCard({ review, onPress, commentCount: commentCountProp, is
               )}
               <Text style={{ ...typography.small, color: colors.textSecondary }}>
                 {formatRelativeTime(review.createdAt)}
-                {review.editedAt ? ' (edited)' : ''}
+                {review.editedAt ? ` ${t('common.edited')}` : ''}
               </Text>
             </View>
           </View>
@@ -119,17 +122,20 @@ export function ReviewCard({ review, onPress, commentCount: commentCountProp, is
           >
             <Ionicons name="eye-off-outline" size={20} color={colors.textSecondary} />
             <Text style={{ ...typography.caption, color: colors.textSecondary, textAlign: 'center' }}>
-              This review contains spoilers. Tap to reveal.
+              {t('review.thisReviewContainsSpoilers')}
             </Text>
           </Pressable>
         ) : (
           <>
             {review.text ? (
-              <MentionText
-                text={review.text}
-                style={{ marginBottom: spacing.sm, lineHeight: 22 }}
-                numberOfLines={onPress ? 3 : undefined}
-              />
+              <View style={{ marginBottom: spacing.sm }}>
+                <MentionText
+                  text={review.text}
+                  style={{ lineHeight: 22 }}
+                  numberOfLines={onPress ? 3 : undefined}
+                />
+                <TranslateButton text={review.text} contentLanguage={review.language} />
+              </View>
             ) : null}
 
             {/* Media gallery */}
