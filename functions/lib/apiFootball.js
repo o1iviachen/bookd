@@ -13,6 +13,7 @@ exports.getPlayerById = getPlayerById;
 exports.getLiveFixtures = getLiveFixtures;
 exports.getTeamSquad = getTeamSquad;
 exports.getTeamInfo = getTeamInfo;
+exports.getLeagueInfo = getLeagueInfo;
 exports.getTeamCoach = getTeamCoach;
 const axios_1 = __importDefault(require("axios"));
 const config_1 = require("./config");
@@ -95,6 +96,12 @@ async function getTeamInfo(teamId) {
     const response = await client.get('/teams', { params: { id: teamId } });
     const teams = response.data.response || [];
     return teams[0] || null;
+}
+async function getLeagueInfo(leagueId) {
+    await rateLimit();
+    const response = await client.get('/leagues', { params: { id: leagueId } });
+    const data = response.data.response || [];
+    return data.length > 0 ? data[0] : null;
 }
 async function getTeamCoach(teamId) {
     await rateLimit();

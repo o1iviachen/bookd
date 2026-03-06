@@ -83,8 +83,38 @@ function decodeEntities(text) {
  *   (no params) — backfill everything
  */
 async function runBackfill(options) {
-    const { leagueCode, season, includeDetails } = options;
-    const allLeagues = await (0, leagueHelper_1.getEnabledLeagues)();
+    const { leagueCode, apiId, season, includeDetails } = options;
+    let allLeagues = await (0, leagueHelper_1.getEnabledLeagues)();
+    let leagueCreated = false;
+    // Auto-create league doc if code + apiId given but league doesn't exist
+    if (leagueCode && apiId && !allLeagues.find((l) => l.code === leagueCode)) {
+        const info = await (0, apiFootball_1.getLeagueInfo)(apiId);
+        if (!info) {
+            throw new Error(`Could not fetch league info from API for apiId=${apiId}`);
+        }
+        // Calendar-year leagues have seasons starting in Jan-Mar
+        const currentSeason = info.seasons.find((s) => s.current);
+        const startMonth = currentSeason ? new Date(currentSeason.start).getMonth() + 1 : 8;
+        const seasonType = startMonth <= 3 ? 'calendar-year' : 'european';
+        const leagueDoc = {
+            code: leagueCode,
+            apiId,
+            name: info.league.name,
+            country: info.country.name,
+            emblem: info.league.logo,
+            tier: 6,
+            isCup: info.league.type === 'Cup',
+            seasonType,
+            displayOrder: 99,
+            enabled: true,
+            followable: true,
+        };
+        await db.collection(config_1.COLLECTIONS.LEAGUES).doc(leagueCode).set(leagueDoc, { merge: true });
+        (0, leagueHelper_1.clearLeagueCache)();
+        allLeagues = await (0, leagueHelper_1.getEnabledLeagues)();
+        leagueCreated = true;
+        console.log(`[backfill] Auto-created league doc: ${leagueCode} (apiId=${apiId}, name=${info.league.name}, type=${info.league.type}, seasonType=${seasonType})`);
+    }
     const leagues = leagueCode
         ? allLeagues.filter((l) => l.code === leagueCode)
         : allLeagues;
@@ -116,7 +146,7 @@ async function runBackfill(options) {
             }
         }
     }
-    return { leagues: leagues.length, matches: totalMatches, details: totalDetails };
+    return { leagues: leagues.length, matches: totalMatches, details: totalDetails, leagueCreated };
 }
 /**
  * Gets fixture IDs for finished matches in a league-season.
@@ -138,9 +168,11 @@ async function getFinishedFixtureIds(leagueApiId, season) {
  * Syncs team data from the matches already in Firestore.
  * Extracts unique teams from match documents and creates team docs.
  */
-async function buildTeamsFromMatches() {
-    var _a, _b, _c, _d;
+async function buildTeamsFromMatches(options) {
+    var _a, _b, _c, _d, _e, _f, _g, _h;
+    const { seasonsOnly } = options || {};
     const teamsMap = new Map();
+    const teamSeasons = new Map();
     // Read all matches in batches
     let lastDoc = null;
     const pageSize = 500;
@@ -156,54 +188,90 @@ async function buildTeamsFromMatches() {
             break;
         for (const doc of snapshot.docs) {
             const data = doc.data();
-            // Extract home team
-            if (((_a = data.homeTeam) === null || _a === void 0 ? void 0 : _a.id) && !teamsMap.has(data.homeTeam.id)) {
-                teamsMap.set(data.homeTeam.id, {
-                    id: data.homeTeam.id,
-                    name: data.homeTeam.name,
-                    shortName: data.homeTeam.shortName,
-                    crest: data.homeTeam.crest,
-                    venue: null,
-                    founded: null,
-                    country: '',
-                    competitionCodes: [data.competition.code],
-                });
+            const season = data.season;
+            const trackSeason = (teamId) => {
+                if (season == null)
+                    return;
+                if (!teamSeasons.has(teamId))
+                    teamSeasons.set(teamId, new Set());
+                teamSeasons.get(teamId).add(season);
+            };
+            if (seasonsOnly) {
+                // Only collect seasons per team
+                if ((_a = data.homeTeam) === null || _a === void 0 ? void 0 : _a.id)
+                    trackSeason(data.homeTeam.id);
+                if ((_b = data.awayTeam) === null || _b === void 0 ? void 0 : _b.id)
+                    trackSeason(data.awayTeam.id);
             }
-            else if ((_b = data.homeTeam) === null || _b === void 0 ? void 0 : _b.id) {
-                const existing = teamsMap.get(data.homeTeam.id);
-                if (!existing.competitionCodes.includes(data.competition.code)) {
-                    existing.competitionCodes.push(data.competition.code);
+            else {
+                // Full rebuild — collect team data + seasons
+                if (((_c = data.homeTeam) === null || _c === void 0 ? void 0 : _c.id) && !teamsMap.has(data.homeTeam.id)) {
+                    teamsMap.set(data.homeTeam.id, {
+                        id: data.homeTeam.id,
+                        name: data.homeTeam.name,
+                        shortName: data.homeTeam.shortName,
+                        crest: data.homeTeam.crest,
+                        venue: null,
+                        founded: null,
+                        country: '',
+                        competitionCodes: [data.competition.code],
+                    });
                 }
-            }
-            // Extract away team
-            if (((_c = data.awayTeam) === null || _c === void 0 ? void 0 : _c.id) && !teamsMap.has(data.awayTeam.id)) {
-                teamsMap.set(data.awayTeam.id, {
-                    id: data.awayTeam.id,
-                    name: data.awayTeam.name,
-                    shortName: data.awayTeam.shortName,
-                    crest: data.awayTeam.crest,
-                    venue: null,
-                    founded: null,
-                    country: '',
-                    competitionCodes: [data.competition.code],
-                });
-            }
-            else if ((_d = data.awayTeam) === null || _d === void 0 ? void 0 : _d.id) {
-                const existing = teamsMap.get(data.awayTeam.id);
-                if (!existing.competitionCodes.includes(data.competition.code)) {
-                    existing.competitionCodes.push(data.competition.code);
+                else if ((_d = data.homeTeam) === null || _d === void 0 ? void 0 : _d.id) {
+                    const existing = teamsMap.get(data.homeTeam.id);
+                    if (!existing.competitionCodes.includes(data.competition.code)) {
+                        existing.competitionCodes.push(data.competition.code);
+                    }
                 }
+                if ((_e = data.homeTeam) === null || _e === void 0 ? void 0 : _e.id)
+                    trackSeason(data.homeTeam.id);
+                if (((_f = data.awayTeam) === null || _f === void 0 ? void 0 : _f.id) && !teamsMap.has(data.awayTeam.id)) {
+                    teamsMap.set(data.awayTeam.id, {
+                        id: data.awayTeam.id,
+                        name: data.awayTeam.name,
+                        shortName: data.awayTeam.shortName,
+                        crest: data.awayTeam.crest,
+                        venue: null,
+                        founded: null,
+                        country: '',
+                        competitionCodes: [data.competition.code],
+                    });
+                }
+                else if ((_g = data.awayTeam) === null || _g === void 0 ? void 0 : _g.id) {
+                    const existing = teamsMap.get(data.awayTeam.id);
+                    if (!existing.competitionCodes.includes(data.competition.code)) {
+                        existing.competitionCodes.push(data.competition.code);
+                    }
+                }
+                if ((_h = data.awayTeam) === null || _h === void 0 ? void 0 : _h.id)
+                    trackSeason(data.awayTeam.id);
             }
         }
         lastDoc = snapshot.docs[snapshot.docs.length - 1];
     }
-    // Write teams to Firestore
+    if (seasonsOnly) {
+        // Write only availableSeasons to existing team docs
+        const entries = Array.from(teamSeasons.entries());
+        for (let i = 0; i < entries.length; i += 450) {
+            const chunk = entries.slice(i, i + 450);
+            const batch = db.batch();
+            for (const [teamId, seasons] of chunk) {
+                batch.set(db.collection(config_1.COLLECTIONS.TEAMS).doc(String(teamId)), { availableSeasons: Array.from(seasons).sort((a, b) => b - a) }, { merge: true });
+            }
+            await batch.commit();
+        }
+        console.log(`[buildTeams] Updated availableSeasons for ${entries.length} teams`);
+        return entries.length;
+    }
+    // Write teams to Firestore (full rebuild)
     const teams = Array.from(teamsMap.values());
     for (let i = 0; i < teams.length; i += 450) {
         const chunk = teams.slice(i, i + 450);
         const batch = db.batch();
         for (const team of chunk) {
-            batch.set(db.collection(config_1.COLLECTIONS.TEAMS).doc(String(team.id)), { ...team, syncedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+            const seasons = teamSeasons.get(team.id);
+            const availableSeasons = seasons ? Array.from(seasons).sort((a, b) => b - a) : [];
+            batch.set(db.collection(config_1.COLLECTIONS.TEAMS).doc(String(team.id)), { ...team, availableSeasons, syncedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
         }
         await batch.commit();
     }
@@ -215,16 +283,79 @@ async function buildTeamsFromMatches() {
  * Extracts all unique players from lineups and creates player docs.
  * Also enriches team docs with coach and squad data.
  */
-async function buildPlayersAndEnrichTeams() {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l;
+async function buildPlayersAndEnrichTeams(options) {
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m;
     const playersMap = new Map();
     const teamCoaches = new Map();
+    const playerSeasons = new Map();
+    const { leagueCode, season: filterSeason, seasonsOnly } = options || {};
     // Determine current season — only use these matches for coach assignment
     const now = new Date();
     const month = now.getMonth() + 1;
     const currentSeason = month >= 7 ? now.getFullYear() : now.getFullYear() - 1;
-    console.log(`[buildPlayers] Current season: ${currentSeason}`);
-    // Read all matchDetails in batches, collecting matchIds we need
+    console.log(`[buildPlayers] Current season: ${currentSeason}, filter: league=${leagueCode || 'all'} season=${filterSeason || 'all'}`);
+    // If filtering by league/season, query matches first to get the relevant IDs
+    let scopedMatchIds = null;
+    if (leagueCode || filterSeason) {
+        scopedMatchIds = new Set();
+        let q = db.collection(config_1.COLLECTIONS.MATCHES);
+        if (leagueCode)
+            q = q.where('competition.code', '==', leagueCode);
+        if (filterSeason)
+            q = q.where('season', '==', filterSeason);
+        const snap = await q.get();
+        for (const d of snap.docs)
+            scopedMatchIds.add(d.id);
+        console.log(`[buildPlayers] Scoped to ${scopedMatchIds.size} matches for league=${leagueCode || 'all'} season=${filterSeason || 'all'}`);
+        if (scopedMatchIds.size === 0)
+            return { players: 0, teams: 0 };
+    }
+    // seasonsOnly fast path: stream through matchDetails, only collect playerIds + season
+    // Never accumulates full doc data — avoids OOM on large datasets
+    if (seasonsOnly) {
+        let lastDoc = null;
+        const pageSize = 500;
+        let processed = 0;
+        while (true) {
+            let q = db.collection(config_1.COLLECTIONS.MATCH_DETAILS)
+                .orderBy('matchId')
+                .limit(pageSize);
+            if (lastDoc)
+                q = q.startAfter(lastDoc);
+            const snapshot = await q.get();
+            if (snapshot.empty)
+                break;
+            for (const doc of snapshot.docs) {
+                const data = doc.data();
+                if (scopedMatchIds && !scopedMatchIds.has(String(data.matchId)))
+                    continue;
+                const season = data.season;
+                if (season == null || !((_a = data.playerIds) === null || _a === void 0 ? void 0 : _a.length))
+                    continue;
+                for (const pid of data.playerIds) {
+                    if (!playerSeasons.has(pid))
+                        playerSeasons.set(pid, new Set());
+                    playerSeasons.get(pid).add(season);
+                }
+                processed++;
+            }
+            lastDoc = snapshot.docs[snapshot.docs.length - 1];
+        }
+        console.log(`[buildPlayers] Streamed ${processed} match details for seasonsOnly`);
+        // Batch-write only availableSeasons
+        const entries = Array.from(playerSeasons.entries());
+        for (let i = 0; i < entries.length; i += config_1.FIRESTORE_BATCH_SIZE) {
+            const chunk = entries.slice(i, i + config_1.FIRESTORE_BATCH_SIZE);
+            const batch = db.batch();
+            for (const [playerId, seasons] of chunk) {
+                batch.set(db.collection(config_1.COLLECTIONS.PLAYERS).doc(String(playerId)), { availableSeasons: Array.from(seasons).sort((a, b) => b - a) }, { merge: true });
+            }
+            await batch.commit();
+        }
+        console.log(`[buildPlayers] Updated availableSeasons for ${entries.length} players`);
+        return { players: entries.length, teams: 0 };
+    }
+    // Full rebuild — load matchDetails into memory
     const detailsList = [];
     const matchIdsNeeded = new Set();
     let lastDoc = null;
@@ -240,6 +371,9 @@ async function buildPlayersAndEnrichTeams() {
             break;
         for (const d of snapshot.docs) {
             const data = d.data();
+            // Skip if not in scoped set
+            if (scopedMatchIds && !scopedMatchIds.has(String(data.matchId)))
+                continue;
             detailsList.push({ matchId: data.matchId, data });
             matchIdsNeeded.add(String(data.matchId));
         }
@@ -271,13 +405,13 @@ async function buildPlayersAndEnrichTeams() {
     for (const { data: d, matchData } of detailsWithKickoff) {
         const isCurrentSeason = (matchData === null || matchData === void 0 ? void 0 : matchData.season) === currentSeason;
         const kickoff = (matchData === null || matchData === void 0 ? void 0 : matchData.kickoff) || '';
-        const homeTeamId = (_a = matchData === null || matchData === void 0 ? void 0 : matchData.homeTeam) === null || _a === void 0 ? void 0 : _a.id;
-        const awayTeamId = (_b = matchData === null || matchData === void 0 ? void 0 : matchData.awayTeam) === null || _b === void 0 ? void 0 : _b.id;
-        const homeTeamName = (_c = matchData === null || matchData === void 0 ? void 0 : matchData.homeTeam) === null || _c === void 0 ? void 0 : _c.name;
-        const awayTeamName = (_d = matchData === null || matchData === void 0 ? void 0 : matchData.awayTeam) === null || _d === void 0 ? void 0 : _d.name;
-        const homeTeamCrest = (_e = matchData === null || matchData === void 0 ? void 0 : matchData.homeTeam) === null || _e === void 0 ? void 0 : _e.crest;
-        const awayTeamCrest = (_f = matchData === null || matchData === void 0 ? void 0 : matchData.awayTeam) === null || _f === void 0 ? void 0 : _f.crest;
-        const competitionCode = ((_g = matchData === null || matchData === void 0 ? void 0 : matchData.competition) === null || _g === void 0 ? void 0 : _g.code) || '';
+        const homeTeamId = (_b = matchData === null || matchData === void 0 ? void 0 : matchData.homeTeam) === null || _b === void 0 ? void 0 : _b.id;
+        const awayTeamId = (_c = matchData === null || matchData === void 0 ? void 0 : matchData.awayTeam) === null || _c === void 0 ? void 0 : _c.id;
+        const homeTeamName = (_d = matchData === null || matchData === void 0 ? void 0 : matchData.homeTeam) === null || _d === void 0 ? void 0 : _d.name;
+        const awayTeamName = (_e = matchData === null || matchData === void 0 ? void 0 : matchData.awayTeam) === null || _e === void 0 ? void 0 : _e.name;
+        const homeTeamCrest = (_f = matchData === null || matchData === void 0 ? void 0 : matchData.homeTeam) === null || _f === void 0 ? void 0 : _f.crest;
+        const awayTeamCrest = (_g = matchData === null || matchData === void 0 ? void 0 : matchData.awayTeam) === null || _g === void 0 ? void 0 : _g.crest;
+        const competitionCode = ((_h = matchData === null || matchData === void 0 ? void 0 : matchData.competition) === null || _h === void 0 ? void 0 : _h.code) || '';
         // Helper to upsert a player — always update currentTeam if this match is newer
         const upsertPlayer = (p, teamId, teamName, teamCrest, compCode) => {
             var _a;
@@ -285,6 +419,13 @@ async function buildPlayersAndEnrichTeams() {
                 return;
             const prev = playerLatestKickoff.get(p.id) || '';
             const isNewer = kickoff >= prev;
+            // Track season for this player
+            const matchSeason = matchData === null || matchData === void 0 ? void 0 : matchData.season;
+            if (matchSeason != null) {
+                if (!playerSeasons.has(p.id))
+                    playerSeasons.set(p.id, new Set());
+                playerSeasons.get(p.id).add(matchSeason);
+            }
             if (!playersMap.has(p.id)) {
                 playersMap.set(p.id, {
                     id: p.id,
@@ -323,23 +464,23 @@ async function buildPlayersAndEnrichTeams() {
         }
         // Coaches — only from current season for team enrichment
         if (isCurrentSeason) {
-            if (((_h = d.homeCoach) === null || _h === void 0 ? void 0 : _h.id) && homeTeamId) {
+            if (((_j = d.homeCoach) === null || _j === void 0 ? void 0 : _j.id) && homeTeamId) {
                 teamCoaches.set(homeTeamId, { id: d.homeCoach.id, name: d.homeCoach.name });
             }
-            if (((_j = d.awayCoach) === null || _j === void 0 ? void 0 : _j.id) && awayTeamId) {
+            if (((_k = d.awayCoach) === null || _k === void 0 ? void 0 : _k.id) && awayTeamId) {
                 teamCoaches.set(awayTeamId, { id: d.awayCoach.id, name: d.awayCoach.name });
             }
         }
         // Coaches as player docs — only create if the ID doesn't already exist as a
         // lineup/bench player (API data sometimes has coach ID clashes with player IDs).
         // Real coaches are handled correctly by the enrichment step via getTeamCoach().
-        if ((_k = d.homeCoach) === null || _k === void 0 ? void 0 : _k.id) {
+        if ((_l = d.homeCoach) === null || _l === void 0 ? void 0 : _l.id) {
             const existing = playersMap.get(d.homeCoach.id);
             if (!existing || existing.position === 'Coach' || !existing.position) {
                 upsertPlayer({ id: d.homeCoach.id, name: d.homeCoach.name, position: 'Coach' }, homeTeamId, homeTeamName, homeTeamCrest, competitionCode);
             }
         }
-        if ((_l = d.awayCoach) === null || _l === void 0 ? void 0 : _l.id) {
+        if ((_m = d.awayCoach) === null || _m === void 0 ? void 0 : _m.id) {
             const existing = playersMap.get(d.awayCoach.id);
             if (!existing || existing.position === 'Coach' || !existing.position) {
                 upsertPlayer({ id: d.awayCoach.id, name: d.awayCoach.name, position: 'Coach' }, awayTeamId, awayTeamName, awayTeamCrest, competitionCode);
@@ -366,13 +507,15 @@ async function buildPlayersAndEnrichTeams() {
         const batch = db.batch();
         for (const player of chunk) {
             const ref = db.collection(config_1.COLLECTIONS.PLAYERS).doc(String(player.id));
+            const seasons = playerSeasons.get(player.id);
+            const availableSeasons = seasons ? Array.from(seasons).sort((a, b) => b - a) : [];
             if (existingNameMap.has(player.id)) {
                 // Player already enriched — only update currentTeam and position, not name fields
                 const { name, nameLower, searchName, ...rest } = player;
-                batch.set(ref, { ...rest, syncedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+                batch.set(ref, { ...rest, availableSeasons, syncedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
             }
             else {
-                batch.set(ref, { ...player, syncedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+                batch.set(ref, { ...player, availableSeasons, syncedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
             }
         }
         await batch.commit();

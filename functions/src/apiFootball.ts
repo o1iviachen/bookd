@@ -269,6 +269,19 @@ export interface ApiCoach {
   }>;
 }
 
+export interface ApiLeagueInfo {
+  league: { id: number; name: string; type: string; logo: string };
+  country: { name: string; code: string | null; flag: string | null };
+  seasons: { year: number; start: string; end: string; current: boolean }[];
+}
+
+export async function getLeagueInfo(leagueId: number): Promise<ApiLeagueInfo | null> {
+  await rateLimit();
+  const response = await client.get('/leagues', { params: { id: leagueId } });
+  const data: ApiLeagueInfo[] = response.data.response || [];
+  return data.length > 0 ? data[0] : null;
+}
+
 export async function getTeamCoach(teamId: number): Promise<ApiCoach | null> {
   await rateLimit();
   const response = await client.get('/coachs', { params: { team: teamId } });

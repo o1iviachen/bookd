@@ -205,12 +205,14 @@ exports.backfill = functions
         res.status(401).json({ error: 'Unauthorized' });
         return;
     }
-    const leagueCode = req.query.league;
-    const season = req.query.season ? parseInt(req.query.season, 10) : undefined;
-    const includeDetails = req.query.details === 'true';
-    console.log(`[backfill] Starting: league=${leagueCode || 'all'}, season=${season || 'all'}, details=${includeDetails}`);
+    const body = req.body || {};
+    const leagueCode = req.query.league || body.league || undefined;
+    const apiId = req.query.apiId ? parseInt(req.query.apiId, 10) : body.apiId ? Number(body.apiId) : undefined;
+    const season = req.query.season ? parseInt(req.query.season, 10) : body.season ? Number(body.season) : undefined;
+    const includeDetails = req.query.details === 'true' || body.details === true;
+    console.log(`[backfill] Starting: league=${leagueCode || 'all'}, apiId=${apiId || 'n/a'}, season=${season || 'all'}, details=${includeDetails}`);
     try {
-        const result = await (0, backfill_1.runBackfill)({ leagueCode, season, includeDetails });
+        const result = await (0, backfill_1.runBackfill)({ leagueCode, apiId, season, includeDetails });
         res.json({
             success: true,
             ...result,
@@ -229,8 +231,10 @@ exports.buildTeams = functions
     .runWith({ timeoutSeconds: 540, memory: '512MB' })
     .https.onRequest(async (req, res) => {
     try {
-        const count = await (0, backfill_1.buildTeamsFromMatches)();
-        res.json({ success: true, teams: count });
+        const body = req.body || {};
+        const seasonsOnly = req.query.seasonsOnly === 'true' || body.seasonsOnly === true;
+        const count = await (0, backfill_1.buildTeamsFromMatches)({ seasonsOnly });
+        res.json({ success: true, teams: count, seasonsOnly });
     }
     catch (err) {
         console.error('[buildTeams] Error:', err);
@@ -384,14 +388,35 @@ exports.migrateHasDetails = functions
  * Also fixes inconsistent hasDetails flags.
  *   GET /backfillDetails
  *   GET /backfillDetails?max=1000
+ *   GET /backfillDetails?resetNotFound=true  — clears detailsNotFound flag first
  */
 exports.backfillDetails = functions
     .runWith({ timeoutSeconds: 540, memory: '512MB' })
     .https.onRequest(async (req, res) => {
     try {
-        const max = parseInt(req.query.max) || 500;
+        const body = req.body || {};
+        const resetNotFound = req.query.resetNotFound === 'true' || body.resetNotFound === true;
+        const db = admin.firestore();
+        // Clear detailsNotFound flag so those matches get reprocessed
+        if (resetNotFound) {
+            const flagged = await db.collection(config_1.COLLECTIONS.MATCHES)
+                .where('detailsNotFound', '==', true)
+                .get();
+            if (!flagged.empty) {
+                const BATCH_SIZE = 500;
+                for (let i = 0; i < flagged.docs.length; i += BATCH_SIZE) {
+                    const batch = db.batch();
+                    flagged.docs.slice(i, i + BATCH_SIZE).forEach((d) => {
+                        batch.update(d.ref, { detailsNotFound: admin.firestore.FieldValue.delete(), hasDetails: false });
+                    });
+                    await batch.commit();
+                }
+                console.log(`[backfillDetails] Reset detailsNotFound on ${flagged.size} matches`);
+            }
+        }
+        const max = req.query.max ? parseInt(req.query.max) : body.max ? Number(body.max) : 500;
         const result = await (0, backfill_1.backfillMissingMatchDetails)(max);
-        res.json(result);
+        res.json({ ...(resetNotFound ? { resetNotFound: true } : {}), ...result });
     }
     catch (err) {
         console.error('[backfillDetails] Error:', err);
@@ -602,13 +627,18 @@ exports.migrateLeagueTier = functions
 /**
  * Build player documents and enrich teams with coach/squad from match details.
  * Call after syncing match details.
+ *   GET /buildPlayers?league=PL&season=2024
  */
 exports.buildPlayers = functions
-    .runWith({ timeoutSeconds: 540, memory: '1GB' })
+    .runWith({ timeoutSeconds: 540, memory: '2GB' })
     .https.onRequest(async (req, res) => {
     try {
-        const result = await (0, backfill_1.buildPlayersAndEnrichTeams)();
-        res.json({ success: true, ...result });
+        const body = req.body || {};
+        const leagueCode = req.query.league || body.league || undefined;
+        const season = req.query.season ? parseInt(req.query.season, 10) : body.season ? Number(body.season) : undefined;
+        const seasonsOnly = req.query.seasonsOnly === 'true' || body.seasonsOnly === true;
+        const result = await (0, backfill_1.buildPlayersAndEnrichTeams)({ leagueCode, season, seasonsOnly });
+        res.json({ success: true, seasonsOnly, ...result });
     }
     catch (err) {
         console.error('[buildPlayers] Error:', err);

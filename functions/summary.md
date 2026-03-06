@@ -60,3 +60,43 @@
 |----------|----------|-------------|
 | `triggerAggregates` | `GET /triggerAggregates` | Manual trigger for `computeAggregates` (same logic, HTTP instead of scheduled) |
 | `diagnoseTeams` | `GET /diagnoseTeams?names=wolves,arsenal` | Find matches where team name/crest conflicts exist |
+
+---
+
+## Backfilling a Season for an Existing League
+
+Use this when a new season starts or you need to add historical data for a league already in `SYNC_LEAGUES`.
+
+1. **Backfill matches** for the league + season
+   ```
+   curl -X POST <function-url>/backfill \
+     -H "Content-Type: application/json" \
+     -H "Authorization: Bearer $ADMIN_KEY" \
+     -d '{"league": "PL", "season": 2025, "details": true}'
+   ```
+   - Fetches all matches from API-Football and writes to `matches` collection
+   - `details: true` also syncs lineups/events/stats for finished matches
+
+2. **Wait for remaining details** — `scheduledBackfillDetails` runs every 2 minutes and picks up finished matches with `hasDetails == false`. Or trigger manually:
+   ```
+   curl <function-url>/backfillDetails?max=500
+   ```
+   Call repeatedly until `missing: 0`.
+
+3. **Build player docs** from the new match lineups
+   ```
+   curl "<function-url>/buildPlayers?league=PL&season=2025"
+   ```
+   Creates/updates player docs from matchDetails lineups. Scoped to only the league+season matches.
+
+4. **Enrich players** with photos, DOB, nationality from API squads
+   ```
+   curl "<function-url>/enrichPlayers?limit=50&offset=0"
+   ```
+   Call repeatedly with increasing `offset` until all teams are processed.
+
+### After setup
+- `dailyPrepopulate` will automatically sync new matches daily
+- `liveSync` will track live scores for the league
+- `lineupSync` will fetch pre-match lineups
+- `staleSync` catches any missed matches

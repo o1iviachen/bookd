@@ -1,10 +1,10 @@
 import { BACKFILL_SEASONS, COLLECTIONS, FIRESTORE_BATCH_SIZE } from '../config';
-import { getEnabledLeagues, getLeagueByCodeMap, getLeagueTier } from '../leagueHelper';
+import { getEnabledLeagues, getLeagueByCodeMap, getLeagueTier, clearLeagueCache } from '../leagueHelper';
 import { syncLeagueSeason } from './syncMatches';
 import { syncLeagueStandings } from './syncStandings';
 import { syncMatchDetails } from './syncDetails';
 import * as admin from 'firebase-admin';
-import { getFixtures, getTeamSquad, getTeamInfo, getTeamCoach } from '../apiFootball';
+import { getFixtures, getTeamSquad, getTeamInfo, getTeamCoach, getLeagueInfo } from '../apiFootball';
 import { API_FOOTBALL_BASE, API_FOOTBALL_KEY, RATE_LIMIT_DELAY_MS } from '../config';
 import axios from 'axios';
 
@@ -39,12 +39,47 @@ function decodeEntities(text: string): string {
  */
 export async function runBackfill(options: {
   leagueCode?: string;
+  apiId?: number;
   season?: number;
   includeDetails?: boolean;
-}): Promise<{ leagues: number; matches: number; details: number }> {
-  const { leagueCode, season, includeDetails } = options;
+}): Promise<{ leagues: number; matches: number; details: number; leagueCreated?: boolean }> {
+  const { leagueCode, apiId, season, includeDetails } = options;
 
-  const allLeagues = await getEnabledLeagues();
+  let allLeagues = await getEnabledLeagues();
+  let leagueCreated = false;
+
+  // Auto-create league doc if code + apiId given but league doesn't exist
+  if (leagueCode && apiId && !allLeagues.find((l) => l.code === leagueCode)) {
+    const info = await getLeagueInfo(apiId);
+    if (!info) {
+      throw new Error(`Could not fetch league info from API for apiId=${apiId}`);
+    }
+
+    // Calendar-year leagues have seasons starting in Jan-Mar
+    const currentSeason = info.seasons.find((s) => s.current);
+    const startMonth = currentSeason ? new Date(currentSeason.start).getMonth() + 1 : 8;
+    const seasonType = startMonth <= 3 ? 'calendar-year' : 'european';
+
+    const leagueDoc: Record<string, any> = {
+      code: leagueCode,
+      apiId,
+      name: info.league.name,
+      country: info.country.name,
+      emblem: info.league.logo,
+      tier: 6,
+      isCup: info.league.type === 'Cup',
+      seasonType,
+      displayOrder: 99,
+      enabled: true,
+      followable: true,
+    };
+    await db.collection(COLLECTIONS.LEAGUES).doc(leagueCode).set(leagueDoc, { merge: true });
+    clearLeagueCache();
+    allLeagues = await getEnabledLeagues();
+    leagueCreated = true;
+    console.log(`[backfill] Auto-created league doc: ${leagueCode} (apiId=${apiId}, name=${info.league.name}, type=${info.league.type}, seasonType=${seasonType})`);
+  }
+
   const leagues = leagueCode
     ? allLeagues.filter((l) => l.code === leagueCode)
     : allLeagues;
@@ -82,7 +117,7 @@ export async function runBackfill(options: {
     }
   }
 
-  return { leagues: leagues.length, matches: totalMatches, details: totalDetails };
+  return { leagues: leagues.length, matches: totalMatches, details: totalDetails, leagueCreated };
 }
 
 /**
@@ -105,8 +140,12 @@ async function getFinishedFixtureIds(leagueApiId: number, season: number): Promi
  * Syncs team data from the matches already in Firestore.
  * Extracts unique teams from match documents and creates team docs.
  */
-export async function buildTeamsFromMatches(): Promise<number> {
+export async function buildTeamsFromMatches(options?: {
+  seasonsOnly?: boolean;
+}): Promise<number> {
+  const { seasonsOnly } = options || {};
   const teamsMap = new Map<number, Record<string, any>>();
+  const teamSeasons = new Map<number, Set<number>>();
 
   // Read all matches in batches
   let lastDoc: any = null;
@@ -126,58 +165,93 @@ export async function buildTeamsFromMatches(): Promise<number> {
 
     for (const doc of snapshot.docs) {
       const data = doc.data();
+      const season = data.season as number | undefined;
 
-      // Extract home team
-      if (data.homeTeam?.id && !teamsMap.has(data.homeTeam.id)) {
-        teamsMap.set(data.homeTeam.id, {
-          id: data.homeTeam.id,
-          name: data.homeTeam.name,
-          shortName: data.homeTeam.shortName,
-          crest: data.homeTeam.crest,
-          venue: null,
-          founded: null,
-          country: '',
-          competitionCodes: [data.competition.code],
-        });
-      } else if (data.homeTeam?.id) {
-        const existing = teamsMap.get(data.homeTeam.id)!;
-        if (!existing.competitionCodes.includes(data.competition.code)) {
-          existing.competitionCodes.push(data.competition.code);
-        }
-      }
+      const trackSeason = (teamId: number) => {
+        if (season == null) return;
+        if (!teamSeasons.has(teamId)) teamSeasons.set(teamId, new Set());
+        teamSeasons.get(teamId)!.add(season);
+      };
 
-      // Extract away team
-      if (data.awayTeam?.id && !teamsMap.has(data.awayTeam.id)) {
-        teamsMap.set(data.awayTeam.id, {
-          id: data.awayTeam.id,
-          name: data.awayTeam.name,
-          shortName: data.awayTeam.shortName,
-          crest: data.awayTeam.crest,
-          venue: null,
-          founded: null,
-          country: '',
-          competitionCodes: [data.competition.code],
-        });
-      } else if (data.awayTeam?.id) {
-        const existing = teamsMap.get(data.awayTeam.id)!;
-        if (!existing.competitionCodes.includes(data.competition.code)) {
-          existing.competitionCodes.push(data.competition.code);
+      if (seasonsOnly) {
+        // Only collect seasons per team
+        if (data.homeTeam?.id) trackSeason(data.homeTeam.id);
+        if (data.awayTeam?.id) trackSeason(data.awayTeam.id);
+      } else {
+        // Full rebuild — collect team data + seasons
+        if (data.homeTeam?.id && !teamsMap.has(data.homeTeam.id)) {
+          teamsMap.set(data.homeTeam.id, {
+            id: data.homeTeam.id,
+            name: data.homeTeam.name,
+            shortName: data.homeTeam.shortName,
+            crest: data.homeTeam.crest,
+            venue: null,
+            founded: null,
+            country: '',
+            competitionCodes: [data.competition.code],
+          });
+        } else if (data.homeTeam?.id) {
+          const existing = teamsMap.get(data.homeTeam.id)!;
+          if (!existing.competitionCodes.includes(data.competition.code)) {
+            existing.competitionCodes.push(data.competition.code);
+          }
         }
+        if (data.homeTeam?.id) trackSeason(data.homeTeam.id);
+
+        if (data.awayTeam?.id && !teamsMap.has(data.awayTeam.id)) {
+          teamsMap.set(data.awayTeam.id, {
+            id: data.awayTeam.id,
+            name: data.awayTeam.name,
+            shortName: data.awayTeam.shortName,
+            crest: data.awayTeam.crest,
+            venue: null,
+            founded: null,
+            country: '',
+            competitionCodes: [data.competition.code],
+          });
+        } else if (data.awayTeam?.id) {
+          const existing = teamsMap.get(data.awayTeam.id)!;
+          if (!existing.competitionCodes.includes(data.competition.code)) {
+            existing.competitionCodes.push(data.competition.code);
+          }
+        }
+        if (data.awayTeam?.id) trackSeason(data.awayTeam.id);
       }
     }
 
     lastDoc = snapshot.docs[snapshot.docs.length - 1];
   }
 
-  // Write teams to Firestore
+  if (seasonsOnly) {
+    // Write only availableSeasons to existing team docs
+    const entries = Array.from(teamSeasons.entries());
+    for (let i = 0; i < entries.length; i += 450) {
+      const chunk = entries.slice(i, i + 450);
+      const batch = db.batch();
+      for (const [teamId, seasons] of chunk) {
+        batch.set(
+          db.collection(COLLECTIONS.TEAMS).doc(String(teamId)),
+          { availableSeasons: Array.from(seasons).sort((a, b) => b - a) },
+          { merge: true }
+        );
+      }
+      await batch.commit();
+    }
+    console.log(`[buildTeams] Updated availableSeasons for ${entries.length} teams`);
+    return entries.length;
+  }
+
+  // Write teams to Firestore (full rebuild)
   const teams = Array.from(teamsMap.values());
   for (let i = 0; i < teams.length; i += 450) {
     const chunk = teams.slice(i, i + 450);
     const batch = db.batch();
     for (const team of chunk) {
+      const seasons = teamSeasons.get(team.id);
+      const availableSeasons = seasons ? Array.from(seasons).sort((a: number, b: number) => b - a) : [];
       batch.set(
         db.collection(COLLECTIONS.TEAMS).doc(String(team.id)),
-        { ...team, syncedAt: admin.firestore.FieldValue.serverTimestamp() },
+        { ...team, availableSeasons, syncedAt: admin.firestore.FieldValue.serverTimestamp() },
         { merge: true }
       );
     }
@@ -193,17 +267,83 @@ export async function buildTeamsFromMatches(): Promise<number> {
  * Extracts all unique players from lineups and creates player docs.
  * Also enriches team docs with coach and squad data.
  */
-export async function buildPlayersAndEnrichTeams(): Promise<{ players: number; teams: number }> {
+export async function buildPlayersAndEnrichTeams(options?: {
+  leagueCode?: string;
+  season?: number;
+  seasonsOnly?: boolean;
+}): Promise<{ players: number; teams: number }> {
   const playersMap = new Map<number, Record<string, any>>();
   const teamCoaches = new Map<number, { id: number; name: string }>();
+  const playerSeasons = new Map<number, Set<number>>();
+  const { leagueCode, season: filterSeason, seasonsOnly } = options || {};
 
   // Determine current season — only use these matches for coach assignment
   const now = new Date();
   const month = now.getMonth() + 1;
   const currentSeason = month >= 7 ? now.getFullYear() : now.getFullYear() - 1;
-  console.log(`[buildPlayers] Current season: ${currentSeason}`);
+  console.log(`[buildPlayers] Current season: ${currentSeason}, filter: league=${leagueCode || 'all'} season=${filterSeason || 'all'}`);
 
-  // Read all matchDetails in batches, collecting matchIds we need
+  // If filtering by league/season, query matches first to get the relevant IDs
+  let scopedMatchIds: Set<string> | null = null;
+  if (leagueCode || filterSeason) {
+    scopedMatchIds = new Set<string>();
+    let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.MATCHES);
+    if (leagueCode) q = q.where('competition.code', '==', leagueCode);
+    if (filterSeason) q = q.where('season', '==', filterSeason);
+    const snap = await q.get();
+    for (const d of snap.docs) scopedMatchIds.add(d.id);
+    console.log(`[buildPlayers] Scoped to ${scopedMatchIds.size} matches for league=${leagueCode || 'all'} season=${filterSeason || 'all'}`);
+    if (scopedMatchIds.size === 0) return { players: 0, teams: 0 };
+  }
+
+  // seasonsOnly fast path: stream through matchDetails, only collect playerIds + season
+  // Never accumulates full doc data — avoids OOM on large datasets
+  if (seasonsOnly) {
+    let lastDoc: any = null;
+    const pageSize = 500;
+    let processed = 0;
+
+    while (true) {
+      let q = db.collection(COLLECTIONS.MATCH_DETAILS)
+        .orderBy('matchId')
+        .limit(pageSize);
+      if (lastDoc) q = q.startAfter(lastDoc);
+      const snapshot = await q.get();
+      if (snapshot.empty) break;
+      for (const doc of snapshot.docs) {
+        const data = doc.data();
+        if (scopedMatchIds && !scopedMatchIds.has(String(data.matchId))) continue;
+        const season = data.season as number | undefined;
+        if (season == null || !data.playerIds?.length) continue;
+        for (const pid of data.playerIds as number[]) {
+          if (!playerSeasons.has(pid)) playerSeasons.set(pid, new Set());
+          playerSeasons.get(pid)!.add(season);
+        }
+        processed++;
+      }
+      lastDoc = snapshot.docs[snapshot.docs.length - 1];
+    }
+    console.log(`[buildPlayers] Streamed ${processed} match details for seasonsOnly`);
+
+    // Batch-write only availableSeasons
+    const entries = Array.from(playerSeasons.entries());
+    for (let i = 0; i < entries.length; i += FIRESTORE_BATCH_SIZE) {
+      const chunk = entries.slice(i, i + FIRESTORE_BATCH_SIZE);
+      const batch = db.batch();
+      for (const [playerId, seasons] of chunk) {
+        batch.set(
+          db.collection(COLLECTIONS.PLAYERS).doc(String(playerId)),
+          { availableSeasons: Array.from(seasons).sort((a, b) => b - a) },
+          { merge: true }
+        );
+      }
+      await batch.commit();
+    }
+    console.log(`[buildPlayers] Updated availableSeasons for ${entries.length} players`);
+    return { players: entries.length, teams: 0 };
+  }
+
+  // Full rebuild — load matchDetails into memory
   const detailsList: Array<{ matchId: number; data: Record<string, any> }> = [];
   const matchIdsNeeded = new Set<string>();
   let lastDoc: any = null;
@@ -218,6 +358,8 @@ export async function buildPlayersAndEnrichTeams(): Promise<{ players: number; t
     if (snapshot.empty) break;
     for (const d of snapshot.docs) {
       const data = d.data();
+      // Skip if not in scoped set
+      if (scopedMatchIds && !scopedMatchIds.has(String(data.matchId))) continue;
       detailsList.push({ matchId: data.matchId, data });
       matchIdsNeeded.add(String(data.matchId));
     }
@@ -265,6 +407,13 @@ export async function buildPlayersAndEnrichTeams(): Promise<{ players: number; t
       if (!p.id) return;
       const prev = playerLatestKickoff.get(p.id) || '';
       const isNewer = kickoff >= prev;
+
+      // Track season for this player
+      const matchSeason = matchData?.season as number | undefined;
+      if (matchSeason != null) {
+        if (!playerSeasons.has(p.id)) playerSeasons.set(p.id, new Set());
+        playerSeasons.get(p.id)!.add(matchSeason);
+      }
 
       if (!playersMap.has(p.id)) {
         playersMap.set(p.id, {
@@ -359,12 +508,14 @@ export async function buildPlayersAndEnrichTeams(): Promise<{ players: number; t
     const batch = db.batch();
     for (const player of chunk) {
       const ref = db.collection(COLLECTIONS.PLAYERS).doc(String(player.id));
+      const seasons = playerSeasons.get(player.id);
+      const availableSeasons = seasons ? Array.from(seasons).sort((a, b) => b - a) : [];
       if (existingNameMap.has(player.id)) {
         // Player already enriched — only update currentTeam and position, not name fields
         const { name, nameLower, searchName, ...rest } = player;
-        batch.set(ref, { ...rest, syncedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+        batch.set(ref, { ...rest, availableSeasons, syncedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
       } else {
-        batch.set(ref, { ...player, syncedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+        batch.set(ref, { ...player, availableSeasons, syncedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
       }
     }
     await batch.commit();
