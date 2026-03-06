@@ -44,6 +44,7 @@ exports.refreshSquadsOnly = refreshSquadsOnly;
 exports.enrichPlayersFromSquads = enrichPlayersFromSquads;
 exports.generateSearchPrefixes = generateSearchPrefixes;
 exports.backfillPlayerNameLower = backfillPlayerNameLower;
+exports.backfillMissingMatchDetails = backfillMissingMatchDetails;
 const config_1 = require("../config");
 const leagueHelper_1 = require("../leagueHelper");
 const syncMatches_1 = require("./syncMatches");
@@ -328,20 +329,20 @@ async function buildPlayersAndEnrichTeams() {
                 teamCoaches.set(awayTeamId, { id: d.awayCoach.id, name: d.awayCoach.name });
             }
         }
-        // Coaches as player docs — preserve formerPosition if they were a player
+        // Coaches as player docs — only create if the ID doesn't already exist as a
+        // lineup/bench player (API data sometimes has coach ID clashes with player IDs).
+        // Real coaches are handled correctly by the enrichment step via getTeamCoach().
         if ((_k = d.homeCoach) === null || _k === void 0 ? void 0 : _k.id) {
             const existing = playersMap.get(d.homeCoach.id);
-            if (existing && existing.position && existing.position !== 'Coach') {
-                existing.formerPosition = existing.position;
+            if (!existing || existing.position === 'Coach' || !existing.position) {
+                upsertPlayer({ id: d.homeCoach.id, name: d.homeCoach.name, position: 'Coach' }, homeTeamId, homeTeamName, homeTeamCrest, competitionCode);
             }
-            upsertPlayer({ id: d.homeCoach.id, name: d.homeCoach.name, position: 'Coach' }, homeTeamId, homeTeamName, homeTeamCrest, competitionCode);
         }
         if ((_l = d.awayCoach) === null || _l === void 0 ? void 0 : _l.id) {
             const existing = playersMap.get(d.awayCoach.id);
-            if (existing && existing.position && existing.position !== 'Coach') {
-                existing.formerPosition = existing.position;
+            if (!existing || existing.position === 'Coach' || !existing.position) {
+                upsertPlayer({ id: d.awayCoach.id, name: d.awayCoach.name, position: 'Coach' }, awayTeamId, awayTeamName, awayTeamCrest, competitionCode);
             }
-            upsertPlayer({ id: d.awayCoach.id, name: d.awayCoach.name, position: 'Coach' }, awayTeamId, awayTeamName, awayTeamCrest, competitionCode);
         }
     }
     console.log(`[buildPlayers] Processed all details: ${playersMap.size} players`);
@@ -895,6 +896,90 @@ function mapSquadPosition(pos) {
         case 'Attacker': return 'Attacker';
         case 'Forward': return 'Attacker'; // normalize legacy
         default: return pos || 'Unknown';
+    }
+}
+/**
+ * Backfills missing matchDetails for FINISHED matches.
+ * Does a ground-truth existence check against the matchDetails collection
+ * (doesn't trust the hasDetails flag). Also fixes inconsistent hasDetails flags.
+ *
+ * @param maxMatches Max number of missing matches to sync per invocation (default 500).
+ *                   Each match = 4 API calls (fixture + lineups + events + stats).
+ */
+async function backfillMissingMatchDetails(maxMatches = 500) {
+    var _a, _b;
+    let total = 0;
+    let missing = 0;
+    let synced = 0;
+    let failed = 0;
+    const missingIds = [];
+    try {
+        // Query FINISHED matches where hasDetails is false and not marked detailsNotFound
+        const snap = await db.collection(config_1.COLLECTIONS.MATCHES)
+            .where('status', '==', 'FINISHED')
+            .where('hasDetails', '==', false)
+            .orderBy('kickoff', 'desc')
+            .limit(maxMatches)
+            .get();
+        if (!snap.empty) {
+            total = snap.size;
+            for (const doc of snap.docs) {
+                if (doc.data().detailsNotFound)
+                    continue;
+                missingIds.push(doc.data().id);
+            }
+        }
+        missing = missingIds.length;
+        if (missing === 0) {
+            console.log(`[backfillDetails] All ${total} finished matches have details`);
+            return { total, missing: 0, synced: 0, failed: 0, syncedIds: [], failedIds: [] };
+        }
+        console.log(`[backfillDetails] Found ${missing} matches missing details out of ${total} scanned: [${missingIds.join(', ')}]`);
+        // Sync missing details in batches of 10
+        const SYNC_BATCH = 10;
+        const syncedIds = [];
+        const failedIds = [];
+        for (let i = 0; i < missingIds.length; i += SYNC_BATCH) {
+            const batch = missingIds.slice(i, i + SYNC_BATCH);
+            try {
+                const count = await (0, syncDetails_1.syncMatchDetails)(batch, true);
+                synced += count;
+                failed += batch.length - count;
+                // Check which ones actually got synced
+                const detailRefs = batch.map((id) => db.collection(config_1.COLLECTIONS.MATCH_DETAILS).doc(String(id)));
+                const detailSnaps = await db.getAll(...detailRefs);
+                for (let j = 0; j < batch.length; j++) {
+                    if (detailSnaps[j].exists)
+                        syncedIds.push(batch[j]);
+                    else
+                        failedIds.push(batch[j]);
+                }
+                console.log(`[backfillDetails] Progress: ${synced + failed}/${missing} (${synced} synced, ${failed} failed)`);
+            }
+            catch (err) {
+                // Stop on rate limit
+                if (((_a = err.message) === null || _a === void 0 ? void 0 : _a.includes('429')) || ((_b = err.message) === null || _b === void 0 ? void 0 : _b.includes('request limit'))) {
+                    console.error(`[backfillDetails] Rate limited after syncing ${synced}. Stopping.`);
+                    const remaining = missingIds.slice(i + batch.length);
+                    failedIds.push(...remaining);
+                    failed += remaining.length;
+                    break;
+                }
+                failedIds.push(...batch);
+                failed += batch.length;
+                console.error(`[backfillDetails] Batch error:`, err.message);
+            }
+        }
+        console.log(`[backfillDetails] Done: ${total} scanned, ${missing} missing, ${synced} synced, ${failed} failed`);
+        console.log(`[backfillDetails] Synced IDs: [${syncedIds.join(', ')}]`);
+        if (failedIds.length > 0) {
+            console.log(`[backfillDetails] Failed IDs: [${failedIds.join(', ')}]`);
+        }
+        return { total, missing, synced, failed, syncedIds, failedIds };
+    }
+    catch (err) {
+        console.error('[backfillDetails] Error:', err.message);
+        return { total, missing, synced, failed, syncedIds: [], failedIds: [] };
     }
 }
 //# sourceMappingURL=backfill.js.map

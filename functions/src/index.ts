@@ -9,7 +9,7 @@ import { syncMatchDetails } from './sync/syncDetails';
 import { syncLiveMatches } from './sync/syncLive';
 import { syncPreMatchLineups } from './sync/syncLineups';
 import { syncStaleMatchDetails } from './sync/syncStale';
-import { runBackfill, buildTeamsFromMatches, buildPlayersAndEnrichTeams, fetchTeamColors, enrichPlayersFromSquads, refreshSquadsOnly, backfillPlayerNameLower, generateSearchPrefixes, backfillMissingMatchDetails, backfillTeamCountry } from './sync/backfill';
+import { runBackfill, buildTeamsFromMatches, buildPlayersAndEnrichTeams, fetchTeamColors, enrichPlayersFromSquads, refreshSquadsOnly, backfillPlayerNameLower, generateSearchPrefixes, backfillMissingMatchDetails } from './sync/backfill';
 import { getLeagueTier } from './leagueHelper';
 import { SYNC_LEAGUES, COLLECTIONS } from './config';
 
@@ -646,22 +646,6 @@ export const enrichTeams = functions
     }
   });
 
-/**
- * One-off: backfill real country for team docs (replaces city values).
- *   GET /backfillCountry?limit=200
- */
-export const backfillCountry = functions
-  .runWith({ timeoutSeconds: 540, memory: '512MB' })
-  .https.onRequest(async (req, res) => {
-    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 200;
-    try {
-      const result = await backfillTeamCountry(limit);
-      res.json({ success: true, ...result });
-    } catch (err: any) {
-      console.error('[backfillCountry] Error:', err);
-      res.status(500).json({ error: err.message });
-    }
-  });
 
 /**
  * Enrich player docs with photos from API-Football /players/squads endpoint.

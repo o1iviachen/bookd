@@ -966,3 +966,91 @@ function mapSquadPosition(pos: string): string {
     default: return pos || 'Unknown';
   }
 }
+
+/**
+ * Backfills missing matchDetails for FINISHED matches.
+ * Does a ground-truth existence check against the matchDetails collection
+ * (doesn't trust the hasDetails flag). Also fixes inconsistent hasDetails flags.
+ *
+ * @param maxMatches Max number of missing matches to sync per invocation (default 500).
+ *                   Each match = 4 API calls (fixture + lineups + events + stats).
+ */
+export async function backfillMissingMatchDetails(
+  maxMatches = 500,
+): Promise<{ total: number; missing: number; synced: number; failed: number; syncedIds: number[]; failedIds: number[] }> {
+  let total = 0;
+  let missing = 0;
+  let synced = 0;
+  let failed = 0;
+  const missingIds: number[] = [];
+
+  try {
+    // Query FINISHED matches where hasDetails is false and not marked detailsNotFound
+    const snap = await db.collection(COLLECTIONS.MATCHES)
+      .where('status', '==', 'FINISHED')
+      .where('hasDetails', '==', false)
+      .orderBy('kickoff', 'desc')
+      .limit(maxMatches)
+      .get();
+
+    if (!snap.empty) {
+      total = snap.size;
+      for (const doc of snap.docs) {
+        if (doc.data().detailsNotFound) continue;
+        missingIds.push(doc.data().id as number);
+      }
+    }
+
+    missing = missingIds.length;
+    if (missing === 0) {
+      console.log(`[backfillDetails] All ${total} finished matches have details`);
+      return { total, missing: 0, synced: 0, failed: 0, syncedIds: [], failedIds: [] };
+    }
+
+    console.log(`[backfillDetails] Found ${missing} matches missing details out of ${total} scanned: [${missingIds.join(', ')}]`);
+
+    // Sync missing details in batches of 10
+    const SYNC_BATCH = 10;
+    const syncedIds: number[] = [];
+    const failedIds: number[] = [];
+
+    for (let i = 0; i < missingIds.length; i += SYNC_BATCH) {
+      const batch = missingIds.slice(i, i + SYNC_BATCH);
+      try {
+        const count = await syncMatchDetails(batch, true);
+        synced += count;
+        failed += batch.length - count;
+        // Check which ones actually got synced
+        const detailRefs = batch.map((id) => db.collection(COLLECTIONS.MATCH_DETAILS).doc(String(id)));
+        const detailSnaps = await db.getAll(...detailRefs);
+        for (let j = 0; j < batch.length; j++) {
+          if (detailSnaps[j].exists) syncedIds.push(batch[j]);
+          else failedIds.push(batch[j]);
+        }
+        console.log(`[backfillDetails] Progress: ${synced + failed}/${missing} (${synced} synced, ${failed} failed)`);
+      } catch (err: any) {
+        // Stop on rate limit
+        if (err.message?.includes('429') || err.message?.includes('request limit')) {
+          console.error(`[backfillDetails] Rate limited after syncing ${synced}. Stopping.`);
+          const remaining = missingIds.slice(i + batch.length);
+          failedIds.push(...remaining);
+          failed += remaining.length;
+          break;
+        }
+        failedIds.push(...batch);
+        failed += batch.length;
+        console.error(`[backfillDetails] Batch error:`, err.message);
+      }
+    }
+
+    console.log(`[backfillDetails] Done: ${total} scanned, ${missing} missing, ${synced} synced, ${failed} failed`);
+    console.log(`[backfillDetails] Synced IDs: [${syncedIds.join(', ')}]`);
+    if (failedIds.length > 0) {
+      console.log(`[backfillDetails] Failed IDs: [${failedIds.join(', ')}]`);
+    }
+    return { total, missing, synced, failed, syncedIds, failedIds };
+  } catch (err: any) {
+    console.error('[backfillDetails] Error:', err.message);
+    return { total, missing, synced, failed, syncedIds: [], failedIds: [] };
+  }
+}
