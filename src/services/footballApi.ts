@@ -101,13 +101,11 @@ function isValidMatch(data: Record<string, any>): boolean {
 
 export async function getMatchesByDate(date: Date): Promise<Match[]> {
   try {
-    // Use local date parts (not toISOString which converts to UTC and shifts the day)
-    const yyyy = date.getFullYear();
-    const mm = String(date.getMonth() + 1).padStart(2, '0');
-    const dd = String(date.getDate()).padStart(2, '0');
-    const dateStr = `${yyyy}-${mm}-${dd}`;
-    const startOfDay = `${dateStr}T00:00:00Z`;
-    const endOfDay = `${dateStr}T23:59:59Z`;
+    // Convert local day boundaries to UTC so matches are grouped by user's local date
+    const localStart = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0);
+    const localEnd = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
+    const startOfDay = localStart.toISOString();
+    const endOfDay = localEnd.toISOString();
 
     // Use season filter to skip old football-data.org docs & orderBy for index use
     const month = date.getMonth() + 1;
@@ -133,10 +131,11 @@ export async function getMatchesByDate(date: Date): Promise<Match[]> {
 
 export async function getMatchesByDateRange(from: Date, to: Date): Promise<Match[]> {
   try {
-    const fromDate = `${from.getFullYear()}-${String(from.getMonth() + 1).padStart(2, '0')}-${String(from.getDate()).padStart(2, '0')}`;
-    const toDate = `${to.getFullYear()}-${String(to.getMonth() + 1).padStart(2, '0')}-${String(to.getDate()).padStart(2, '0')}`;
-    const fromStr = `${fromDate}T00:00:00Z`;
-    const toStr = `${toDate}T23:59:59Z`;
+    // Convert local day boundaries to UTC so matches are grouped by user's local date
+    const fromStart = new Date(from.getFullYear(), from.getMonth(), from.getDate(), 0, 0, 0);
+    const toEnd = new Date(to.getFullYear(), to.getMonth(), to.getDate(), 23, 59, 59);
+    const fromStr = fromStart.toISOString();
+    const toStr = toEnd.toISOString();
 
     const month = from.getMonth() + 1;
     const season = month >= 7 ? from.getFullYear() : from.getFullYear() - 1;
