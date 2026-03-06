@@ -16,6 +16,8 @@ import { TeamLogo } from '../../components/match/TeamLogo';
 import { MatchPosterCard } from '../../components/match/MatchPosterCard';
 import { StarRating } from '../../components/ui/StarRating';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
+import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { RatingChart } from '../../components/profile/RatingChart';
 import { ProfileStackParamList } from '../../types/navigation';
 import { POPULAR_TEAMS } from '../../utils/constants';
@@ -122,8 +124,18 @@ export function ProfileScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: spacing.md }}>
+        {/* Header image */}
+        {profile?.headerImage && (
+          <View style={{ width: screenWidth, height: 180 }}>
+            <Image source={{ uri: profile.headerImage }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
+            <LinearGradient
+              colors={['transparent', colors.background]}
+              style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 80 }}
+            />
+          </View>
+        )}
         {/* Avatar + name */}
-        <View style={{ alignItems: 'center', paddingTop: spacing.lg, paddingHorizontal: spacing.md }}>
+        <View style={{ alignItems: 'center', paddingTop: profile?.headerImage ? 0 : spacing.lg, marginTop: profile?.headerImage ? -48 : 0, paddingHorizontal: spacing.md }}>
           <Avatar uri={profile?.avatar || null} name={profile?.displayName || 'User'} size={96} />
           <Text style={{ ...typography.h3, color: colors.foreground, marginTop: spacing.sm }}>
             {profile?.displayName || 'User'}

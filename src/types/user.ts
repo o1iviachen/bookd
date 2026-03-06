@@ -16,6 +16,7 @@ export interface User {
   displayName: string;
   email: string;
   avatar: string | null;
+  headerImage: string | null;
   bio: string;
   location: string;
   website: string;

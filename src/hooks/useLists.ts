@@ -80,7 +80,8 @@ export function useCreateList() {
       matchIds: number[];
       ranked?: boolean;
       language?: string;
-    }) => createList(params.userId, params.username, params.name, params.description, params.matchIds, params.ranked, params.language),
+      coverImage?: string | null;
+    }) => createList(params.userId, params.username, params.name, params.description, params.matchIds, params.ranked, params.language, params.coverImage),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['lists'] });
     },
@@ -90,7 +91,7 @@ export function useCreateList() {
 export function useUpdateList() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (params: { listId: string; data: { name?: string; description?: string; ranked?: boolean; language?: string } }) =>
+    mutationFn: (params: { listId: string; data: { name?: string; description?: string; ranked?: boolean; language?: string; coverImage?: string | null } }) =>
       updateList(params.listId, params.data),
     onSuccess: (_, params) => {
       queryClient.invalidateQueries({ queryKey: ['lists'] });

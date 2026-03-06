@@ -44,6 +44,7 @@ export async function createList(
   matchIds: number[],
   ranked: boolean = false,
   language?: string,
+  coverImage?: string | null,
 ): Promise<string> {
   const ref = await addDoc(collection(db, 'lists'), {
     userId,
@@ -54,7 +55,7 @@ export async function createList(
     ranked,
     likes: 0,
     createdAt: serverTimestamp(),
-    coverImage: null,
+    coverImage: coverImage || null,
     ...(language && { language }),
   });
   return ref.id;
@@ -308,7 +309,7 @@ export async function deleteListComment(commentId: string): Promise<void> {
 
 export async function updateList(
   listId: string,
-  data: { name?: string; description?: string; ranked?: boolean; language?: string }
+  data: { name?: string; description?: string; ranked?: boolean; language?: string; coverImage?: string | null }
 ): Promise<void> {
   await updateDoc(doc(db, 'lists', listId), data);
 }

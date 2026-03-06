@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Pressable, KeyboardAvoidingView, Platform, Alert, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, Pressable, KeyboardAvoidingView, Platform, Alert, ScrollView, ActivityIndicator, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,7 +8,9 @@ import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useUserProfile } from '../../hooks/useUser';
 import { updateUserProfile } from '../../services/firestore/users';
-import { uploadAvatar } from '../../services/storage';
+import { uploadAvatar, uploadHeaderImage } from '../../services/storage';
+import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Avatar } from '../../components/ui/Avatar';
 import { TextInput } from '../../components/ui/TextInput';
 import { Button } from '../../components/ui/Button';
@@ -24,7 +26,7 @@ type Props = NativeStackScreenProps<ProfileStackParamList, 'EditProfile'>;
 export function EditProfileScreen({ navigation }: Props) {
   const { t } = useTranslation();
   const { theme, isDark } = useTheme();
-  const { colors, spacing, typography } = theme;
+  const { colors, spacing, typography, borderRadius } = theme;
   const { user } = useAuth();
   const { data: profile, isLoading } = useUserProfile(user?.uid || '');
   const queryClient = useQueryClient();
@@ -36,8 +38,11 @@ export function EditProfileScreen({ navigation }: Props) {
   const [website, setWebsite] = useState('');
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [avatarChanged, setAvatarChanged] = useState(false);
+  const [headerImageUri, setHeaderImageUri] = useState<string | null>(null);
+  const [headerImageChanged, setHeaderImageChanged] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [saving, setSaving] = useState(false);
+  const { width: screenWidth } = useWindowDimensions();
 
   useEffect(() => {
     if (profile) {
@@ -47,8 +52,27 @@ export function EditProfileScreen({ navigation }: Props) {
       setLocation(profile.location || '');
       setWebsite(profile.website || '');
       setAvatarUri(profile.avatar || null);
+      setHeaderImageUri(profile.headerImage || null);
     }
   }, [profile]);
+
+  const handlePickHeaderImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [16, 9],
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets[0]) {
+      setHeaderImageUri(result.assets[0].uri);
+      setHeaderImageChanged(true);
+    }
+  };
+
+  const handleRemoveHeaderImage = () => {
+    setHeaderImageUri(null);
+    setHeaderImageChanged(true);
+  };
 
   const handlePickAvatar = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -89,6 +113,12 @@ export function EditProfileScreen({ navigation }: Props) {
         avatarUrl = await uploadAvatar(user.uid, avatarUri);
         setUploadingAvatar(false);
       }
+      let headerImageUrl = headerImageUri;
+      if (headerImageChanged) {
+        if (headerImageUri && !headerImageUri.startsWith('http')) {
+          headerImageUrl = await uploadHeaderImage(`headers/users/${user.uid}.jpg`, headerImageUri);
+        }
+      }
       await updateUserProfile(user.uid, {
         username: username.trim().toLowerCase(),
         displayName,
@@ -96,6 +126,7 @@ export function EditProfileScreen({ navigation }: Props) {
         location,
         website,
         avatar: avatarUrl,
+        headerImage: headerImageChanged ? headerImageUrl : undefined,
       });
       queryClient.invalidateQueries({ queryKey: ['user', user.uid] });
       navigation.goBack();
@@ -122,9 +153,36 @@ export function EditProfileScreen({ navigation }: Props) {
           <View style={{ width: 24 }} />
         </View>
 
-        <ScrollView showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ padding: spacing.md, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
-          {/* Avatar picker */}
-          <Pressable onPress={handlePickAvatar} style={{ alignSelf: 'center', marginBottom: spacing.lg }}>
+        <ScrollView showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+          {/* Header image picker */}
+          <Pressable onPress={handlePickHeaderImage} style={{ width: '100%', height: 160, overflow: 'hidden', justifyContent: 'center', alignItems: 'center' }}>
+            {headerImageUri ? (
+              <>
+                <Image source={{ uri: headerImageUri }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
+                <LinearGradient
+                  colors={['transparent', colors.background]}
+                  style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 80 }}
+                />
+                <Pressable
+                  onPress={handleRemoveHeaderImage}
+                  style={{ position: 'absolute', top: spacing.sm, right: spacing.sm, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 14, width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}
+                >
+                  <Ionicons name="close" size={16} color="#fff" />
+                </Pressable>
+              </>
+            ) : (
+              <LinearGradient
+                colors={[colors.muted, colors.background]}
+                style={{ width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center' }}
+              >
+                <Ionicons name="image-outline" size={28} color={colors.textSecondary} />
+                <Text style={{ ...typography.caption, color: colors.textSecondary, marginTop: 4 }}>{t('profile.addHeaderImage')}</Text>
+              </LinearGradient>
+            )}
+          </Pressable>
+
+          {/* Avatar picker — overlaps header image */}
+          <Pressable onPress={handlePickAvatar} style={{ alignSelf: 'center', marginTop: -48, marginBottom: spacing.lg }}>
             <Avatar uri={avatarUri} name={displayName || 'User'} size={96} />
             <View
               style={{
@@ -149,6 +207,7 @@ export function EditProfileScreen({ navigation }: Props) {
             </View>
           </Pressable>
 
+          <View style={{ paddingHorizontal: spacing.md }}>
           <TextInput
             label={t('auth.username')}
             value={username}
@@ -174,6 +233,7 @@ export function EditProfileScreen({ navigation }: Props) {
             keyboardType="url"
           />
           <Button title={t('common.save')} onPress={handleSave} loading={saving} size="lg" style={{ marginTop: spacing.md }} />
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

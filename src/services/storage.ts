@@ -47,6 +47,18 @@ export async function uploadAvatar(userId: string, uri: string): Promise<string>
 }
 
 /**
+ * Upload a profile or list header image.
+ * Compressed to 1200px wide, stored at the given path.
+ */
+export async function uploadHeaderImage(storagePath: string, uri: string): Promise<string> {
+  const compressed = await compressImage(uri, 1200, 0.8);
+  const blob = await uriToBlob(compressed);
+  const storageRef = ref(storage, storagePath);
+  await uploadBytesResumable(storageRef, blob, { contentType: 'image/jpeg' });
+  return getDownloadURL(storageRef);
+}
+
+/**
  * Upload a review image file.
  * Images are compressed before upload.
  * Returns the download URL.

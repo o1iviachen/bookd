@@ -26,6 +26,8 @@ import { POPULAR_TEAMS } from '../../utils/constants';
 import { Match } from '../../types/match';
 import { User } from '../../types/user';
 import { ReportModal } from '../../components/ui/ReportModal';
+import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { ListComment } from '../../services/firestore/lists';
 import { isTextClean } from '../../utils/moderation';
@@ -301,6 +303,16 @@ export function ListDetailScreen({ route, navigation }: any) {
         contentContainerStyle={{ paddingBottom: 100 }}
         keyboardShouldPersistTaps="handled"
       >
+        {/* Cover image */}
+        {list.coverImage && (
+          <View style={{ width: screenWidth, height: 180 }}>
+            <Image source={{ uri: list.coverImage }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
+            <LinearGradient
+              colors={['transparent', colors.background]}
+              style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 80 }}
+            />
+          </View>
+        )}
         {/* List metadata */}
         <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.md }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>

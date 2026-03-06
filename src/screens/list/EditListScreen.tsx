@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { View, Text, Pressable, ScrollView, Alert, Animated, Switch } from 'react-native';
+import { View, Text, Pressable, ScrollView, Alert, Animated, Switch, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useQueries } from '@tanstack/react-query';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
 import { useTheme } from '../../context/ThemeContext';
@@ -15,6 +16,9 @@ import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { MatchPickerModal } from '../../components/match/MatchPickerModal';
 import { Match } from '../../types/match';
 import { isTextClean } from '../../utils/moderation';
+import { uploadHeaderImage } from '../../services/storage';
+import { useAuth } from '../../context/AuthContext';
+import * as ImagePicker from 'expo-image-picker';
 import { useTranslation } from 'react-i18next';
 
 function SwipeableMatchRow({
@@ -76,6 +80,8 @@ export function EditListScreen({ route, navigation }: any) {
   const { colors, spacing, typography, borderRadius } = theme;
   const { t } = useTranslation();
   const { language } = usePreferredLanguage();
+  const { user } = useAuth();
+  const { width: screenWidth } = useWindowDimensions();
   const { listId } = route.params;
   const { data: list, isLoading } = useList(listId);
   const updateList = useUpdateList();
@@ -86,6 +92,8 @@ export function EditListScreen({ route, navigation }: any) {
   const [description, setDescription] = useState('');
   const [ranked, setRanked] = useState(false);
   const [localMatchIds, setLocalMatchIds] = useState<number[]>([]);
+  const [coverImageUri, setCoverImageUri] = useState<string | null>(null);
+  const [coverImageChanged, setCoverImageChanged] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
   const [initialized, setInitialized] = useState(false);
 
@@ -95,6 +103,7 @@ export function EditListScreen({ route, navigation }: any) {
       setDescription(list.description);
       setRanked(list.ranked);
       setLocalMatchIds(list.matchIds);
+      setCoverImageUri(list.coverImage || null);
       setInitialized(true);
     }
   }, [list, initialized]);
@@ -129,21 +138,29 @@ export function EditListScreen({ route, navigation }: any) {
       return;
     }
 
-    updateList.mutate(
-      {
-        listId,
-        data: {
-          name: name.trim(),
-          description: description.trim(),
-          ranked,
-          language,
-        },
-      },
-      {
-        onSuccess: () => navigation.goBack(),
-        onError: () => Alert.alert(t('common.error'), t('list.editList')),
+    const saveList = async () => {
+      let coverImageUrl = coverImageUri;
+      if (coverImageChanged && coverImageUri && !coverImageUri.startsWith('http')) {
+        coverImageUrl = await uploadHeaderImage(`headers/lists/${listId}.jpg`, coverImageUri);
       }
-    );
+      updateList.mutate(
+        {
+          listId,
+          data: {
+            name: name.trim(),
+            description: description.trim(),
+            ranked,
+            language,
+            ...(coverImageChanged && { coverImage: coverImageUrl }),
+          },
+        },
+        {
+          onSuccess: () => navigation.goBack(),
+          onError: () => Alert.alert(t('common.error'), t('list.editList')),
+        }
+      );
+    };
+    saveList();
   };
 
   const handleAddMatches = (matchIds: number[]) => {
@@ -192,6 +209,47 @@ export function EditListScreen({ route, navigation }: any) {
         contentContainerStyle={{ paddingBottom: 100 }}
         keyboardShouldPersistTaps="handled"
       >
+        {/* Cover image picker */}
+        <Pressable
+          onPress={async () => {
+            const result = await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ['images'],
+              allowsEditing: true,
+              aspect: [16, 9],
+              quality: 0.8,
+            });
+            if (!result.canceled && result.assets[0]) {
+              setCoverImageUri(result.assets[0].uri);
+              setCoverImageChanged(true);
+            }
+          }}
+          style={{ width: '100%', height: 160, overflow: 'hidden', justifyContent: 'center', alignItems: 'center' }}
+        >
+          {coverImageUri ? (
+            <>
+              <Image source={{ uri: coverImageUri }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
+              <LinearGradient
+                colors={['transparent', colors.background]}
+                style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 60 }}
+              />
+              <Pressable
+                onPress={() => { setCoverImageUri(null); setCoverImageChanged(true); }}
+                style={{ position: 'absolute', top: spacing.sm, right: spacing.sm, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 14, width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}
+              >
+                <Ionicons name="close" size={16} color="#fff" />
+              </Pressable>
+            </>
+          ) : (
+            <LinearGradient
+              colors={[colors.muted, colors.background]}
+              style={{ width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center' }}
+            >
+              <Ionicons name="image-outline" size={28} color={colors.textSecondary} />
+              <Text style={{ ...typography.caption, color: colors.textSecondary, marginTop: 4 }}>{t('list.addCoverImage')}</Text>
+            </LinearGradient>
+          )}
+        </Pressable>
+
         {/* List info fields */}
         <View style={{ padding: spacing.md }}>
           <TextInput label={t('list.listName')} value={name} onChangeText={setName} placeholder={t('list.listNamePlaceholder')} />
