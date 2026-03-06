@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { View, Text, ScrollView, Pressable, useWindowDimensions, NativeScrollEvent, NativeSyntheticEvent, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -51,6 +51,33 @@ export function TeamDetailScreen({ route, navigation }: any) {
   const POSTER_WIDTH = (screenWidth - spacing.md * 2 - GAP * (COLUMNS - 1)) / COLUMNS;
 
   const allMatches = useMemo(() => matches || [], [matches]);
+
+  // Derive current-season competitions from actual matches (not stale Firestore data)
+  const currentSeasonCompetitions = useMemo(() => {
+    if (allMatches.length === 0) return [];
+    // Determine the current season based on today's date
+    const now = new Date();
+    const currentSeasonStart = now.getMonth() >= 7 ? now.getFullYear() : now.getFullYear() - 1;
+    const currentSeasonStr = `${currentSeasonStart}/${(currentSeasonStart + 1).toString().slice(2)}`;
+
+    const seen = new Map<string, { id: number; name: string; code: string; emblem: string }>();
+    for (const m of allMatches) {
+      const kickoff = new Date(m.kickoff);
+      const year = kickoff.getFullYear();
+      const month = kickoff.getMonth();
+      const seasonStart = month >= 7 ? year : year - 1;
+      const seasonStr = `${seasonStart}/${(seasonStart + 1).toString().slice(2)}`;
+      if (seasonStr === currentSeasonStr && !seen.has(m.competition.code)) {
+        seen.set(m.competition.code, {
+          id: m.competition.id || 0,
+          name: m.competition.name,
+          code: m.competition.code,
+          emblem: m.competition.emblem || '',
+        });
+      }
+    }
+    return Array.from(seen.values());
+  }, [allMatches]);
 
   // Map matchId → season string for chart filtering
   const matchSeasonMap = useMemo(() => {
@@ -132,6 +159,7 @@ export function TeamDetailScreen({ route, navigation }: any) {
     }
   };
 
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
       {/* Header bar */}
@@ -145,70 +173,70 @@ export function TeamDetailScreen({ route, navigation }: any) {
         <View style={{ width: 22 }} />
       </View>
 
-      {/* ─── Single ScrollView with hero + tabs ─── */}
-      <ScrollView showsVerticalScrollIndicator={false}
+      {/* Hero — team crest + name */}
+      <View style={{ alignItems: 'center', paddingVertical: spacing.lg }}>
+        <Image
+          source={{ uri: teamCrest }}
+          style={{ width: 100, height: 100, marginBottom: spacing.md }}
+          contentFit="contain"
+        />
+        <Text style={{ ...typography.h3, color: colors.foreground }}>
+          {teamName}
+        </Text>
+      </View>
+
+      {/* Ratings section — O(1): reads from pre-computed ratingBuckets on match docs */}
+      <RatingChart
+        reviews={[]}
+        ratingBuckets={teamRatingBuckets}
+        showStats
+        season={chartSeason}
+        seasonOptions={[
+          { value: 'all', label: t('team.allSeasons') },
+          ...availableSeasons.map((s) => ({ value: s, label: s })),
+        ]}
+        onSeasonChange={setChartSeason}
+        loading={matchesLoading}
+      />
+
+      {/* Tab bar */}
+      <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: colors.border, marginTop: spacing.md }}>
+        {TAB_KEYS.map((tab, i) => {
+          const isActive = activeTabIndex === i;
+          return (
+            <Pressable
+              key={tab.key}
+              onPress={() => setActiveTabIndex(i)}
+              style={{
+                flex: 1,
+                alignItems: 'center',
+                paddingVertical: spacing.sm + 2,
+                borderBottomWidth: 2,
+                borderBottomColor: isActive ? colors.primary : 'transparent',
+              }}
+            >
+              <Text style={{
+                ...typography.body,
+                fontWeight: isActive ? '600' : '400',
+                color: isActive ? colors.foreground : colors.textSecondary,
+                fontSize: 15,
+              }}>
+                {t(tab.i18nKey)}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {/* ─── Tab Content ─── */}
+      <ScrollView
+        showsVerticalScrollIndicator={false}
         style={{ flex: 1 }}
         indicatorStyle={isDark ? 'white' : 'default'}
         contentContainerStyle={{ paddingBottom: 16 }}
-        onScroll={handleScroll}
+        onScroll={activeTabIndex === 0 ? handleScroll : undefined}
         scrollEventThrottle={400}
       >
-        {/* Hero — team crest + name */}
-        <View style={{ alignItems: 'center', paddingVertical: spacing.lg }}>
-          <Image
-            source={{ uri: teamCrest }}
-            style={{ width: 100, height: 100, marginBottom: spacing.md }}
-            contentFit="contain"
-          />
-          <Text style={{ ...typography.h3, color: colors.foreground }}>
-            {teamName}
-          </Text>
-        </View>
-
-        {/* Ratings section — O(1): reads from pre-computed ratingBuckets on match docs */}
-        <RatingChart
-          reviews={[]}
-          ratingBuckets={teamRatingBuckets}
-          showStats
-          season={chartSeason}
-          seasonOptions={[
-            { value: 'all', label: t('team.allSeasons') },
-            ...availableSeasons.map((s) => ({ value: s, label: s })),
-          ]}
-          onSeasonChange={setChartSeason}
-          loading={matchesLoading}
-        />
-
-        {/* Tab bar */}
-        <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: colors.border, marginTop: spacing.md }}>
-          {TAB_KEYS.map((tab, i) => {
-            const isActive = activeTabIndex === i;
-            return (
-              <Pressable
-                key={tab.key}
-                onPress={() => setActiveTabIndex(i)}
-                style={{
-                  flex: 1,
-                  alignItems: 'center',
-                  paddingVertical: spacing.sm + 2,
-                  borderBottomWidth: 2,
-                  borderBottomColor: isActive ? colors.primary : 'transparent',
-                }}
-              >
-                <Text style={{
-                  ...typography.body,
-                  fontWeight: isActive ? '600' : '400',
-                  color: isActive ? colors.foreground : colors.textSecondary,
-                  fontSize: 15,
-                }}>
-                  {t(tab.i18nKey)}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        {/* ─── Tab Content ─── */}
         {activeTabIndex === 0 && (
           <View>
             {/* Filters */}
@@ -264,7 +292,6 @@ export function TeamDetailScreen({ route, navigation }: any) {
         )}
 
         {activeTabIndex === 1 && (
-          <View>
             <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.md, paddingBottom: spacing.xs }}>
               {detailLoading ? (
                 <View style={{ paddingVertical: spacing.xxl }}><LoadingSpinner fullScreen={false} /></View>
@@ -302,11 +329,9 @@ export function TeamDetailScreen({ route, navigation }: any) {
                 ))
               )}
             </View>
-          </View>
         )}
 
         {activeTabIndex === 2 && (
-          <View>
             <View style={{ padding: spacing.md }}>
               {detailLoading ? (
                 <View style={{ paddingVertical: spacing.xxl }}><LoadingSpinner fullScreen={false} /></View>
@@ -365,12 +390,14 @@ export function TeamDetailScreen({ route, navigation }: any) {
                   </View>
 
                   {/* Competitions */}
-                  {teamDetail && teamDetail.activeCompetitions.length > 0 && (
+                  {currentSeasonCompetitions.length > 0 && (
                     <View style={{ borderTopWidth: 1, borderTopColor: colors.border, paddingHorizontal: spacing.md, paddingVertical: spacing.sm }}>
                       <Text style={{ ...typography.body, color: colors.textSecondary, fontSize: 14, marginBottom: spacing.xs }}>{t('team.competitions')}</Text>
-                      {teamDetail.activeCompetitions.map((comp) => (
+                      {currentSeasonCompetitions.map((comp) => (
                         <View key={comp.id} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 6, paddingHorizontal: spacing.sm, backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)', borderRadius: borderRadius.sm, marginTop: 4 }}>
-                          <Image source={{ uri: comp.emblem }} style={{ width: 18, height: 18 }} contentFit="contain" />
+                          <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: '#ffffff', alignItems: 'center', justifyContent: 'center' }}>
+                            <Image source={{ uri: comp.emblem }} style={{ width: 16, height: 16 }} contentFit="contain" />
+                          </View>
                           <Text style={{ ...typography.body, color: colors.foreground, fontSize: 14, fontWeight: '500' }}>{comp.name}</Text>
                         </View>
                       ))}
@@ -379,7 +406,6 @@ export function TeamDetailScreen({ route, navigation }: any) {
                 </View>
               )}
             </View>
-          </View>
         )}
       </ScrollView>
     </SafeAreaView>
