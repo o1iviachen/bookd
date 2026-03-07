@@ -13,6 +13,14 @@ import {
 
   limit,
 } from 'firebase/firestore';
+import { getLocales } from 'expo-localization';
+
+const SUPPORTED_LANGS = ['en', 'es', 'de', 'it', 'fr', 'pt'];
+
+function getDefaultLanguage(): string {
+  const code = getLocales()[0]?.languageCode || 'en';
+  return SUPPORTED_LANGS.includes(code) ? code : 'en';
+}
 import { db } from '../../config/firebase';
 import { User } from '../../types/user';
 
@@ -83,6 +91,7 @@ export async function createUserProfile(
     customTags: [],
     following: [],
     followers: [],
+    preferredLanguage: getDefaultLanguage(),
     createdAt: serverTimestamp(),
   });
 }

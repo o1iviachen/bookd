@@ -22,7 +22,6 @@ import { RatingChart } from '../../components/profile/RatingChart';
 import { ProfileStackParamList } from '../../types/navigation';
 import { POPULAR_TEAMS } from '../../utils/constants';
 import { nationalityFlag } from '../../utils/flagEmoji';
-import { TranslateButton } from '../../components/ui/TranslateButton';
 import { useTranslation } from 'react-i18next';
 import { Match } from '../../types/match';
 
@@ -204,7 +203,6 @@ export function ProfileScreen() {
             <Text style={{ ...typography.body, color: colors.textSecondary, textAlign: 'center' }}>
               {profile.bio}
             </Text>
-            <TranslateButton text={profile.bio} contentLanguage={profile.preferredLanguage} />
           </View>
         ) : null}
 
@@ -238,7 +236,7 @@ export function ProfileScreen() {
         )}
 
         {/* Stats row — Instagram-style */}
-        <View style={{ flexDirection: 'row', justifyContent: 'center', gap: spacing.xxl, marginTop: spacing.sm, paddingTop: spacing.sm, paddingBottom: profile?.headerImage ? spacing.sm : spacing.lg }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'center', gap: spacing.xxl, marginTop: spacing.sm, paddingTop: spacing.sm, paddingBottom: spacing.sm }}>
           <Pressable onPress={() => navigation.navigate('FollowList', { userIds: profile?.following || [], title: t('common.following') })} style={{ alignItems: 'center' }}>
             <Text style={{ ...typography.h4, color: colors.foreground }}>{profile?.following?.length || 0}</Text>
             <Text style={{ ...typography.small, color: colors.textSecondary }}>{t('common.following')}</Text>
