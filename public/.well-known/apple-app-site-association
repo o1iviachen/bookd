@@ -4,7 +4,7 @@
     "details": [
       {
         "appID": "4CMVBFM2BQ.com.bookd-app",
-        "paths": ["/match/*", "/review/*", "/list/*"]
+        "paths": ["/match/*", "/review/*", "/list/*", "/profile/*"]
       }
     ]
   }

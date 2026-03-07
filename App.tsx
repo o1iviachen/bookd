@@ -13,6 +13,7 @@ import { navigationRef } from './src/navigation/navigationRef';
 
 // Keep splash screen visible until auth resolves
 SplashScreen.preventAutoHideAsync();
+SplashScreen.setOptions({ fade: true, duration: 400 });
 
 // React Query: refetch stale queries when app returns to foreground
 focusManager.setEventListener((handleFocus) => {

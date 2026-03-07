@@ -22,7 +22,8 @@
     "rewrites": [
       { "source": "/match/**", "destination": "/app-redirect.html" },
       { "source": "/review/**", "destination": "/app-redirect.html" },
-      { "source": "/list/**", "destination": "/app-redirect.html" }
+      { "source": "/list/**", "destination": "/app-redirect.html" },
+      { "source": "/profile/**", "destination": "/app-redirect.html" }
     ]
   }
 }

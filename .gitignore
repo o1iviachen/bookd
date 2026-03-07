@@ -34,6 +34,10 @@ yarn-error.*
 .env
 .env*.local
 
+# service account keys
+api-*.json
+bookd-*.json
+
 # typescript
 *.tsbuildinfo
 
