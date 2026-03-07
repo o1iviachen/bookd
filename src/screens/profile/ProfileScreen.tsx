@@ -1,6 +1,6 @@
 import React, { useCallback, useRef, useMemo } from 'react';
-import { View, Text, ScrollView, Pressable, Linking, useWindowDimensions, Animated } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, ScrollView, Pressable, Linking, useWindowDimensions, Animated, Share, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -34,7 +34,9 @@ export function ProfileScreen() {
   const { colors, spacing, typography, borderRadius } = theme;
   const navigation = useNavigation<Nav>();
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
+  const headerHeight = Math.round(screenWidth * 0.5);
   const { data: profile, isLoading } = useUserProfile(user?.uid || '');
   const scrollY = useRef(new Animated.Value(0)).current;
   const handleScroll = useMemo(
@@ -119,33 +121,46 @@ export function ProfileScreen() {
   ];
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
-      {/* Header bar */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border }}>
-        <View style={{ width: 32 }} />
-        <Text style={{ fontSize: 24, fontWeight: '700', color: colors.primary, letterSpacing: -0.5 }}>
-          bookd.
-        </Text>
-        <Pressable onPress={() => navigation.navigate('Settings')}>
-          <Ionicons name="settings-outline" size={22} color={colors.foreground} />
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      {/* Floating buttons */}
+      <Animated.View style={{ position: 'absolute', top: insets.top + spacing.xs, left: spacing.md, right: spacing.md, zIndex: 10, flexDirection: 'row', justifyContent: 'space-between', opacity: scrollY.interpolate({ inputRange: [0, 80], outputRange: [1, 0], extrapolate: 'clamp' }), pointerEvents: 'box-none' }}>
+        <Pressable
+          onPress={() => {
+            const url = `https://bookd-app.com/profile/${user?.uid}`;
+            const text = `Check out @${profile?.username} on Bookd!`;
+            Share.share(Platform.OS === 'ios' ? { message: text, url } : { message: `${text}\n${url}` });
+          }}
+          style={{ backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: borderRadius.full, padding: spacing.sm }}
+        >
+          <Ionicons name="share-social-outline" size={20} color="#fff" />
         </Pressable>
-      </View>
+        <Pressable
+          onPress={() => navigation.navigate('Settings')}
+          style={{ backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: borderRadius.full, padding: spacing.sm }}
+        >
+          <Ionicons name="settings-outline" size={20} color="#fff" />
+        </Pressable>
+      </Animated.View>
 
       <Animated.ScrollView showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: spacing.md }} onScroll={handleScroll} scrollEventThrottle={16} bounces>
         {/* Header image */}
         {profile?.headerImage && (
-          <View style={{ height: 180, overflow: 'visible' }}>
+          <View style={{ height: headerHeight, overflow: 'visible' }}>
             <Animated.View
               pointerEvents="none"
               style={{
-                position: 'absolute', top: 0, left: 0, right: 0, height: 180,
+                position: 'absolute', top: 0, left: 0, right: 0, height: headerHeight,
                 transform: [
-                  { translateY: scrollY.interpolate({ inputRange: [-180, 0], outputRange: [-90, 0], extrapolateRight: 'clamp' }) },
-                  { scale: scrollY.interpolate({ inputRange: [-180, 0], outputRange: [2, 1], extrapolateRight: 'clamp' }) },
+                  { translateY: scrollY.interpolate({ inputRange: [-headerHeight, 0], outputRange: [-headerHeight / 2, 0], extrapolateRight: 'clamp' }) },
+                  { scale: scrollY.interpolate({ inputRange: [-headerHeight, 0], outputRange: [2, 1], extrapolateRight: 'clamp' }) },
                 ],
               }}
             >
               <Image source={{ uri: profile.headerImage }} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} contentFit="cover" />
+              <LinearGradient
+                colors={['rgba(0,0,0,0.4)', 'transparent']}
+                style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 80 }}
+              />
               <LinearGradient
                 colors={['transparent', colors.background]}
                 style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 80 }}
@@ -396,6 +411,6 @@ export function ProfileScreen() {
         </View>
 
       </Animated.ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }

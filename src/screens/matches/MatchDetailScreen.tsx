@@ -661,7 +661,9 @@ export function MatchDetailScreen({ route, navigation }: Props) {
         visible={showMenu}
         onClose={() => setShowMenu(false)}
         items={[
-          { label: isFavourite ? t('matches.removeFromFavourites') : t('matches.addToFavourites'), icon: isFavourite ? 'star' : 'star-outline', onPress: handleToggleFavourite },
+          ...(isFavourite || favoriteMatchIds.length < MAX_FAVOURITES
+            ? [{ label: isFavourite ? t('matches.removeFromFavourites') : t('matches.addToFavourites'), icon: (isFavourite ? 'star' : 'star-outline') as keyof typeof Ionicons.glyphMap, onPress: handleToggleFavourite }]
+            : []),
           { label: t('matches.addToList'), icon: 'list-outline', onPress: () => { setShowMenu(false); setShowListModal(true); } },
           { label: t('common.share'), icon: 'share-social-outline', onPress: () => { setShowMenu(false); setTimeout(handleShare, 300); } },
         ]}

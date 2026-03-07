@@ -267,7 +267,7 @@ export function ReviewDetailScreen({ route, navigation }: any) {
         keyboardVerticalOffset={0}
       >
         <ScreenHeader
-          title={t('common.reviews')}
+          title={t('common.review')}
           onBack={() => navigation.goBack()}
           rightElement={
             <Pressable onPress={() => setShowMenu(true)} hitSlop={8}>
@@ -822,8 +822,5 @@ function MatchCard({ matchId, navigation }: { matchId: number; navigation: any }
         <Ionicons name="chevron-forward" size={14} color={colors.textSecondary} style={{ marginLeft: 4 }} />
       </View>
     </Pressable>
-  );
-}
-ressable>
   );
 }

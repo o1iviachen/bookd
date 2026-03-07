@@ -158,7 +158,7 @@ export function FavouriteTeamsScreen() {
         {!searchQuery.trim() && selectedTeamObjects.length > 0 && (
           <View style={{ marginTop: spacing.lg, paddingHorizontal: spacing.md }}>
             <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: spacing.sm, marginLeft: spacing.xs }}>
-              {t('common.selected', { defaultValue: 'Selected' })} ({selectedClubs.length}/{MAX_CLUBS})
+              {t('favourites.selectedTeams', { defaultValue: 'SELECTED TEAMS' })} ({selectedClubs.length}/{MAX_CLUBS})
             </Text>
             <View style={{ backgroundColor: colors.card, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' }}>
               {selectedTeamObjects.map((team, i) => (
@@ -191,7 +191,7 @@ export function FavouriteTeamsScreen() {
         {!searchQuery.trim() && selectedCountry && (
           <View style={{ marginTop: spacing.lg, paddingHorizontal: spacing.md }}>
             <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: spacing.sm, marginLeft: spacing.xs }}>
-              {t('favourites.countries', { defaultValue: 'Country' })} (1/1)
+              {t('favourites.selectedCountry', { defaultValue: 'SELECTED COUNTRY' })} (1/1)
             </Text>
             <View style={{ backgroundColor: colors.card, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' }}>
               <Pressable

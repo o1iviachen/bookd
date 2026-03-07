@@ -1,6 +1,6 @@
 import React, { useCallback, useState, useRef, useMemo } from 'react';
-import { View, Text, ScrollView, Pressable, Linking, useWindowDimensions, Alert, Animated } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, ScrollView, Pressable, Linking, useWindowDimensions, Alert, Animated, Share, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQueries, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '../../context/ThemeContext';
@@ -31,9 +31,11 @@ export function UserProfileScreen({ route, navigation }: any) {
   const { t } = useTranslation();
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
+  const insets = useSafeAreaInsets();
   const { userId } = route.params;
   const { user: currentUser } = useAuth();
   const { width: screenWidth } = useWindowDimensions();
+  const headerHeight = Math.round(screenWidth * 0.5);
   const { data: profile, isLoading } = useUserProfile(userId);
   const { data: currentProfile } = useUserProfile(currentUser?.uid || '');
   const { data: reviews } = useReviewsForUser(userId);
@@ -232,20 +234,36 @@ export function UserProfileScreen({ route, navigation }: any) {
   ];
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
-      <ScreenHeader
-        title={profile.username}
-        onBack={() => navigation.goBack()}
-        rightElement={!isOwnProfile ? (
-          <Pressable onPress={() => setShowMenu(true)} hitSlop={8}>
-            <Ionicons name="ellipsis-horizontal" size={22} color={colors.foreground} />
-          </Pressable>
-        ) : undefined}
-      />
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      {/* Floating buttons */}
+      <Pressable
+        onPress={() => navigation.goBack()}
+        style={{ position: 'absolute', top: insets.top + spacing.xs, left: spacing.md, zIndex: 10, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: borderRadius.full, padding: spacing.sm }}
+      >
+        <Ionicons name="arrow-back" size={20} color="#fff" />
+      </Pressable>
+      {!isOwnProfile && (
+        <Pressable
+          onPress={() => setShowMenu(true)}
+          style={{ position: 'absolute', top: insets.top + spacing.xs, right: spacing.md, zIndex: 10, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: borderRadius.full, padding: spacing.sm }}
+        >
+          <Ionicons name="ellipsis-horizontal" size={20} color="#fff" />
+        </Pressable>
+      )}
       <ActionMenu
         visible={showMenu}
         onClose={() => setShowMenu(false)}
         items={[
+          {
+            label: t('common.share'),
+            icon: 'share-social-outline',
+            onPress: () => {
+              setShowMenu(false);
+              const url = `https://bookd-app.com/profile/${userId}`;
+              const text = `Check out @${profile.username} on Bookd!`;
+              Share.share(Platform.OS === 'ios' ? { message: text, url } : { message: `${text}\n${url}` });
+            },
+          },
           {
             label: t('common.report'),
             icon: 'flag-outline',
@@ -270,18 +288,22 @@ export function UserProfileScreen({ route, navigation }: any) {
       <Animated.ScrollView showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: 60 }} onScroll={handleScroll} scrollEventThrottle={16} bounces>
         {/* Header image */}
         {profile.headerImage && (
-          <View style={{ height: 180, overflow: 'visible' }}>
+          <View style={{ height: headerHeight, overflow: 'visible' }}>
             <Animated.View
               pointerEvents="none"
               style={{
-                position: 'absolute', top: 0, left: 0, right: 0, height: 180,
+                position: 'absolute', top: 0, left: 0, right: 0, height: headerHeight,
                 transform: [
-                  { translateY: scrollY.interpolate({ inputRange: [-180, 0], outputRange: [-90, 0], extrapolateRight: 'clamp' }) },
-                  { scale: scrollY.interpolate({ inputRange: [-180, 0], outputRange: [2, 1], extrapolateRight: 'clamp' }) },
+                  { translateY: scrollY.interpolate({ inputRange: [-headerHeight, 0], outputRange: [-headerHeight / 2, 0], extrapolateRight: 'clamp' }) },
+                  { scale: scrollY.interpolate({ inputRange: [-headerHeight, 0], outputRange: [2, 1], extrapolateRight: 'clamp' }) },
                 ],
               }}
             >
               <Image source={{ uri: profile.headerImage }} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} contentFit="cover" />
+              <LinearGradient
+                colors={['rgba(0,0,0,0.4)', 'transparent']}
+                style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 80 }}
+              />
               <LinearGradient
                 colors={['transparent', colors.background]}
                 style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 80 }}
@@ -482,6 +504,6 @@ export function UserProfileScreen({ route, navigation }: any) {
           </View>
         </View>
       </Animated.ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }

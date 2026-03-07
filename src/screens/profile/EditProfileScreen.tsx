@@ -13,7 +13,6 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Avatar } from '../../components/ui/Avatar';
 import { TextInput } from '../../components/ui/TextInput';
-import { Button } from '../../components/ui/Button';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { ProfileStackParamList } from '../../types/navigation';
 import { useQueryClient } from '@tanstack/react-query';
@@ -150,12 +149,18 @@ export function EditProfileScreen({ navigation }: Props) {
           <Text style={{ ...typography.h4, color: colors.foreground, flex: 1, textAlign: 'center' }}>
             {t('profile.editProfile')}
           </Text>
-          <View style={{ width: 24 }} />
+          <Pressable onPress={handleSave} disabled={saving} style={{ opacity: saving ? 0.5 : 1 }}>
+            {saving ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : (
+              <Text style={{ ...typography.body, color: colors.primary, fontWeight: '600' }}>{t('common.save')}</Text>
+            )}
+          </Pressable>
         </View>
 
         <ScrollView showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
           {/* Header image picker */}
-          <Pressable onPress={handlePickHeaderImage} style={{ width: '100%', height: 160, overflow: 'hidden', justifyContent: 'center', alignItems: 'center' }}>
+          <Pressable onPress={handlePickHeaderImage} style={{ width: '100%', height: Math.round(screenWidth * 0.5), overflow: 'hidden', justifyContent: 'center', alignItems: 'center' }}>
             {headerImageUri ? (
               <>
                 <Image source={{ uri: headerImageUri }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
@@ -232,10 +237,10 @@ export function EditProfileScreen({ navigation }: Props) {
             autoCapitalize="none"
             keyboardType="url"
           />
-          <Button title={t('common.save')} onPress={handleSave} loading={saving} size="lg" style={{ marginTop: spacing.md }} />
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
     </SafeAreaView>
   );
 }
