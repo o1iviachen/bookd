@@ -134,7 +134,9 @@ export async function updateUserProfile(
   updates: Partial<Pick<User, 'username' | 'displayName' | 'bio' | 'location' | 'website' | 'avatar' | 'headerImage' | 'favoriteTeams' | 'favoriteCountry' | 'clubAffiliations' | 'followedLeagues' | 'followedTeamIds' | 'favoriteMatchIds' | 'watchedMatchIds' | 'likedMatchIds' | 'customTags' | 'expoPushToken' | 'notificationPreferences' | 'preferredLanguage'>>
 ): Promise<void> {
   const userRef = doc(db, 'users', uid);
-  await updateDoc(userRef, updates);
+  // Strip undefined values — Firestore rejects them
+  const cleaned = Object.fromEntries(Object.entries(updates).filter(([_, v]) => v !== undefined));
+  await updateDoc(userRef, cleaned);
 }
 
 export async function toggleWatchedMatch(userId: string, matchId: number): Promise<boolean> {
