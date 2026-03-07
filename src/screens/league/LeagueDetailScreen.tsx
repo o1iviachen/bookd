@@ -458,7 +458,7 @@ export function LeagueDetailScreen({ route, navigation }: any) {
             </Text>
             <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
               <TeamLogo uri={row.team.crest} size={22} />
-              <Text style={{ ...typography.body, color: colors.foreground, fontSize: 14 }} numberOfLines={1}>
+              <Text style={{ flex: 1, ...typography.body, color: colors.foreground, fontSize: 14 }} numberOfLines={1}>
                 {row.team.shortName}
               </Text>
             </View>
