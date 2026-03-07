@@ -11,7 +11,7 @@ service cloud.firestore {
       // Authenticated users can update only MOTM votes and rating aggregates
       allow update: if request.auth != null &&
         request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['motmVotes', 'ratingSum', 'ratingCount', 'reviewCount', 'ratingBuckets', 'discussionCount']);
+          .hasOnly(['motmVotes', 'ratingSum', 'ratingCount', 'reviewCount', 'ratingBuckets', 'ratingBucketsHome', 'ratingBucketsAway', 'ratingBucketsNeutral', 'discussionCount']);
 
       // MOTM votes subcollection — one doc per user
       match /motmVotes/{voteId} {
