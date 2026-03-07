@@ -1,5 +1,5 @@
-import React, { useCallback, useState } from 'react';
-import { View, Text, ScrollView, Pressable, Linking, useWindowDimensions, Alert } from 'react-native';
+import React, { useCallback, useState, useRef, useMemo } from 'react';
+import { View, Text, ScrollView, Pressable, Linking, useWindowDimensions, Alert, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQueries, useQueryClient } from '@tanstack/react-query';
@@ -47,6 +47,14 @@ export function UserProfileScreen({ route, navigation }: any) {
   const unblockMutation = useUnblockUser();
   const [showMenu, setShowMenu] = useState(false);
   const [showReport, setShowReport] = useState(false);
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const handleScroll = useMemo(
+    () => Animated.event(
+      [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+      { useNativeDriver: true },
+    ),
+    [scrollY],
+  );
 
   const blockedSet = useBlockedUsers(currentUser?.uid);
   const isOwnProfile = currentUser?.uid === userId;
@@ -259,15 +267,26 @@ export function UserProfileScreen({ route, navigation }: any) {
         contentId={userId}
       />
 
-      <ScrollView showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: 60 }}>
+      <Animated.ScrollView showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: 60 }} onScroll={handleScroll} scrollEventThrottle={16} bounces>
         {/* Header image */}
         {profile.headerImage && (
-          <View style={{ width: screenWidth, height: 180 }}>
-            <Image source={{ uri: profile.headerImage }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
-            <LinearGradient
-              colors={['transparent', colors.background]}
-              style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 80 }}
-            />
+          <View style={{ height: 180, overflow: 'visible' }}>
+            <Animated.View
+              pointerEvents="none"
+              style={{
+                position: 'absolute', top: 0, left: 0, right: 0, height: 180,
+                transform: [
+                  { translateY: scrollY.interpolate({ inputRange: [-180, 0], outputRange: [-90, 0], extrapolateRight: 'clamp' }) },
+                  { scale: scrollY.interpolate({ inputRange: [-180, 0], outputRange: [2, 1], extrapolateRight: 'clamp' }) },
+                ],
+              }}
+            >
+              <Image source={{ uri: profile.headerImage }} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} contentFit="cover" />
+              <LinearGradient
+                colors={['transparent', colors.background]}
+                style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 80 }}
+              />
+            </Animated.View>
           </View>
         )}
         {/* Avatar + name */}
@@ -462,7 +481,7 @@ export function UserProfileScreen({ route, navigation }: any) {
             ))}
           </View>
         </View>
-      </ScrollView>
+      </Animated.ScrollView>
     </SafeAreaView>
   );
 }

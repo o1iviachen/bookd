@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef } from 'react';
-import { View, Text, ScrollView, Pressable, Alert, Share, useWindowDimensions, TextInput as RNTextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, ScrollView, Pressable, Alert, Share, useWindowDimensions, TextInput as RNTextInput, KeyboardAvoidingView, Platform, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQueries } from '@tanstack/react-query';
@@ -75,6 +75,14 @@ export function ListDetailScreen({ route, navigation }: any) {
   const [replyingTo, setReplyingTo] = useState<{ id: string; username: string } | null>(null);
   const commentInputRef = useRef<RNTextInput | null>(null);
   const scrollViewRef = useRef<ScrollView>(null);
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const handleScroll = useMemo(
+    () => Animated.event(
+      [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+      { useNativeDriver: true },
+    ),
+    [scrollY],
+  );
 
   const { data: listAuthorProfile } = useUserProfile(list?.userId || '');
   const listAuthorName = listAuthorProfile?.displayName || listAuthorProfile?.username || list?.username || '';
@@ -178,7 +186,8 @@ export function ListDetailScreen({ route, navigation }: any) {
   const handleShare = () => {
     const count = list.matchIds.length;
     const url = `https://bookd-app.com/list/${list.id}`;
-    Share.share({ message: `"${list.name}", a list of ${count} ${count === 1 ? 'match' : 'matches'} by @${listAuthorUsername} on bookd:\n${url}`, url });
+    const text = `"${list.name}", a list of ${count} ${count === 1 ? 'match' : 'matches'} by @${listAuthorUsername} on bookd:`;
+    Share.share(Platform.OS === 'ios' ? { message: text, url } : { message: `${text}\n${url}` });
   };
 
   const handleEdit = () => {
@@ -298,20 +307,34 @@ export function ListDetailScreen({ route, navigation }: any) {
         }}
       />
 
-      <ScrollView showsVerticalScrollIndicator={false}
+      <Animated.ScrollView showsVerticalScrollIndicator={false}
         ref={scrollViewRef}
         indicatorStyle={isDark ? 'white' : 'default'}
         contentContainerStyle={{ paddingBottom: 100 }}
         keyboardShouldPersistTaps="handled"
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+        bounces
       >
         {/* Cover image */}
         {list.coverImage && (
-          <View style={{ width: screenWidth, height: 180 }}>
-            <Image source={{ uri: list.coverImage }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
-            <LinearGradient
-              colors={['transparent', colors.background]}
-              style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 80 }}
-            />
+          <View style={{ height: 180, overflow: 'visible' }}>
+            <Animated.View
+              pointerEvents="none"
+              style={{
+                position: 'absolute', top: 0, left: 0, right: 0, height: 180,
+                transform: [
+                  { translateY: scrollY.interpolate({ inputRange: [-180, 0], outputRange: [-90, 0], extrapolateRight: 'clamp' }) },
+                  { scale: scrollY.interpolate({ inputRange: [-180, 0], outputRange: [2, 1], extrapolateRight: 'clamp' }) },
+                ],
+              }}
+            >
+              <Image source={{ uri: list.coverImage }} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} contentFit="cover" />
+              <LinearGradient
+                colors={['transparent', colors.background]}
+                style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 80 }}
+              />
+            </Animated.View>
           </View>
         )}
         {/* List metadata */}
@@ -506,7 +529,7 @@ export function ListDetailScreen({ route, navigation }: any) {
             ));
           })()
         )}
-      </ScrollView>
+      </Animated.ScrollView>
 
       {/* Sticky comment input bar */}
       {user && (

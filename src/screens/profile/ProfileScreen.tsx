@@ -1,5 +1,5 @@
-import React, { useCallback } from 'react';
-import { View, Text, ScrollView, Pressable, Linking, useWindowDimensions } from 'react-native';
+import React, { useCallback, useRef, useMemo } from 'react';
+import { View, Text, ScrollView, Pressable, Linking, useWindowDimensions, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -36,6 +36,14 @@ export function ProfileScreen() {
   const { user } = useAuth();
   const { width: screenWidth } = useWindowDimensions();
   const { data: profile, isLoading } = useUserProfile(user?.uid || '');
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const handleScroll = useMemo(
+    () => Animated.event(
+      [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+      { useNativeDriver: true },
+    ),
+    [scrollY],
+  );
   const { data: reviews } = useReviewsForUser(user?.uid || '');
   const { data: lists } = useListsForUser(user?.uid || '');
   const { data: likedReviews } = useLikedReviews(user?.uid || '');
@@ -123,15 +131,26 @@ export function ProfileScreen() {
         </Pressable>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: spacing.md }}>
+      <Animated.ScrollView showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: spacing.md }} onScroll={handleScroll} scrollEventThrottle={16} bounces>
         {/* Header image */}
         {profile?.headerImage && (
-          <View style={{ width: screenWidth, height: 180 }}>
-            <Image source={{ uri: profile.headerImage }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
-            <LinearGradient
-              colors={['transparent', colors.background]}
-              style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 80 }}
-            />
+          <View style={{ height: 180, overflow: 'visible' }}>
+            <Animated.View
+              pointerEvents="none"
+              style={{
+                position: 'absolute', top: 0, left: 0, right: 0, height: 180,
+                transform: [
+                  { translateY: scrollY.interpolate({ inputRange: [-180, 0], outputRange: [-90, 0], extrapolateRight: 'clamp' }) },
+                  { scale: scrollY.interpolate({ inputRange: [-180, 0], outputRange: [2, 1], extrapolateRight: 'clamp' }) },
+                ],
+              }}
+            >
+              <Image source={{ uri: profile.headerImage }} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} contentFit="cover" />
+              <LinearGradient
+                colors={['transparent', colors.background]}
+                style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 80 }}
+              />
+            </Animated.View>
           </View>
         )}
         {/* Avatar + name */}
@@ -376,7 +395,7 @@ export function ProfileScreen() {
           </View>
         </View>
 
-      </ScrollView>
+      </Animated.ScrollView>
     </SafeAreaView>
   );
 }
