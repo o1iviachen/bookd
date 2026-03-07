@@ -120,7 +120,7 @@ function parseMatchday(round: string): number | null {
 }
 
 // Parse knockout stage from round string
-function parseStage(round: string): string | null {
+export function parseStage(round: string): string | null {
   const lower = round.toLowerCase();
 
   if (lower.includes('regular season') || lower.includes('league stage') || lower.includes('group')) {
@@ -131,12 +131,15 @@ function parseStage(round: string): string | null {
   if (lower.includes('preliminary')) return 'PRELIMINARY_ROUND';
   if (lower.includes('qualifying') || lower.includes('qualification')) return 'QUALIFYING_ROUND';
   if (lower.includes('play-off') || lower.includes('playoff')) return 'PLAYOFFS';
-  if (lower.includes('round of 32') || lower.includes('32nd')) return 'LAST_32';
-  if (lower.includes('round of 16') || lower.includes('16th')) return 'LAST_16';
+  // Match fractional format (e.g. "1/128-finals") BEFORE the generic "final" check
+  if (lower.includes('1/128') || lower.includes('round of 128') || lower.includes('128th')) return 'LAST_128';
+  if (lower.includes('1/64') || lower.includes('round of 64') || lower.includes('64th')) return 'LAST_64';
+  if (lower.includes('round of 32') || lower.includes('32nd') || lower.includes('1/32')) return 'LAST_32';
+  if (lower.includes('round of 16') || lower.includes('16th') || lower.includes('1/16')) return 'LAST_16';
   if (lower.includes('quarter')) return 'QUARTER_FINALS';
   if (lower.includes('semi')) return 'SEMI_FINALS';
   if (lower.includes('3rd place') || lower.includes('third place')) return 'THIRD_PLACE';
-  if (lower.includes('final')) return 'FINAL';
+  if (/\bfinal\b/.test(lower)) return 'FINAL';
 
   return round; // Return raw round string if we can't map it
 }

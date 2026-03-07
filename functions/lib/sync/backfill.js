@@ -46,6 +46,7 @@ exports.generateSearchPrefixes = generateSearchPrefixes;
 exports.backfillPlayerNameLower = backfillPlayerNameLower;
 exports.backfillMissingMatchDetails = backfillMissingMatchDetails;
 exports.backfillTeamCountry = backfillTeamCountry;
+exports.backfillMatchStages = backfillMatchStages;
 const config_1 = require("../config");
 const leagueHelper_1 = require("../leagueHelper");
 const syncMatches_1 = require("./syncMatches");
@@ -1149,5 +1150,40 @@ async function backfillTeamCountry(batchLimit = 200) {
     }
     console.log(`[backfillTeamCountry] Updated ${updated}/${processed} teams (total: ${allDocs.length})`);
     return { updated, total: allDocs.length };
+}
+/**
+ * Re-compute `stage` from `round` for all matches using the updated parseStage logic.
+ * Fixes matches that were incorrectly tagged (e.g. "1/128-finals" → 'FINAL').
+ */
+async function backfillMatchStages() {
+    const { parseStage } = await Promise.resolve().then(() => __importStar(require('../transforms')));
+    const snapshot = await db.collection(config_1.COLLECTIONS.MATCHES)
+        .where('stage', '!=', null)
+        .get();
+    let updated = 0;
+    let batch = db.batch();
+    let batchCount = 0;
+    for (const doc of snapshot.docs) {
+        const data = doc.data();
+        const round = data.round;
+        if (!round)
+            continue;
+        const correctStage = parseStage(round);
+        if (correctStage !== data.stage) {
+            batch.update(doc.ref, { stage: correctStage });
+            batchCount++;
+            updated++;
+            console.log(`[backfillMatchStages] ${doc.id}: "${round}" stage ${data.stage} → ${correctStage}`);
+            if (batchCount >= config_1.FIRESTORE_BATCH_SIZE) {
+                await batch.commit();
+                batch = db.batch();
+                batchCount = 0;
+            }
+        }
+    }
+    if (batchCount > 0)
+        await batch.commit();
+    console.log(`[backfillMatchStages] Updated ${updated}/${snapshot.size} matches`);
+    return { updated, total: snapshot.size };
 }
 //# sourceMappingURL=backfill.js.map

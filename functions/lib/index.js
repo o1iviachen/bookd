@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.seedLeagues = exports.diagnoseTeams = exports.auditTeamIds = exports.migrateLegacyMatches = exports.backfillMatchRatings = exports.triggerAggregates = exports.computeAggregates = exports.backfillPlayerIds = exports.migratePlayerNames = exports.squadRefresh = exports.triggerSquadRefresh = exports.enrichPlayers = exports.enrichTeams = exports.buildPlayers = exports.migrateLeagueTier = exports.migrateSearchPrefixes = exports.fixPlayerNames = exports.scheduledBackfillDetails = exports.backfillDetails = exports.migrateHasDetails = exports.syncDetailsForLeague = exports.manualSync = exports.buildTeams = exports.backfill = exports.staleSync = exports.liveSync = exports.lineupSync = exports.dailyPrepopulate = exports.backfillMatchDetailKickoffs = exports.translateText = exports.submitReport = exports.deleteAccount = exports.moderateReviewMedia = exports.onMatchStatusChange = exports.preMatchNotify = exports.sendPushNotification = void 0;
+exports.seedLeagues = exports.diagnoseTeams = exports.auditTeamIds = exports.migrateLegacyMatches = exports.backfillMatchStages = exports.backfillMatchRatings = exports.triggerAggregates = exports.computeAggregates = exports.backfillPlayerIds = exports.migratePlayerNames = exports.squadRefresh = exports.triggerSquadRefresh = exports.enrichPlayers = exports.enrichTeams = exports.buildPlayers = exports.migrateLeagueTier = exports.migrateSearchPrefixes = exports.fixPlayerNames = exports.scheduledBackfillDetails = exports.backfillDetails = exports.migrateHasDetails = exports.syncDetailsForLeague = exports.manualSync = exports.buildTeams = exports.backfill = exports.staleSync = exports.liveSync = exports.lineupSync = exports.dailyPrepopulate = exports.backfillMatchDetailKickoffs = exports.translateText = exports.submitReport = exports.deleteAccount = exports.moderateReviewMedia = exports.onMatchStatusChange = exports.preMatchNotify = exports.sendPushNotification = void 0;
 const functions = __importStar(require("firebase-functions"));
 const admin = __importStar(require("firebase-admin"));
 admin.initializeApp();
@@ -1003,6 +1003,24 @@ exports.backfillMatchRatings = functions
     }
     console.log(`[backfillMatchRatings] Done. ${totalReviews} reviews → ${matchesUpdated} matches updated`);
     res.json({ success: true, reviewsProcessed: totalReviews, matchesUpdated });
+});
+/**
+ * One-off: re-compute `stage` from `round` for all matches.
+ * Fixes matches tagged 'FINAL' due to round strings like "1/128-finals".
+ * GET /backfillMatchStages
+ */
+exports.backfillMatchStages = functions
+    .runWith({ timeoutSeconds: 540, memory: '512MB' })
+    .https.onRequest(async (_req, res) => {
+    try {
+        const { backfillMatchStages: run } = await Promise.resolve().then(() => __importStar(require('./sync/backfill')));
+        const result = await run();
+        res.json({ success: true, ...result });
+    }
+    catch (err) {
+        console.error('[backfillMatchStages] Error:', err);
+        res.status(500).json({ error: err.message });
+    }
 });
 // ─── Helpers ───
 /**

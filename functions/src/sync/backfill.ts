@@ -618,7 +618,7 @@ async function processTeamSquad(
   // ─── Phase 1: Fetch current squad via /players/squads ───
   apiCalls++;
   const squadResponse = await getTeamSquad(teamId);
-  const currentSquad: Array<{ id: number; name: string; position: string; nationality: string | null }> = [];
+  const currentSquad: Array<{ id: number; name: string; position: string; nationality: string | null; shirtNumber: number | null }> = [];
 
   if (squadResponse?.players) {
     for (const sp of squadResponse.players) {
@@ -628,6 +628,7 @@ async function processTeamSquad(
         name: decodeEntities(sp.name),
         position: mapSquadPosition(sp.position),
         nationality: null,
+        shirtNumber: sp.number ?? null,
       });
     }
   }
@@ -1229,4 +1230,43 @@ export async function backfillTeamCountry(batchLimit = 200): Promise<{ updated: 
 
   console.log(`[backfillTeamCountry] Updated ${updated}/${processed} teams (total: ${allDocs.length})`);
   return { updated, total: allDocs.length };
+}
+
+/**
+ * Re-compute `stage` from `round` for all matches using the updated parseStage logic.
+ * Fixes matches that were incorrectly tagged (e.g. "1/128-finals" → 'FINAL').
+ */
+export async function backfillMatchStages(): Promise<{ updated: number; total: number }> {
+  const { parseStage } = await import('../transforms');
+  const snapshot = await db.collection(COLLECTIONS.MATCHES)
+    .where('stage', '!=', null)
+    .get();
+
+  let updated = 0;
+  let batch = db.batch();
+  let batchCount = 0;
+
+  for (const doc of snapshot.docs) {
+    const data = doc.data();
+    const round = data.round;
+    if (!round) continue;
+
+    const correctStage = parseStage(round);
+    if (correctStage !== data.stage) {
+      batch.update(doc.ref, { stage: correctStage });
+      batchCount++;
+      updated++;
+      console.log(`[backfillMatchStages] ${doc.id}: "${round}" stage ${data.stage} → ${correctStage}`);
+
+      if (batchCount >= FIRESTORE_BATCH_SIZE) {
+        await batch.commit();
+        batch = db.batch();
+        batchCount = 0;
+      }
+    }
+  }
+
+  if (batchCount > 0) await batch.commit();
+  console.log(`[backfillMatchStages] Updated ${updated}/${snapshot.size} matches`);
+  return { updated, total: snapshot.size };
 }

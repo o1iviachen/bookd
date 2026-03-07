@@ -1048,6 +1048,24 @@ export const backfillMatchRatings = functions
     res.json({ success: true, reviewsProcessed: totalReviews, matchesUpdated });
   });
 
+/**
+ * One-off: re-compute `stage` from `round` for all matches.
+ * Fixes matches tagged 'FINAL' due to round strings like "1/128-finals".
+ * GET /backfillMatchStages
+ */
+export const backfillMatchStages = functions
+  .runWith({ timeoutSeconds: 540, memory: '512MB' })
+  .https.onRequest(async (_req, res) => {
+    try {
+      const { backfillMatchStages: run } = await import('./sync/backfill');
+      const result = await run();
+      res.json({ success: true, ...result });
+    } catch (err: any) {
+      console.error('[backfillMatchStages] Error:', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
 // ─── Helpers ───
 
 /**
