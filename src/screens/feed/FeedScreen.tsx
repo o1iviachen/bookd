@@ -251,6 +251,14 @@ export function FeedScreen() {
     </Pressable>
   );
 
+  // Compute alternating section backgrounds (dark first)
+  let sIdx = 0;
+  const trendingSIdx = trendingLiveMatches.length > 0 ? sIdx++ : -1;
+  const friendsSIdx = sIdx++;
+  const popularSIdx = sIdx++;
+  const leagueStartIdx = sIdx;
+  const sectionBg = (i: number) => i % 2 === 0 ? `${colors.accent}40` : 'transparent';
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
       {/* Sticky header */}
@@ -316,7 +324,7 @@ export function FeedScreen() {
               <>
                 {/* Trending live matches */}
                 {trendingLiveMatches.length > 0 && (
-                  <View style={{ backgroundColor: `${colors.accent}40`, paddingVertical: spacing.md }}>
+                  <View style={{ backgroundColor: sectionBg(trendingSIdx), paddingVertical: spacing.md }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, marginBottom: spacing.sm, gap: 4 }}>
                       <Ionicons name="flame" size={13} color="#ef4444" />
                       <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1 }}>
@@ -337,7 +345,7 @@ export function FeedScreen() {
                 )}
 
                 {/* New from friends */}
-                <View style={{ paddingVertical: spacing.md }}>
+                <View style={{ backgroundColor: sectionBg(friendsSIdx), paddingVertical: spacing.md }}>
                   {renderSectionHeader(t('feed.newFromFriends'))}
                   {friendReviews.length > 0 ? (
                     <FlatList showsVerticalScrollIndicator={false}
@@ -365,7 +373,7 @@ export function FeedScreen() {
                 </View>
 
                 {/* Popular this week */}
-                <View style={{ backgroundColor: `${colors.accent}40`, paddingVertical: spacing.md }}>
+                <View style={{ backgroundColor: sectionBg(popularSIdx), paddingVertical: spacing.md }}>
                   {renderSectionHeader(t('feed.popularThisWeek'))}
                   {popularMatches.length > 0 ? (
                     <FlatList showsVerticalScrollIndicator={false}
@@ -391,7 +399,7 @@ export function FeedScreen() {
                     <View
                       key={code}
                       style={{
-                        backgroundColor: index % 2 === 0 ? `${colors.accent}40` : 'transparent',
+                        backgroundColor: sectionBg(leagueStartIdx + index),
                         paddingVertical: spacing.md,
                       }}
                     >
@@ -414,7 +422,7 @@ export function FeedScreen() {
                     </View>
                   ))
                 ) : (
-                  <View style={{ alignItems: 'center', paddingTop: spacing.lg, paddingHorizontal: spacing.xl }}>
+                  <View style={{ backgroundColor: sectionBg(leagueStartIdx), alignItems: 'center', paddingTop: spacing.lg, paddingBottom: spacing.md, paddingHorizontal: spacing.xl }}>
                     <Ionicons name="football-outline" size={36} color={colors.textSecondary} />
                     <Text style={{ ...typography.caption, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.sm }}>
                       {t('feed.followLeaguesToSeeMatches')}
