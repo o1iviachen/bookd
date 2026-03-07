@@ -12,7 +12,7 @@ import { CreateUsernameScreen } from '../screens/auth/CreateUsernameScreen';
 const prefix = Linking.createURL('/');
 
 const linking = {
-  prefixes: [prefix, 'bookd://'],
+  prefixes: [prefix, 'bookd://', 'https://bookd-app.com'],
   config: {
     screens: {
       Main: {

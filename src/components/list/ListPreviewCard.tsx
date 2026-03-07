@@ -59,7 +59,8 @@ export function ListPreviewCard({ list, onPress, onMatchPress }: ListPreviewCard
 
   const handleShare = () => {
     const count = list.matchIds.length;
-    Share.share({ message: `"${list.name}", a list of ${count} ${count === 1 ? 'match' : 'matches'} by @${displayUsername} on bookd:\nbookd://list/${list.id}` });
+    const url = `https://bookd-app.com/list/${list.id}`;
+    Share.share({ message: `"${list.name}", a list of ${count} ${count === 1 ? 'match' : 'matches'} by @${displayUsername} on bookd:\n${url}`, url });
   };
 
   return (

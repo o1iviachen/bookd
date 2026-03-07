@@ -2,10 +2,27 @@
   "functions": {
     "source": "functions",
     "runtime": "nodejs22",
-    "predeploy": ["npm --prefix \"$RESOURCE_DIR\" run build"]
+    "predeploy": [
+      "npm --prefix \"$RESOURCE_DIR\" run build"
+    ]
   },
   "firestore": {
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
+  },
+  "hosting": {
+    "public": "public",
+    "cleanUrls": true,
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "!.well-known/**",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      { "source": "/match/**", "destination": "/app-redirect.html" },
+      { "source": "/review/**", "destination": "/app-redirect.html" },
+      { "source": "/list/**", "destination": "/app-redirect.html" }
+    ]
   }
 }

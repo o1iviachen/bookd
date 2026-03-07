@@ -177,7 +177,8 @@ export function ListDetailScreen({ route, navigation }: any) {
 
   const handleShare = () => {
     const count = list.matchIds.length;
-    Share.share({ message: `"${list.name}", a list of ${count} ${count === 1 ? 'match' : 'matches'} by @${listAuthorUsername} on bookd:\nbookd://list/${list.id}` });
+    const url = `https://bookd-app.com/list/${list.id}`;
+    Share.share({ message: `"${list.name}", a list of ${count} ${count === 1 ? 'match' : 'matches'} by @${listAuthorUsername} on bookd:\n${url}`, url });
   };
 
   const handleEdit = () => {

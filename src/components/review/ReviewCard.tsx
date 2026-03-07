@@ -66,7 +66,8 @@ export function ReviewCard({ review, onPress, commentCount: commentCountProp, is
     const line1 = stars
       ? `A ${stars} review of ${matchLabel} by @${displayUsername} on bookd:`
       : `@${displayUsername}'s review of ${matchLabel} on bookd:`;
-    Share.share({ message: `${line1}\nbookd://review/${review.id}` });
+    const url = `https://bookd-app.com/review/${review.id}`;
+    Share.share({ message: `${line1}\n${url}`, url });
   };
 
   return (

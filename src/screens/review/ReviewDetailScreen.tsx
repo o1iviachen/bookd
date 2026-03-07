@@ -141,7 +141,8 @@ export function ReviewDetailScreen({ route, navigation }: any) {
     const line1 = stars
       ? `A ${stars} review of ${matchLabel} by @${authorUsername} on bookd:`
       : `@${authorUsername}'s review of ${matchLabel} on bookd:`;
-    Share.share({ message: `${line1}\nbookd://review/${review.id}` });
+    const url = `https://bookd-app.com/review/${review.id}`;
+    Share.share({ message: `${line1}\n${url}`, url });
   };
 
   const handleReply = (_commentId: string, username: string, parentId?: string | null) => {

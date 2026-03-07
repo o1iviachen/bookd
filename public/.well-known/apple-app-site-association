@@ -1,0 +1,11 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "4CMVBFM2BQ.com.bookd-app",
+        "paths": ["/match/*", "/review/*", "/list/*"]
+      }
+    ]
+  }
+}

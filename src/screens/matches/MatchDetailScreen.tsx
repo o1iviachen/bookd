@@ -206,7 +206,8 @@ export function MatchDetailScreen({ route, navigation }: Props) {
       ? `${match.homeTeam.shortName} ${match.homeScore} - ${match.awayScore} ${match.awayTeam.shortName} · ${match.competition.name} on bookd`
       : `${match.homeTeam.shortName} vs ${match.awayTeam.shortName} · ${match.competition.name} on bookd`;
     try {
-      await Share.share({ message: label, url: `bookd://match/${matchId}` });
+      const url = `https://bookd-app.com/match/${matchId}`;
+      await Share.share({ message: `${label}\n${url}`, url });
     } catch (err) {
       // User cancelled or share failed — ignore
     }
