@@ -611,7 +611,7 @@ export function MatchDetailScreen({ route, navigation }: Props) {
           colors={colors}
           spacing={spacing}
           borderRadius={borderRadius}
-          onFocus={() => setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 300)}
+          onFocus={() => {}}
           matchMinute={match.elapsed}
         />
       )}
