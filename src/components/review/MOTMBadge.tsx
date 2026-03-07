@@ -6,7 +6,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { usePersonDetail } from '../../hooks/usePeople';
-import { decodeHtmlEntities } from '../../utils/formatName';
+import { decodeHtmlEntities, shortName } from '../../utils/formatName';
 
 const REFEREE_MOTM_ID = -1;
 
@@ -81,7 +81,7 @@ function PlayerMOTMBadge({ playerId, playerName, size = 'sm' }: { playerId: numb
 
   const photoSize = size === 'md' ? 32 : 26;
   const rawName = player?.name && player.name !== 'Unknown Player' ? player.name : playerName || 'Unknown';
-  const displayName = decodeHtmlEntities(rawName);
+  const displayName = shortName(decodeHtmlEntities(rawName));
 
   if (!player) return null;
 

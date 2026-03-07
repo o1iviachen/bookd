@@ -419,19 +419,12 @@ export async function getMatchDetail(id: number): Promise<MatchDetail> {
 
   const data = detailSnap.data();
 
-  const [homeLineup, homeBench, awayLineup, awayBench] = await Promise.all([
-    enrichPlayerNames(data.homeLineup || []),
-    enrichPlayerNames(data.homeBench || []),
-    enrichPlayerNames(data.awayLineup || []),
-    enrichPlayerNames(data.awayBench || []),
-  ]);
-
   return {
     match,
-    homeLineup,
-    homeBench,
-    awayLineup,
-    awayBench,
+    homeLineup: data.homeLineup || [],
+    homeBench: data.homeBench || [],
+    awayLineup: data.awayLineup || [],
+    awayBench: data.awayBench || [],
     homeCoach: data.homeCoach || null,
     awayCoach: data.awayCoach || null,
     homeFormation: data.homeFormation || null,

@@ -1186,7 +1186,7 @@ function FormationPitch({
               teamColor="rgba(20,20,30,0.65)"
               events={playerEvents.get(player.id)}
               isMOTM={motmWinnerId === player.id}
-              onPress={() => navigation.navigate('PersonDetail', { personId: player.id, personName: shortName(player.name), role: 'player' })}
+              onPress={() => navigation.navigate('PersonDetail', { personId: player.id, personName: lastName(player.name), role: 'player' })}
             />
           );
         })
@@ -1205,7 +1205,7 @@ function FormationPitch({
               teamColor="rgba(255,255,255,0.2)"
               events={playerEvents.get(player.id)}
               isMOTM={motmWinnerId === player.id}
-              onPress={() => navigation.navigate('PersonDetail', { personId: player.id, personName: shortName(player.name), role: 'player' })}
+              onPress={() => navigation.navigate('PersonDetail', { personId: player.id, personName: lastName(player.name), role: 'player' })}
             />
           );
         })
@@ -1233,7 +1233,7 @@ function BenchPlayerRow({ player, substitution, colors, spacing, typography, onP
         )}
         {isMOTM && <Text style={{ fontSize: 13 }}>⭐</Text>}
         <Text style={{ ...typography.body, color: isMOTM ? '#f59e0b' : colors.foreground, fontSize: 14, flex: 1, fontWeight: isMOTM ? '700' : '400' }} numberOfLines={1}>
-          {shortName(player.name)}
+          {lastName(player.name)}
         </Text>
         {substitution && (
           <Text style={{ fontSize: 11, color: colors.textSecondary }}>
@@ -1309,7 +1309,7 @@ function LineupSection({ matchDetail, match, colors, spacing, typography, naviga
               <Text style={{ ...typography.caption, color: colors.textSecondary }}>{t('matches.startingXI')}</Text>
             </View>
             {matchDetail.homeLineup.map((p) => (
-              <BenchPlayerRow key={p.id} player={p} colors={colors} spacing={spacing} typography={typography} isMOTM={motmWinnerId === p.id} onPress={() => navigation.navigate('PersonDetail', { personId: p.id, personName: shortName(p.name), role: 'player' })} />
+              <BenchPlayerRow key={p.id} player={p} colors={colors} spacing={spacing} typography={typography} isMOTM={motmWinnerId === p.id} onPress={() => navigation.navigate('PersonDetail', { personId: p.id, personName: lastName(p.name), role: 'player' })} />
             ))}
           </View>
           <View style={{ height: 1, backgroundColor: colors.border, marginBottom: spacing.md }} />
@@ -1321,7 +1321,7 @@ function LineupSection({ matchDetail, match, colors, spacing, typography, naviga
               <Text style={{ ...typography.caption, color: colors.textSecondary }}>{t('matches.startingXI')}</Text>
             </View>
             {matchDetail.awayLineup.map((p) => (
-              <BenchPlayerRow key={p.id} player={p} colors={colors} spacing={spacing} typography={typography} isMOTM={motmWinnerId === p.id} onPress={() => navigation.navigate('PersonDetail', { personId: p.id, personName: shortName(p.name), role: 'player' })} />
+              <BenchPlayerRow key={p.id} player={p} colors={colors} spacing={spacing} typography={typography} isMOTM={motmWinnerId === p.id} onPress={() => navigation.navigate('PersonDetail', { personId: p.id, personName: lastName(p.name), role: 'player' })} />
             ))}
           </View>
         </>
@@ -1346,7 +1346,7 @@ function LineupSection({ matchDetail, match, colors, spacing, typography, naviga
               spacing={spacing}
               typography={typography}
               isMOTM={motmWinnerId === p.id}
-              onPress={() => navigation.navigate('PersonDetail', { personId: p.id, personName: shortName(p.name), role: 'player' })}
+              onPress={() => navigation.navigate('PersonDetail', { personId: p.id, personName: lastName(p.name), role: 'player' })}
             />
           ))}
           {matchDetail.homeCoach && (
@@ -1385,7 +1385,7 @@ function LineupSection({ matchDetail, match, colors, spacing, typography, naviga
               spacing={spacing}
               typography={typography}
               isMOTM={motmWinnerId === p.id}
-              onPress={() => navigation.navigate('PersonDetail', { personId: p.id, personName: shortName(p.name), role: 'player' })}
+              onPress={() => navigation.navigate('PersonDetail', { personId: p.id, personName: lastName(p.name), role: 'player' })}
             />
           ))}
           {matchDetail.awayCoach && (
