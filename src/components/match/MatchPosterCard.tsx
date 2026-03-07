@@ -3,6 +3,7 @@ import { View, Text, Pressable, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { Match } from '../../types/match';
 import { formatMatchDate } from '../../utils/formatDate';
@@ -18,6 +19,7 @@ interface MatchPosterCardProps {
 }
 
 export const MatchPosterCard = React.memo(function MatchPosterCard({ match, onPress, width: widthProp, compact, selected }: MatchPosterCardProps) {
+  const { t } = useTranslation();
   const { theme } = useTheme();
   const { spacing } = theme;
   const { width: screenWidth } = useWindowDimensions();
@@ -31,6 +33,8 @@ export const MatchPosterCard = React.memo(function MatchPosterCard({ match, onPr
   const isFinished = match.status === 'FINISHED';
   const isLive = match.status === 'IN_PLAY' || match.status === 'PAUSED';
   const isUpcoming = !isFinished && !isLive;
+  const isHT = match.statusShort === 'HT';
+  const isBT = match.statusShort === 'BT';
 
   return (
     <Pressable
@@ -109,7 +113,7 @@ export const MatchPosterCard = React.memo(function MatchPosterCard({ match, onPr
             </Text>
           ) : null}
 
-          {/* LIVE badge */}
+          {/* LIVE / HT / BT badge */}
           {isLive && (
             <View
               style={{
@@ -124,8 +128,18 @@ export const MatchPosterCard = React.memo(function MatchPosterCard({ match, onPr
                 marginBottom: 4,
               }}
             >
-              <PulsingDot size={5} color="#14181c" />
-              <Text style={{ fontSize: 9, fontWeight: '800', color: '#14181c' }}>LIVE</Text>
+              {isHT || isBT ? (
+                <Text style={{ fontSize: 9, fontWeight: '800', color: '#14181c' }}>
+                  {isHT ? t('common.halfTime') : t('common.breakTime')}
+                </Text>
+              ) : (
+                <>
+                  <PulsingDot size={5} color="#14181c" />
+                  <Text style={{ fontSize: 9, fontWeight: '800', color: '#14181c' }}>
+                    {match.elapsed != null ? `${match.elapsed}'` : ''}
+                  </Text>
+                </>
+              )}
             </View>
           )}
 

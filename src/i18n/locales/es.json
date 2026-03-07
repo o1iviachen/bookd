@@ -32,6 +32,8 @@
     "vs": "contra",
     "live": "VIVIR",
     "fullTime": "Tiempo completo",
+    "halfTime": "Descanso",
+    "breakTime": "Pausa",
     "gif": "GIF",
     "photo": "Foto",
     "noResultsFound": "No se encontraron resultados",

@@ -26,6 +26,8 @@ function matchToDoc(match: Match): Record<string, any> {
     venue: match.venue,
     matchday: match.matchday,
     stage: match.stage ?? null,
+    elapsed: match.elapsed ?? null,
+    statusShort: match.statusShort ?? null,
     cachedAt: serverTimestamp(),
   };
 }
@@ -43,6 +45,8 @@ function docToMatch(data: Record<string, any>, docId: string): Match {
     venue: data.venue,
     matchday: data.matchday,
     stage: data.stage ?? null,
+    elapsed: data.elapsed ?? null,
+    statusShort: data.statusShort ?? null,
   };
 }
 

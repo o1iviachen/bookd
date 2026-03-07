@@ -97,6 +97,7 @@ export function transformFixtureToMatch(fixture: ApiFixture, leagueMap: Map<numb
     season: fixture.league.season,
     round: fixture.league.round,
     elapsed: fixture.fixture.status.elapsed,
+    statusShort: fixture.fixture.status.short,
   };
 }
 

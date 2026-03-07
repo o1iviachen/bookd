@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { TeamLogo } from './TeamLogo';
 import { Match } from '../../types/match';
@@ -13,10 +14,13 @@ interface CompactMatchRowProps {
 }
 
 export function CompactMatchRow({ match, onPress }: CompactMatchRowProps) {
+  const { t } = useTranslation();
   const { theme } = useTheme();
   const { colors, spacing, typography } = theme;
 
   const isLive = match.status === 'IN_PLAY' || match.status === 'PAUSED';
+  const isHT = match.statusShort === 'HT';
+  const isBT = match.statusShort === 'BT';
   const isFinished = match.status === 'FINISHED';
   const showScore = isFinished || isLive;
 
@@ -63,8 +67,18 @@ export function CompactMatchRow({ match, onPress }: CompactMatchRowProps) {
         )}
         {isLive && (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 1 }}>
-            <PulsingDot />
-            <Text style={{ fontSize: 10, fontWeight: '700', color: '#00e054' }}>LIVE</Text>
+            {isHT || isBT ? (
+              <Text style={{ fontSize: 10, fontWeight: '700', color: '#00e054' }}>
+                {isHT ? t('common.halfTime') : t('common.breakTime')}
+              </Text>
+            ) : (
+              <>
+                <PulsingDot />
+                <Text style={{ fontSize: 10, fontWeight: '700', color: '#00e054' }}>
+                  {match.elapsed != null ? `${match.elapsed}'` : ''}
+                </Text>
+              </>
+            )}
           </View>
         )}
       </View>

@@ -86,6 +86,8 @@ function docToMatch(data: Record<string, any>, docId: string): Match {
     ratingBucketsAway: data.ratingBucketsAway ?? undefined,
     ratingBucketsNeutral: data.ratingBucketsNeutral ?? undefined,
     legacyId: data.legacyId ?? undefined,
+    elapsed: data.elapsed ?? null,
+    statusShort: data.statusShort ?? null,
   };
 }
 

@@ -41,7 +41,6 @@ exports.buildTeamsFromMatches = buildTeamsFromMatches;
 exports.buildPlayersAndEnrichTeams = buildPlayersAndEnrichTeams;
 exports.enrichTeamInfo = enrichTeamInfo;
 exports.refreshSquadsOnly = refreshSquadsOnly;
-exports.enrichPlayersFromSquads = enrichPlayersFromSquads;
 exports.generateSearchPrefixes = generateSearchPrefixes;
 exports.backfillPlayerNameLower = backfillPlayerNameLower;
 exports.backfillMissingMatchDetails = backfillMissingMatchDetails;
@@ -553,7 +552,7 @@ async function enrichTeamInfo(batchLimit = 400, cursor) {
     const snap = await query.get();
     const teamDocs = snap.docs.filter((d) => {
         const data = d.data();
-        return !data.country || !data.founded || !data.venue || typeof data.venue === 'string';
+        return !data.country || !data.founded || !data.venue || typeof data.venue === 'string' || !data.activeCompetitions;
     });
     let updated = 0;
     for (const teamDoc of teamDocs) {
@@ -574,6 +573,27 @@ async function enrichTeamInfo(batchLimit = 400, cursor) {
                     capacity: info.venue.capacity || null,
                     image: info.venue.image || null,
                 };
+            }
+            // Build activeCompetitions from competitionCodes (no API call)
+            const compCodes = teamDoc.data().competitionCodes || [];
+            if (compCodes.length > 0) {
+                const leagueCodeMap = await (0, leagueHelper_1.getLeagueByCodeMap)();
+                const activeCompetitions = compCodes
+                    .map((code) => {
+                    const league = leagueCodeMap.get(code);
+                    if (!league)
+                        return null;
+                    return {
+                        id: league.apiId,
+                        name: league.name,
+                        code: league.code,
+                        emblem: `https://media.api-sports.io/football/leagues/${league.apiId}.png`,
+                    };
+                })
+                    .filter(Boolean);
+                if (activeCompetitions.length > 0) {
+                    update.activeCompetitions = activeCompetitions;
+                }
             }
             if (Object.keys(update).length > 0) {
                 await db.collection(config_1.COLLECTIONS.TEAMS).doc(String(teamId)).set(update, { merge: true });
@@ -596,7 +616,7 @@ async function enrichTeamInfo(batchLimit = 400, cursor) {
  * Returns { playersEnriched, apiCalls }
  */
 async function processTeamSquad(teamId, teamName, teamCrest, teamTier, currentSeason) {
-    var _a, _b, _c, _d, _e;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l;
     let playersEnriched = 0;
     let apiCalls = 0;
     // ─── Phase 1: Fetch current squad via /players/squads ───
@@ -612,6 +632,7 @@ async function processTeamSquad(teamId, teamName, teamCrest, teamTier, currentSe
                 name: decodeEntities(sp.name),
                 position: mapSquadPosition(sp.position),
                 nationality: null,
+                shirtNumber: (_a = sp.number) !== null && _a !== void 0 ? _a : null,
             });
         }
     }
@@ -674,24 +695,50 @@ async function processTeamSquad(teamId, teamName, teamCrest, teamTier, currentSe
         const data = response.data;
         const players = (data === null || data === void 0 ? void 0 : data.response) || [];
         allPlayers.push(...players);
-        totalPages = ((_a = data === null || data === void 0 ? void 0 : data.paging) === null || _a === void 0 ? void 0 : _a.total) || 1;
+        totalPages = ((_b = data === null || data === void 0 ? void 0 : data.paging) === null || _b === void 0 ? void 0 : _b.total) || 1;
         page++;
     }
+    // Track players whose currentTeam changed (for squad cleanup)
+    // Only track if the player is in this team's actual squad (Phase 1), not just season stats
+    const INTERNATIONAL_CODES = new Set(['WC', 'EURO', 'NL', 'CA']);
+    const currentSquadIds = new Set(currentSquad.map((s) => s.id));
+    const oldTeamPlayers = new Map();
     if (allPlayers.length > 0) {
+        // Read existing player docs to detect team changes
+        const playerIds = allPlayers.map((e) => { var _a; return (_a = e.player) === null || _a === void 0 ? void 0 : _a.id; }).filter(Boolean);
+        const playerRefs = playerIds.map((id) => db.collection(config_1.COLLECTIONS.PLAYERS).doc(String(id)));
+        for (let i = 0; i < playerRefs.length; i += 100) {
+            const chunk = playerRefs.slice(i, i + 100);
+            const docs = await db.getAll(...chunk);
+            for (const d of docs) {
+                if (!d.exists)
+                    continue;
+                const prev = (_c = d.data()) === null || _c === void 0 ? void 0 : _c.currentTeam;
+                const playerId = Number(d.id);
+                if ((prev === null || prev === void 0 ? void 0 : prev.id) && prev.id !== teamId && currentSquadIds.has(playerId)) {
+                    if (!oldTeamPlayers.has(prev.id))
+                        oldTeamPlayers.set(prev.id, new Set());
+                    oldTeamPlayers.get(prev.id).add(playerId);
+                }
+            }
+        }
         let batch = db.batch();
         let batchCount = 0;
         for (const entry of allPlayers) {
             const p = entry.player;
             if (!(p === null || p === void 0 ? void 0 : p.id))
                 continue;
-            const firstWord = (p.firstname || '').split(/\s+/)[0];
-            const rawName = p.name
-                || (firstWord && p.lastname ? `${firstWord} ${p.lastname}` : p.firstname || p.lastname || '');
+            const apiName = p.name || '';
+            const firstName = (p.firstname || '').trim();
+            const lastName = (p.lastname || '').trim();
+            const rawName = apiName.includes('.')
+                ? (firstName && lastName ? `${firstName} ${lastName}` : firstName || lastName || apiName)
+                : (apiName || (firstName && lastName ? `${firstName} ${lastName}` : firstName || lastName || ''));
             const fullName = decodeEntities(rawName);
-            const pos = ((_d = (_c = (_b = entry.statistics) === null || _b === void 0 ? void 0 : _b[0]) === null || _c === void 0 ? void 0 : _c.games) === null || _d === void 0 ? void 0 : _d.position) || null;
+            const pos = ((_f = (_e = (_d = entry.statistics) === null || _d === void 0 ? void 0 : _d[0]) === null || _e === void 0 ? void 0 : _e.games) === null || _f === void 0 ? void 0 : _f.position) || null;
             const playerRef = db.collection(config_1.COLLECTIONS.PLAYERS).doc(String(p.id));
             const searchName = extractSearchName(fullName);
-            batch.set(playerRef, {
+            const playerData = {
                 id: p.id,
                 name: fullName,
                 nameLower: fullName.toLowerCase(),
@@ -699,12 +746,16 @@ async function processTeamSquad(teamId, teamName, teamCrest, teamTier, currentSe
                 searchPrefixes: generateSearchPrefixes(fullName),
                 photo: p.photo || null,
                 nationality: p.nationality || null,
-                dateOfBirth: ((_e = p.birth) === null || _e === void 0 ? void 0 : _e.date) || null,
+                dateOfBirth: ((_g = p.birth) === null || _g === void 0 ? void 0 : _g.date) || null,
                 position: pos ? mapSquadPosition(pos) : undefined,
-                currentTeam: { id: teamId, name: teamName, crest: teamCrest },
                 leagueTier: teamTier,
                 syncedAt: admin.firestore.FieldValue.serverTimestamp(),
-            }, { merge: true });
+            };
+            // Only set currentTeam for players in the actual current squad (Phase 1)
+            if (currentSquadIds.has(p.id)) {
+                playerData.currentTeam = { id: teamId, name: teamName, crest: teamCrest };
+            }
+            batch.set(playerRef, playerData, { merge: true });
             batchCount++;
             playersEnriched++;
             if (batchCount >= 450) {
@@ -715,6 +766,34 @@ async function processTeamSquad(teamId, teamName, teamCrest, teamTier, currentSe
         }
         if (batchCount > 0) {
             await batch.commit();
+        }
+        // Remove transferred players from their old team's squad array
+        // Skip national teams — players can be in both club + country squads
+        const currentTeamDoc = await db.collection(config_1.COLLECTIONS.TEAMS).doc(String(teamId)).get();
+        const currentCompCodes = ((_h = currentTeamDoc.data()) === null || _h === void 0 ? void 0 : _h.competitionCodes) || [];
+        const currentIsNational = currentCompCodes.length > 0 && currentCompCodes.every((c) => INTERNATIONAL_CODES.has(c));
+        if (!currentIsNational) {
+            for (const [oldTeamId, playerIdSet] of oldTeamPlayers) {
+                try {
+                    const oldTeamRef = db.collection(config_1.COLLECTIONS.TEAMS).doc(String(oldTeamId));
+                    const oldTeamSnap = await oldTeamRef.get();
+                    if (!oldTeamSnap.exists)
+                        continue;
+                    const oldCompCodes = ((_j = oldTeamSnap.data()) === null || _j === void 0 ? void 0 : _j.competitionCodes) || [];
+                    if (oldCompCodes.length > 0 && oldCompCodes.every((c) => INTERNATIONAL_CODES.has(c)))
+                        continue;
+                    const oldSquad = ((_k = oldTeamSnap.data()) === null || _k === void 0 ? void 0 : _k.squad) || [];
+                    const filtered = oldSquad.filter((p) => !playerIdSet.has(p.id));
+                    if (filtered.length < oldSquad.length) {
+                        await oldTeamRef.update({ squad: filtered });
+                        const movedIds = [...playerIdSet].filter((id) => oldSquad.some((p) => p.id === id));
+                        console.log(`[processTeamSquad] Transferred player(s) [${movedIds.join(', ')}] from team ${oldTeamId} → ${teamId}`);
+                    }
+                }
+                catch (err) {
+                    console.error(`[processTeamSquad] Error cleaning squad for team ${oldTeamId}:`, err.message);
+                }
+            }
         }
     }
     // ─── Phase 3: Backfill nationality into squad array ───
@@ -737,6 +816,48 @@ async function processTeamSquad(teamId, teamName, teamCrest, teamTier, currentSe
         if (squadUpdated) {
             await db.collection(config_1.COLLECTIONS.TEAMS).doc(String(teamId)).set({ squad: currentSquad }, { merge: true });
         }
+    }
+    // ─── Phase 4: Fetch coach ───
+    apiCalls++;
+    const coachResponse = await (0, apiFootball_1.getTeamCoach)(teamId);
+    if (coachResponse) {
+        const firstWord = (coachResponse.firstname || '').split(/\s+/)[0];
+        const lastParts = (coachResponse.lastname || '').trim().split(/\s+/);
+        const COACH_PARTICLES = new Set(['de', 'da', 'do', 'dos', 'das', 'di', 'del', 'della', 'van', 'von', 'den', 'der', 'ten', 'el', 'al', 'le', 'la', 'du']);
+        const shortLastParts = [];
+        for (const word of lastParts) {
+            shortLastParts.push(word);
+            if (!COACH_PARTICLES.has(word.toLowerCase()))
+                break;
+        }
+        const shortLast = shortLastParts.join(' ');
+        const coachName = decodeEntities(firstWord && shortLast ? `${firstWord} ${shortLast}`
+            : coachResponse.name || firstWord || shortLast || '');
+        await db.collection(config_1.COLLECTIONS.TEAMS).doc(String(teamId)).set({ coach: { id: coachResponse.id, name: coachName }, syncedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+        // Update coach's player doc
+        const coachRef = db.collection(config_1.COLLECTIONS.PLAYERS).doc(String(coachResponse.id));
+        const existingCoachSnap = await coachRef.get();
+        const existingCoachData = existingCoachSnap.data();
+        const formerPosition = (existingCoachData === null || existingCoachData === void 0 ? void 0 : existingCoachData.formerPosition)
+            || ((existingCoachData === null || existingCoachData === void 0 ? void 0 : existingCoachData.position) && existingCoachData.position !== 'Coach'
+                ? existingCoachData.position : null);
+        const coachDocData = {
+            id: coachResponse.id,
+            name: coachName,
+            nameLower: coachName.toLowerCase(),
+            searchName: extractSearchName(coachName),
+            searchPrefixes: generateSearchPrefixes(coachName),
+            photo: coachResponse.photo || null,
+            nationality: coachResponse.nationality || null,
+            dateOfBirth: ((_l = coachResponse.birth) === null || _l === void 0 ? void 0 : _l.date) || null,
+            position: 'Coach',
+            currentTeam: { id: teamId, name: teamName, crest: teamCrest },
+            leagueTier: teamTier,
+            syncedAt: admin.firestore.FieldValue.serverTimestamp(),
+        };
+        if (formerPosition)
+            coachDocData.formerPosition = formerPosition;
+        await coachRef.set(coachDocData, { merge: true });
     }
     return { playersEnriched, apiCalls };
 }
@@ -780,145 +901,6 @@ async function refreshSquadsOnly(batchLimit = 200, lastTeamId = 0) {
     }
     console.log(`[refreshSquads] Done: ${teamsProcessed} teams, ${playersEnriched} players, ${apiCalls} API calls`);
     return { teamsProcessed, playersEnriched, apiCalls, lastProcessedTeamId };
-}
-/**
- * Enriches player docs with FULL names, photo, nationality, DOB by fetching
- * /players?team={id}&season={year} for each team. This endpoint returns
- * firstname, lastname, full name, nationality, birth date, and photo.
- * It's paginated (20 per page) so ~2 API calls per team.
- *
- * Query params:
- *   ?limit=50 — how many teams to process per invocation (default 50)
- *   ?offset=0 — skip this many teams (for resuming)
- */
-async function enrichPlayersFromSquads(batchLimit = 50, offset = 0) {
-    var _a, _b, _c, _d, _e, _f, _g;
-    // Determine current season
-    const now = new Date();
-    const month = now.getMonth() + 1;
-    const currentSeason = month >= 7 ? now.getFullYear() : now.getFullYear() - 1;
-    // Get all team IDs from Firestore
-    const teamsSnap = await db.collection(config_1.COLLECTIONS.TEAMS)
-        .orderBy('id')
-        .offset(offset)
-        .limit(batchLimit)
-        .get();
-    let teamsProcessed = 0;
-    let playersEnriched = 0;
-    let apiCalls = 0;
-    for (const teamDoc of teamsSnap.docs) {
-        const teamData = teamDoc.data();
-        const teamId = teamData.id;
-        const teamName = teamData.name;
-        const teamCrest = teamData.crest;
-        const teamTier = await (0, leagueHelper_1.getLeagueTier)(teamData.competitionCodes);
-        try {
-            // ─── Phases 1-3: Squad fetch, player enrichment, nationality backfill ───
-            const squadResult = await processTeamSquad(teamId, teamName, teamCrest, teamTier, currentSeason);
-            playersEnriched += squadResult.playersEnriched;
-            apiCalls += squadResult.apiCalls;
-            // ─── Phase 4: Fetch team info (venue, founded, colors) ───
-            apiCalls++;
-            const teamInfoResponse = await (0, apiFootball_1.getTeamInfo)(teamId);
-            const teamUpdate = {};
-            if (teamInfoResponse) {
-                if ((_a = teamInfoResponse.venue) === null || _a === void 0 ? void 0 : _a.name)
-                    teamUpdate.venue = teamInfoResponse.venue.name;
-                if ((_b = teamInfoResponse.team) === null || _b === void 0 ? void 0 : _b.country)
-                    teamUpdate.country = teamInfoResponse.team.country;
-                if ((_c = teamInfoResponse.team) === null || _c === void 0 ? void 0 : _c.founded)
-                    teamUpdate.founded = teamInfoResponse.team.founded;
-                if ((_f = (_e = (_d = teamInfoResponse.team) === null || _d === void 0 ? void 0 : _d.colors) === null || _e === void 0 ? void 0 : _e.player) === null || _f === void 0 ? void 0 : _f.primary) {
-                    const primary = teamInfoResponse.team.colors.player.primary;
-                    const secondary = teamInfoResponse.team.colors.player.number;
-                    teamUpdate.clubColors = `#${primary}`;
-                    if (secondary && secondary !== primary) {
-                        teamUpdate.clubColors = `#${primary} / #${secondary}`;
-                    }
-                }
-            }
-            // ─── Phase 5: Fetch coach with full name ───
-            apiCalls++;
-            const coachResponse = await (0, apiFootball_1.getTeamCoach)(teamId);
-            if (coachResponse) {
-                // First word of firstname + leading particles + first real surname word from lastname
-                // e.g. "Josep" + "Guardiola i Sala" → "Josep Guardiola"
-                // e.g. "Erik" + "ten Hag" → "Erik ten Hag"
-                const firstWord = (coachResponse.firstname || '').split(/\s+/)[0];
-                const lastParts = (coachResponse.lastname || '').trim().split(/\s+/);
-                const NAME_PARTICLES = new Set(['de', 'da', 'do', 'dos', 'das', 'di', 'del', 'della', 'van', 'von', 'den', 'der', 'ten', 'el', 'al', 'le', 'la', 'du']);
-                const shortLastParts = [];
-                for (const word of lastParts) {
-                    shortLastParts.push(word);
-                    if (!NAME_PARTICLES.has(word.toLowerCase()))
-                        break;
-                }
-                const shortLast = shortLastParts.join(' ');
-                const coachName = decodeEntities(firstWord && shortLast ? `${firstWord} ${shortLast}`
-                    : coachResponse.name || firstWord || shortLast || '');
-                teamUpdate.coach = { id: coachResponse.id, name: coachName };
-                // Also update the coach's player doc with full name + photo + DOB
-                // Preserve formerPosition if this coach was previously a player
-                const coachRef = db.collection(config_1.COLLECTIONS.PLAYERS).doc(String(coachResponse.id));
-                const existingCoachSnap = await coachRef.get();
-                const existingCoachData = existingCoachSnap.data();
-                const formerPosition = (existingCoachData === null || existingCoachData === void 0 ? void 0 : existingCoachData.formerPosition)
-                    || ((existingCoachData === null || existingCoachData === void 0 ? void 0 : existingCoachData.position) && existingCoachData.position !== 'Coach'
-                        ? existingCoachData.position : null);
-                const coachDocData = {
-                    id: coachResponse.id,
-                    name: coachName,
-                    nameLower: coachName.toLowerCase(),
-                    searchName: extractSearchName(coachName),
-                    searchPrefixes: generateSearchPrefixes(coachName),
-                    photo: coachResponse.photo || null,
-                    nationality: coachResponse.nationality || null,
-                    dateOfBirth: ((_g = coachResponse.birth) === null || _g === void 0 ? void 0 : _g.date) || null,
-                    position: 'Coach',
-                    currentTeam: { id: teamId, name: teamName, crest: teamCrest },
-                    leagueTier: teamTier,
-                    syncedAt: admin.firestore.FieldValue.serverTimestamp(),
-                };
-                if (formerPosition) {
-                    coachDocData.formerPosition = formerPosition;
-                }
-                await coachRef.set(coachDocData, { merge: true });
-            }
-            // ─── Phase 6: Build activeCompetitions from competitionCodes ───
-            const compCodes = teamData.competitionCodes || [];
-            const leagueCodeMap = await (0, leagueHelper_1.getLeagueByCodeMap)();
-            if (compCodes.length > 0) {
-                const activeCompetitions = compCodes
-                    .map((code) => {
-                    const league = leagueCodeMap.get(code);
-                    if (!league)
-                        return null;
-                    return {
-                        id: league.apiId,
-                        name: league.name,
-                        code: league.code,
-                        emblem: `https://media.api-sports.io/football/leagues/${league.apiId}.png`,
-                    };
-                })
-                    .filter(Boolean);
-                if (activeCompetitions.length > 0) {
-                    teamUpdate.activeCompetitions = activeCompetitions;
-                }
-            }
-            // Write all team updates in one call
-            if (Object.keys(teamUpdate).length > 0) {
-                await db.collection(config_1.COLLECTIONS.TEAMS).doc(String(teamId)).set({ ...teamUpdate, syncedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
-            }
-            teamsProcessed++;
-            console.log(`[enrichPlayers] Team ${teamId} (${teamName}): enriched=${squadResult.playersEnriched}, coach=${(coachResponse === null || coachResponse === void 0 ? void 0 : coachResponse.name) || 'n/a'}`);
-        }
-        catch (err) {
-            console.error(`[enrichPlayers] Error for team ${teamId}:`, err.message);
-            teamsProcessed++;
-        }
-    }
-    console.log(`[enrichPlayers] Done: ${teamsProcessed} teams, ${playersEnriched} players, ${apiCalls} API calls`);
-    return { teamsProcessed, playersEnriched, apiCalls };
 }
 /**
  * Extracts a searchable last-name portion from a player name.

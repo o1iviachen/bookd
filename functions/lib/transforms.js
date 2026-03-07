@@ -97,6 +97,7 @@ function transformFixtureToMatch(fixture, leagueMap) {
         season: fixture.league.season,
         round: fixture.league.round,
         elapsed: fixture.fixture.status.elapsed,
+        statusShort: fixture.fixture.status.short,
     };
 }
 // Parse matchday number from round string like "Regular Season - 15"

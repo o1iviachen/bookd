@@ -32,6 +32,8 @@
     "vs": "vs",
     "live": "AO VIVO",
     "fullTime": "Tempo total",
+    "halfTime": "Intervalo",
+    "breakTime": "Pausa",
     "gif": "GIF",
     "photo": "Foto",
     "noResultsFound": "Nenhum resultado encontrado",

@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.seedLeagues = exports.diagnoseTeams = exports.auditTeamIds = exports.migrateLegacyMatches = exports.backfillMatchStages = exports.backfillMatchRatings = exports.triggerAggregates = exports.computeAggregates = exports.backfillPlayerIds = exports.migratePlayerNames = exports.squadRefresh = exports.triggerSquadRefresh = exports.enrichPlayers = exports.enrichTeams = exports.buildPlayers = exports.migrateLeagueTier = exports.migrateSearchPrefixes = exports.fixPlayerNames = exports.scheduledBackfillDetails = exports.backfillDetails = exports.migrateHasDetails = exports.syncDetailsForLeague = exports.manualSync = exports.buildTeams = exports.backfill = exports.staleSync = exports.liveSync = exports.lineupSync = exports.dailyPrepopulate = exports.backfillMatchDetailKickoffs = exports.translateText = exports.submitReport = exports.deleteAccount = exports.moderateReviewMedia = exports.onMatchStatusChange = exports.preMatchNotify = exports.sendPushNotification = void 0;
+exports.seedLeagues = exports.diagnoseTeams = exports.auditTeamIds = exports.migrateLegacyMatches = exports.backfillMatchStages = exports.backfillMatchRatings = exports.triggerAggregates = exports.computeAggregates = exports.backfillPlayerIds = exports.migratePlayerNames = exports.squadRefresh = exports.triggerSquadRefresh = exports.enrichTeams = exports.buildPlayers = exports.migrateLeagueTier = exports.migrateSearchPrefixes = exports.fixPlayerNames = exports.scheduledBackfillDetails = exports.backfillDetails = exports.migrateHasDetails = exports.syncDetailsForLeague = exports.manualSync = exports.buildTeams = exports.backfill = exports.staleSync = exports.liveSync = exports.lineupSync = exports.dailyPrepopulate = exports.backfillMatchDetailKickoffs = exports.translateText = exports.submitReport = exports.deleteAccount = exports.moderateReviewMedia = exports.onMatchStatusChange = exports.preMatchNotify = exports.sendPushNotification = void 0;
 const functions = __importStar(require("firebase-functions"));
 const admin = __importStar(require("firebase-admin"));
 admin.initializeApp();
@@ -665,25 +665,6 @@ exports.enrichTeams = functions
     }
 });
 /**
- * Enrich player docs with photos from API-Football /players/squads endpoint.
- * Processes teams in batches. Call multiple times with offset to cover all teams.
- *   GET /enrichPlayers?limit=50&offset=0
- */
-exports.enrichPlayers = functions
-    .runWith({ timeoutSeconds: 540, memory: '512MB' })
-    .https.onRequest(async (req, res) => {
-    const limit = req.query.limit ? parseInt(req.query.limit, 10) : 50;
-    const offset = req.query.offset ? parseInt(req.query.offset, 10) : 0;
-    try {
-        const result = await (0, backfill_1.enrichPlayersFromSquads)(limit, offset);
-        res.json({ success: true, ...result });
-    }
-    catch (err) {
-        console.error('[enrichPlayers] Error:', err);
-        res.status(500).json({ error: err.message });
-    }
-});
-/**
  * Manual trigger for squad-only refresh (Phases 1-3).
  *   GET /triggerSquadRefresh?limit=200
  * Uses cursor stored in aggregates/squadRefreshCursor.
@@ -692,11 +673,19 @@ exports.triggerSquadRefresh = functions
     .runWith({ timeoutSeconds: 540, memory: '512MB' })
     .https.onRequest(async (req, res) => {
     var _a, _b;
-    const limit = req.query.limit ? parseInt(req.query.limit, 10) : 200;
+    const body = req.body || {};
+    const limit = req.query.limit ? parseInt(req.query.limit, 10) : body.limit ? Number(body.limit) : 200;
+    const cursorOverride = req.query.cursor || body.cursor;
     try {
         const db = admin.firestore();
-        const cursorDoc = await db.collection('aggregates').doc('squadRefreshCursor').get();
-        const lastTeamId = cursorDoc.exists ? ((_b = (_a = cursorDoc.data()) === null || _a === void 0 ? void 0 : _a.lastTeamId) !== null && _b !== void 0 ? _b : 0) : 0;
+        let lastTeamId;
+        if (cursorOverride !== undefined) {
+            lastTeamId = Number(cursorOverride);
+        }
+        else {
+            const cursorDoc = await db.collection('aggregates').doc('squadRefreshCursor').get();
+            lastTeamId = cursorDoc.exists ? ((_b = (_a = cursorDoc.data()) === null || _a === void 0 ? void 0 : _a.lastTeamId) !== null && _b !== void 0 ? _b : 0) : 0;
+        }
         const result = await (0, backfill_1.refreshSquadsOnly)(limit, lastTeamId);
         if (result.teamsProcessed < limit) {
             // Completed full cycle — reset cursor

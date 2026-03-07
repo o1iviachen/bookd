@@ -30,6 +30,7 @@ import { shortName, lastName } from '../../utils/formatName';
 import { nationalityFlag } from '../../utils/flagEmoji';
 import { MatchPosterCard } from '../../components/match/MatchPosterCard';
 import { MOTMBadge } from '../../components/review/MOTMBadge';
+import { PulsingDot } from '../../components/ui/PulsingDot';
 import { DiscussionSection, DiscussionInputBar } from '../../components/discussion/DiscussionSection';
 import { useDiscussion } from '../../hooks/useDiscussion';
 import { useTranslation } from 'react-i18next';
@@ -195,6 +196,8 @@ export function MatchDetailScreen({ route, navigation }: Props) {
 
   const isFinished = match.status === 'FINISHED';
   const isLive = match.status === 'IN_PLAY' || match.status === 'PAUSED';
+  const isHT = match.statusShort === 'HT';
+  const isBT = match.statusShort === 'BT';
 
   const userReviews = reviews?.filter((r) => r.userId === user?.uid) || [];
   const hasReview = userReviews.length > 0;
@@ -355,12 +358,23 @@ export function MatchDetailScreen({ route, navigation }: Props) {
                 </Pressable>
               </View>
               {isLive && (
-                <View style={{ backgroundColor: colors.primary, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4, marginTop: 4 }}>
-                  <Text style={{ fontSize: 11, fontWeight: '800', color: '#14181c' }}>{t('common.live')}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                  {isHT || isBT ? (
+                    <Text style={{ fontSize: 13, fontWeight: '800', color: '#00e054' }}>
+                      {isHT ? t('common.halfTime') : t('common.breakTime')}
+                    </Text>
+                  ) : (
+                    <>
+                      <PulsingDot size={6} color="#00e054" />
+                      <Text style={{ fontSize: 13, fontWeight: '800', color: '#00e054' }}>
+                        {match.elapsed != null ? `${match.elapsed}'` : ''}
+                      </Text>
+                    </>
+                  )}
                 </View>
               )}
               {isFinished && (
-                <Text style={{ ...typography.caption, color: colors.textSecondary, marginTop: 4 }}>{t('common.fullTime')}</Text>
+                <Text style={{ ...typography.caption, color: colors.textSecondary, marginTop: 2 }}>{t('common.fullTime')}</Text>
               )}
             </>
           ) : (
@@ -374,7 +388,7 @@ export function MatchDetailScreen({ route, navigation }: Props) {
                   <Text style={{ ...typography.bodyBold, color: colors.foreground, textAlign: 'left' }} numberOfLines={1}>{match.awayTeam.shortName}</Text>
                 </Pressable>
               </View>
-              <Text style={{ ...typography.caption, color: colors.textSecondary, marginTop: 4 }}>
+              <Text style={{ ...typography.caption, color: colors.textSecondary, marginTop: 2 }}>
                 {formatMatchTime(match.kickoff)}
               </Text>
             </>

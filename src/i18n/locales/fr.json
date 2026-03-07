@@ -32,6 +32,8 @@
     "vs": "contre",
     "live": "EN DIRECT",
     "fullTime": "À temps plein",
+    "halfTime": "Mi-temps",
+    "breakTime": "Pause",
     "gif": "GIF",
     "photo": "Photo",
     "noResultsFound": "Aucun résultat trouvé",
