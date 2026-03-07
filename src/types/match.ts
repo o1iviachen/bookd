@@ -54,6 +54,7 @@ export interface Match {
   // Legacy ID from football-data.org migration — reviews may reference this old ID
   legacyId?: number;
   motmVotes?: Record<string, number>;
+
   elapsed?: number | null;
   statusShort?: string | null;
 }

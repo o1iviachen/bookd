@@ -71,7 +71,6 @@ export function CreateReviewScreen({ route, navigation }: any) {
   const [motmPlayerId, setMotmPlayerId] = useState<number | null>(null);
   const [showMotmModal, setShowMotmModal] = useState(false);
   const [showGifPicker, setShowGifPicker] = useState(false);
-
   const isWatched = profile?.watchedMatchIds?.some((id) => String(id) === String(matchId)) || rating > 0 || text.trim().length > 0;
 
   // Reset form when navigating to a new (non-edit) entry

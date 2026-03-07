@@ -207,7 +207,6 @@ export async function createReview(
   if (motmPlayerId !== undefined) {
     await voteMotm(matchId, userId, motmPlayerId);
   }
-
   return reviewRef.id;
 }
 
@@ -497,6 +496,7 @@ export async function updateReview(
       await voteMotm(matchId, userId, data.motmPlayerId);
     }
   }
+
 }
 
 export async function deleteReview(reviewId: string): Promise<void> {
@@ -531,6 +531,7 @@ export async function deleteReview(reviewId: string): Promise<void> {
         await removeMotmVote(matchId, userId);
       }
     }
+
   } else {
     await deleteDoc(doc(db, 'reviews', reviewId));
   }
