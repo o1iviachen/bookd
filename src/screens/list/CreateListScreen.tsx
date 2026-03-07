@@ -180,7 +180,7 @@ export function CreateListScreen({ navigation }: Props) {
 
         {/* List info fields */}
         <View style={{ padding: spacing.md }}>
-          <TextInput label={t('list.listName')} value={name} onChangeText={setName} placeholder={t('list.listNamePlaceholder')} />
+          <TextInput label={t('list.listName')} value={name} onChangeText={setName} placeholder={t('list.listNamePlaceholder')} maxLength={50} />
           <TextInput
             label={t('list.descriptionOptional')}
             value={description}
@@ -188,6 +188,7 @@ export function CreateListScreen({ navigation }: Props) {
             placeholder={t('list.descriptionPlaceholder')}
             multiline
             numberOfLines={3}
+            maxLength={150}
           />
 
           {/* Ranked toggle */}
