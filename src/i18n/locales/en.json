@@ -97,7 +97,11 @@
     "continueWithGoogle": "Continue with Google",
     "googleSignInFailed": "Google sign-in failed",
     "continueWithApple": "Continue with Apple",
-    "appleSignInFailed": "Apple sign-in failed"
+    "appleSignInFailed": "Apple sign-in failed",
+    "confirmAge": "I confirm I am 13 years or older",
+    "acceptPolicies": "I accept the <privacy>Privacy Policy</privacy> and <terms>Terms of Service</terms>",
+    "mustConfirmAge": "You must confirm you are 13 years or older.",
+    "mustAcceptPolicies": "You must accept the Privacy Policy and Terms of Service."
   },
   "onboarding": {
     "pickYourTeams": "Pick Your Teams",

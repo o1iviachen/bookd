@@ -1,9 +1,9 @@
 import React, { useRef, useState } from 'react';
-import { View, Text, KeyboardAvoidingView, Platform, ScrollView, Dimensions, Pressable, TextInput as RNTextInput } from 'react-native';
+import { View, Text, KeyboardAvoidingView, Platform, ScrollView, Dimensions, Pressable, TextInput as RNTextInput, Linking } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useTranslation } from 'react-i18next';
+import { useTranslation, Trans } from 'react-i18next';
 import { getAuthErrorMessage } from '../../utils/authErrors';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -38,12 +38,22 @@ export function SignUpScreen({ navigation }: Props) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [ageConfirmed, setAgeConfirmed] = useState(false);
+  const [policiesAccepted, setPoliciesAccepted] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleSignUp = async () => {
     if (!username || !email || !password || !confirmPassword) {
       setError(t('auth.pleaseFillInAllFields'));
+      return;
+    }
+    if (!ageConfirmed) {
+      setError(t('auth.mustConfirmAge'));
+      return;
+    }
+    if (!policiesAccepted) {
+      setError(t('auth.mustAcceptPolicies'));
       return;
     }
     if (password !== confirmPassword) {
@@ -91,7 +101,7 @@ export function SignUpScreen({ navigation }: Props) {
         keyboardShouldPersistTaps="handled"
       >
         {/* Photo at top */}
-        <View style={{ height: height * 0.25 }}>
+        <View style={{ height: height * 0.22 }}>
           <Image
             source={require('../../../assets/stadium-background.jpg')}
             style={{ width: '100%', height: '100%' }}
@@ -109,7 +119,7 @@ export function SignUpScreen({ navigation }: Props) {
           onPress={() => navigation.goBack()}
           style={{
             position: 'absolute',
-            top: height * 0.07,
+            top: insets.top + spacing.xs,
             left: spacing.md,
             flexDirection: 'row',
             alignItems: 'center',
@@ -196,12 +206,45 @@ export function SignUpScreen({ navigation }: Props) {
             onSubmitEditing={handleSignUp}
           />
 
+          {/* Checkboxes */}
+          <View style={{ gap: spacing.xs, marginTop: -spacing.xs }}>
+            <Pressable
+              onPress={() => setAgeConfirmed((v) => !v)}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}
+            >
+              <View style={{ width: 20, height: 20, borderRadius: 4, borderWidth: 1.5, borderColor: ageConfirmed ? colors.primary : colors.textSecondary, backgroundColor: ageConfirmed ? colors.primary : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
+                {ageConfirmed && <Ionicons name="checkmark" size={14} color="#fff" />}
+              </View>
+              <Text style={{ ...typography.caption, color: colors.textSecondary, flex: 1 }}>
+                {t('auth.confirmAge')}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setPoliciesAccepted((v) => !v)}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}
+            >
+              <View style={{ width: 20, height: 20, borderRadius: 4, borderWidth: 1.5, borderColor: policiesAccepted ? colors.primary : colors.textSecondary, backgroundColor: policiesAccepted ? colors.primary : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
+                {policiesAccepted && <Ionicons name="checkmark" size={14} color="#fff" />}
+              </View>
+              <Text style={{ ...typography.caption, color: colors.textSecondary, flex: 1 }}>
+                <Trans
+                  i18nKey="auth.acceptPolicies"
+                  components={{
+                    privacy: <Text style={{ color: colors.primary, fontWeight: '600' }} onPress={() => Linking.openURL('https://bookd-app.com/privacy-policy')} />,
+                    terms: <Text style={{ color: colors.primary, fontWeight: '600' }} onPress={() => Linking.openURL('https://bookd-app.com/terms-of-service')} />,
+                  }}
+                />
+              </Text>
+            </Pressable>
+          </View>
+
           <Button
             title={t('auth.createAccount')}
             onPress={handleSignUp}
             loading={loading}
+            disabled={!ageConfirmed || !policiesAccepted}
             size="lg"
-            style={{ marginTop: spacing.xs }}
+            style={{ marginTop: spacing.md }}
           />
 
           {/* Divider */}
@@ -221,7 +264,7 @@ export function SignUpScreen({ navigation }: Props) {
               ...typography.caption,
               color: colors.textSecondary,
               textAlign: 'center',
-              marginTop: spacing.lg,
+              marginTop: spacing.sm,
             }}
             onPress={() => navigation.navigate('Login')}
           >
