@@ -2,6 +2,7 @@ import React, { useState, useMemo, useRef, useCallback } from 'react';
 import { View, Text, Pressable, Alert, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
+import { useQueryClient } from '@tanstack/react-query';
 import { GifPickerModal } from '../ui/GifPickerModal';
 import { TenorGif } from '../../services/tenor';
 import { useQueries } from '@tanstack/react-query';
@@ -20,6 +21,22 @@ import { POPULAR_TEAMS } from '../../utils/constants';
 import { TranslateButton } from '../ui/TranslateButton';
 import { usePreferredLanguage } from '../../hooks/usePreferredLanguage';
 import { DiscussionMessage } from '../../types/discussion';
+import { Match } from '../../types/match';
+import { QueryClient } from '@tanstack/react-query';
+
+/** Optimistically update discussionCount in all cached match queries */
+function updateDiscussionCountCache(queryClient: QueryClient, matchId: number, delta: number) {
+  queryClient.setQueriesData<Match[]>({ queryKey: ['matches'] }, (old) => {
+    if (!old) return old;
+    return old.map((m) =>
+      m.id === matchId ? { ...m, discussionCount: (m.discussionCount ?? 0) + delta } : m
+    );
+  });
+  queryClient.setQueryData<Match>(['match', matchId], (old) => {
+    if (!old) return old;
+    return { ...old, discussionCount: (old.discussionCount ?? 0) + delta };
+  });
+}
 
 // ─── Message Row ───
 
@@ -156,6 +173,7 @@ export function DiscussionInputBar({
 }) {
   const { t } = useTranslation();
   const { language } = usePreferredLanguage();
+  const queryClient = useQueryClient();
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [gif, setGif] = useState<TenorGif | null>(null);
@@ -186,12 +204,13 @@ export function DiscussionInputBar({
         matchMinute,
         gif?.url || null,
       );
+      updateDiscussionCountCache(queryClient, matchId, 1);
       setText('');
       setGif(null);
     } finally {
       setSending(false);
     }
-  }, [text, sending, gif, matchId, userId, profile, language, matchMinute]);
+  }, [text, sending, gif, matchId, userId, profile, language, matchMinute, queryClient]);
 
   return (
     <View style={{ borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.background, zIndex: 10 }}>
@@ -293,6 +312,7 @@ export function DiscussionSection({
 }: DiscussionSectionProps) {
   const { t } = useTranslation();
   const { language } = usePreferredLanguage();
+  const queryClient = useQueryClient();
 
   // Fetch current profiles for all message authors
   const authorIds = useMemo(
@@ -345,9 +365,12 @@ export function DiscussionSection({
   const handleDelete = useCallback((messageId: string) => {
     Alert.alert(t('discussion.deleteMessage'), t('discussion.areYouSure'), [
       { text: t('common.cancel'), style: 'cancel' },
-      { text: t('common.delete'), style: 'destructive', onPress: () => deleteDiscussionMessage(messageId) },
+      { text: t('common.delete'), style: 'destructive', onPress: () => {
+        deleteDiscussionMessage(messageId, matchId);
+        updateDiscussionCountCache(queryClient, matchId, -1);
+      }},
     ]);
-  }, []);
+  }, [matchId, queryClient]);
 
   // Not yet in the discussion window
   if (!isReadable) {

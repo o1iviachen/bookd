@@ -13,6 +13,7 @@ import {
   serverTimestamp,
   arrayUnion,
   arrayRemove,
+  increment,
 } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { DiscussionMessage } from '../../types/discussion';
@@ -84,6 +85,10 @@ export async function createDiscussionMessage(
     ...(matchMinute != null && { matchMinute }),
     ...(gifUrl && { gifUrl }),
   });
+  // Atomically increment discussion count on the match doc
+  await updateDoc(doc(db, 'matches', String(matchId)), {
+    discussionCount: increment(1),
+  });
   return ref.id;
 }
 
@@ -110,6 +115,10 @@ export async function toggleDiscussionLike(
   }
 }
 
-export async function deleteDiscussionMessage(messageId: string): Promise<void> {
+export async function deleteDiscussionMessage(messageId: string, matchId: number): Promise<void> {
   await deleteDoc(doc(db, COLLECTION, messageId));
+  // Atomically decrement discussion count on the match doc
+  await updateDoc(doc(db, 'matches', String(matchId)), {
+    discussionCount: increment(-1),
+  });
 }

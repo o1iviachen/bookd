@@ -88,6 +88,7 @@ function docToMatch(data: Record<string, any>, docId: string): Match {
     legacyId: data.legacyId ?? undefined,
     elapsed: data.elapsed ?? null,
     statusShort: data.statusShort ?? null,
+    discussionCount: data.discussionCount ?? 0,
   };
 }
 
@@ -511,7 +512,9 @@ export async function getTeamDetail(teamId: number): Promise<TeamDetail> {
   }
 
   const data = docSnap.data();
-  const squad = await enrichPlayerNames(data.squad || []);
+  const squad = await enrichPlayerNames(
+    (data.squad || []) as TeamDetail['squad'],
+  );
 
   return {
     id: data.id ?? teamId,

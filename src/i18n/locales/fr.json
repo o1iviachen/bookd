@@ -347,7 +347,9 @@
     "yourRatingLow": "Votre note (faible)",
     "averageRatingHigh": "Note moyenne (élevée)",
     "averageRatingLow": "Note moyenne (faible)",
-    "mostLogged": "La plupart des connexions"
+    "mostLogged": "La plupart des connexions",
+    "trending": "Tendances",
+    "trendingLive": "Tendances en direct"
   },
   "favourites": {
     "favouriteLeagues": "Ligues préférées",

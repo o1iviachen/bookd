@@ -57,4 +57,5 @@ export interface Match {
 
   elapsed?: number | null;
   statusShort?: string | null;
+  discussionCount?: number;
 }

@@ -91,8 +91,15 @@ export function useMatchesRange(from: Date, to: Date) {
   return useQuery({
     queryKey: ['matches', 'range', fromKey, toKey],
     queryFn: () => getMatchesByDateRange(from, to),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 2 * 60 * 1000,
     retry: 2,
+    refetchInterval: (query) => {
+      const matches = query.state.data;
+      const hasLive = matches?.some(
+        (m) => m.status === 'IN_PLAY' || m.status === 'PAUSED'
+      );
+      return hasLive ? 60000 : false;
+    },
   });
 }
 

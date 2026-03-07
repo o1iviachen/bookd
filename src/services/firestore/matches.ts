@@ -47,6 +47,7 @@ function docToMatch(data: Record<string, any>, docId: string): Match {
     stage: data.stage ?? null,
     elapsed: data.elapsed ?? null,
     statusShort: data.statusShort ?? null,
+    discussionCount: data.discussionCount ?? 0,
   };
 }
 

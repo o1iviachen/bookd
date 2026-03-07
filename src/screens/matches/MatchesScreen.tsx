@@ -16,7 +16,6 @@ import { LeagueSection } from '../../components/match/LeagueSection';
 import { CompactMatchRow } from '../../components/match/CompactMatchRow';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { MatchesStackParamList } from '../../types/navigation';
-import { Match } from '../../types/match';
 import { POPULAR_TEAMS } from '../../utils/constants';
 import { useLeagueMap } from '../../hooks/useLeagues';
 import { useTranslation } from 'react-i18next';

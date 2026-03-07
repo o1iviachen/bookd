@@ -193,8 +193,31 @@ export const MatchPosterCard = React.memo(function MatchPosterCard({ match, onPr
           />
         </View>
 
+        {/* Discussion count badge — top-right (live matches) */}
+        {isLive && (match.discussionCount ?? 0) > 0 && (
+          <View
+            style={{
+              position: 'absolute',
+              top: spacing.sm,
+              right: spacing.sm,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 2,
+              backgroundColor: 'rgba(0,0,0,0.6)',
+              borderRadius: 8,
+              paddingHorizontal: 5,
+              paddingVertical: 3,
+            }}
+          >
+            <Ionicons name="chatbubble" size={9} color="rgba(255,255,255,0.8)" />
+            <Text style={{ fontSize: 8, fontWeight: '700', color: 'rgba(255,255,255,0.8)' }}>
+              {match.discussionCount}
+            </Text>
+          </View>
+        )}
+
         {/* Log count badge — top-right */}
-        {(match.reviewCount ?? 0) > 0 && (
+        {!isLive && (match.reviewCount ?? 0) > 0 && (
           <View
             style={{
               position: 'absolute',

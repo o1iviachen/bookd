@@ -347,7 +347,9 @@
     "yourRatingLow": "La tua valutazione (bassa)",
     "averageRatingHigh": "Valutazione media (alta)",
     "averageRatingLow": "Valutazione media (bassa)",
-    "mostLogged": "Più registrati"
+    "mostLogged": "Più registrati",
+    "trending": "Di tendenza",
+    "trendingLive": "Di tendenza live"
   },
   "favourites": {
     "favouriteLeagues": "Campionati preferiti",
