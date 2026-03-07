@@ -188,17 +188,52 @@ export function LeagueDetailScreen({ route, navigation }: any) {
     return { leagueFixtures: league, knockoutFixtures: knockout };
   }, [fixtures]);
 
-  // Group league fixtures by matchday
+  // Group league fixtures by matchday (or by date when matchdays are missing)
+  const hasMatchdays = useMemo(() => leagueFixtures.some((m) => m.matchday != null && m.matchday > 0), [leagueFixtures]);
+
   const fixturesByMatchday = useMemo(() => {
     const map = new Map<number, Match[]>();
-    for (const m of leagueFixtures) {
-      const md = m.matchday || 0;
-      const arr = map.get(md) || [];
-      arr.push(m);
-      map.set(md, arr);
+    if (hasMatchdays) {
+      for (const m of leagueFixtures) {
+        const md = m.matchday || 0;
+        const arr = map.get(md) || [];
+        arr.push(m);
+        map.set(md, arr);
+      }
+    } else {
+      // Fallback: group by date when matchday is null (e.g. Liga MX)
+      const dateMap = new Map<string, Match[]>();
+      for (const m of leagueFixtures) {
+        const dateKey = m.kickoff?.split('T')[0] || 'unknown';
+        const arr = dateMap.get(dateKey) || [];
+        arr.push(m);
+        dateMap.set(dateKey, arr);
+      }
+      const sortedDates = Array.from(dateMap.keys()).sort();
+      sortedDates.forEach((date, i) => {
+        map.set(i + 1, dateMap.get(date)!);
+      });
     }
     return map;
-  }, [leagueFixtures]);
+  }, [leagueFixtures, hasMatchdays]);
+
+  // Map matchday index → date label (only used when hasMatchdays is false)
+  const matchdayDateLabels = useMemo(() => {
+    if (hasMatchdays) return new Map<number, string>();
+    const labels = new Map<number, string>();
+    const dateMap = new Map<string, Match[]>();
+    for (const m of leagueFixtures) {
+      const dateKey = m.kickoff?.split('T')[0] || 'unknown';
+      const arr = dateMap.get(dateKey) || [];
+      arr.push(m);
+      dateMap.set(dateKey, arr);
+    }
+    const sortedDates = Array.from(dateMap.keys()).sort();
+    sortedDates.forEach((date, i) => {
+      labels.set(i + 1, formatFullDate(date));
+    });
+    return labels;
+  }, [leagueFixtures, hasMatchdays]);
 
   // Group knockout fixtures by stage
   const knockoutByStage = useMemo(() => {
@@ -512,7 +547,7 @@ export function LeagueDetailScreen({ route, navigation }: any) {
                 paddingBottom: spacing.sm,
               }}>
                 <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1 }}>
-                  {t('league.matchdayLabel', { matchday: md })}
+                  {hasMatchdays ? t('league.matchdayLabel', { matchday: md }) : matchdayDateLabels.get(md) || ''}
                 </Text>
               </View>
               {mdMatches.map(renderFixtureRow)}
@@ -542,7 +577,7 @@ export function LeagueDetailScreen({ route, navigation }: any) {
         })}
       </View>
     );
-  }, [fixturesLoading, allFixtures, fixturesReady, leagueFixtures, knockoutFixtures, sortedMatchdays, fixturesByMatchday, knockoutByStage, colors, spacing, typography, handleMatchdayLayout, renderFixtureRow, t]);
+  }, [fixturesLoading, allFixtures, fixturesReady, leagueFixtures, knockoutFixtures, sortedMatchdays, fixturesByMatchday, knockoutByStage, hasMatchdays, matchdayDateLabels, colors, spacing, typography, handleMatchdayLayout, renderFixtureRow, t]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
