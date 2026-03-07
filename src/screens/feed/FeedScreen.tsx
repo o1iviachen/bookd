@@ -226,6 +226,15 @@ export function FeedScreen() {
     return map;
   }, [reviewMatchQueries]);
 
+  // Trending live matches — sorted by discussion count
+  const trendingLiveMatches = useMemo(() => {
+    if (!matches) return [];
+    return matches
+      .filter((m) => m.status === 'IN_PLAY' || m.status === 'PAUSED')
+      .sort((a, b) => (b.discussionCount ?? 0) - (a.discussionCount ?? 0))
+      .slice(0, 10);
+  }, [matches]);
+
   // Per-league grouped (only followed leagues)
   const grouped = groupMatchesByCompetition(followedMatches);
 
@@ -305,13 +314,18 @@ export function FeedScreen() {
               <View style={{ marginTop: spacing.xxl }}><LoadingSpinner fullScreen={false} /></View>
             ) : (
               <>
-                {/* Popular this week */}
-                <View style={{ paddingTop: spacing.sm, paddingBottom: spacing.sm }}>
-                  {renderSectionHeader(t('feed.popularThisWeek'))}
-                  {popularMatches.length > 0 ? (
+                {/* Trending live matches */}
+                {trendingLiveMatches.length > 0 && (
+                  <View style={{ backgroundColor: `${colors.accent}40`, paddingVertical: spacing.md }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, marginBottom: spacing.sm, gap: 4 }}>
+                      <Ionicons name="flame" size={13} color="#ef4444" />
+                      <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1 }}>
+                        {t('matches.trendingLive')}
+                      </Text>
+                    </View>
                     <FlatList showsVerticalScrollIndicator={false}
                       horizontal
-                      data={popularMatches}
+                      data={trendingLiveMatches}
                       keyExtractor={(item) => item.id.toString()}
                       showsHorizontalScrollIndicator={false}
                       contentContainerStyle={{ paddingHorizontal: spacing.md, gap: spacing.sm + 4 }}
@@ -319,15 +333,11 @@ export function FeedScreen() {
                         <MatchPosterCard match={item} onPress={() => navigation.navigate('MatchDetail', { matchId: item.id })} />
                       )}
                     />
-                  ) : (
-                    <Text style={{ ...typography.caption, color: colors.textSecondary, paddingHorizontal: spacing.md }}>
-                      {t('feed.noPopularMatchesThisWeek')}
-                    </Text>
-                  )}
-                </View>
+                  </View>
+                )}
 
                 {/* New from friends */}
-                <View style={{ paddingTop: spacing.sm, paddingBottom: spacing.sm }}>
+                <View style={{ paddingVertical: spacing.md }}>
                   {renderSectionHeader(t('feed.newFromFriends'))}
                   {friendReviews.length > 0 ? (
                     <FlatList showsVerticalScrollIndicator={false}
@@ -350,6 +360,27 @@ export function FeedScreen() {
                   ) : (
                     <Text style={{ ...typography.caption, color: colors.textSecondary, paddingHorizontal: spacing.md }}>
                       {t('feed.followFriendsToSeeActivity')}
+                    </Text>
+                  )}
+                </View>
+
+                {/* Popular this week */}
+                <View style={{ backgroundColor: `${colors.accent}40`, paddingVertical: spacing.md }}>
+                  {renderSectionHeader(t('feed.popularThisWeek'))}
+                  {popularMatches.length > 0 ? (
+                    <FlatList showsVerticalScrollIndicator={false}
+                      horizontal
+                      data={popularMatches}
+                      keyExtractor={(item) => item.id.toString()}
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={{ paddingHorizontal: spacing.md, gap: spacing.sm + 4 }}
+                      renderItem={({ item }) => (
+                        <MatchPosterCard match={item} onPress={() => navigation.navigate('MatchDetail', { matchId: item.id })} />
+                      )}
+                    />
+                  ) : (
+                    <Text style={{ ...typography.caption, color: colors.textSecondary, paddingHorizontal: spacing.md }}>
+                      {t('feed.noPopularMatchesThisWeek')}
                     </Text>
                   )}
                 </View>
