@@ -44,6 +44,8 @@ export function ReviewDetailScreen({ route, navigation }: any) {
   const { user } = useAuth();
   const { language } = usePreferredLanguage();
   const { data: review, isLoading } = useReview(reviewId);
+  const matchId = review?.matchId;
+  const { data: match } = useMatch(matchId!);
   const { data: profile } = useUserProfile(user?.uid || '');
   const blockedUsers = useBlockedUsers(user?.uid);
   const voteMutation = useVoteOnReview();
@@ -137,12 +139,13 @@ export function ReviewDetailScreen({ route, navigation }: any) {
     const stars = review.rating > 0
       ? '★'.repeat(Math.floor(review.rating)) + (review.rating % 1 >= 0.5 ? '½' : '')
       : null;
-    const matchLabel = review.matchLabel || `Match #${review.matchId}`;
+    const matchLabel = review.matchLabel
+      || (match ? `${match.homeTeam.shortName} vs ${match.awayTeam.shortName}` : 'a match');
     const line1 = stars
       ? `A ${stars} review of ${matchLabel} by @${authorUsername} on bookd:`
       : `@${authorUsername}'s review of ${matchLabel} on bookd:`;
     const url = `https://bookd-app.com/review/${review.id}`;
-    Share.share({ message: `${line1}\n${url}`, url });
+    Share.share(Platform.OS === 'ios' ? { message: line1, url } : { message: `${line1}\n${url}` });
   };
 
   const handleReply = (_commentId: string, username: string, parentId?: string | null) => {
@@ -819,5 +822,8 @@ function MatchCard({ matchId, navigation }: { matchId: number; navigation: any }
         <Ionicons name="chevron-forward" size={14} color={colors.textSecondary} style={{ marginLeft: 4 }} />
       </View>
     </Pressable>
+  );
+}
+ressable>
   );
 }

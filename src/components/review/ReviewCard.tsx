@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, Pressable, ScrollView, Share } from 'react-native';
+import { View, Text, Pressable, ScrollView, Share, Platform } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
@@ -59,7 +59,7 @@ export function ReviewCard({ review, onPress, commentCount: commentCountProp, is
   };
 
   const handleShare = () => {
-    const matchLabel = review.matchLabel || `Match #${review.matchId}`;
+    const matchLabel = review.matchLabel || 'a match';
     const stars = review.rating > 0
       ? '★'.repeat(Math.floor(review.rating)) + (review.rating % 1 >= 0.5 ? '½' : '')
       : null;
@@ -67,7 +67,7 @@ export function ReviewCard({ review, onPress, commentCount: commentCountProp, is
       ? `A ${stars} review of ${matchLabel} by @${displayUsername} on bookd:`
       : `@${displayUsername}'s review of ${matchLabel} on bookd:`;
     const url = `https://bookd-app.com/review/${review.id}`;
-    Share.share({ message: `${line1}\n${url}`, url });
+    Share.share(Platform.OS === 'ios' ? { message: line1, url } : { message: `${line1}\n${url}` });
   };
 
   return (

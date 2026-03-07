@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Pressable, Share, ScrollView } from 'react-native';
+import { View, Text, Pressable, Share, ScrollView, Platform } from 'react-native';
 import { useQueries } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
@@ -60,7 +60,8 @@ export function ListPreviewCard({ list, onPress, onMatchPress }: ListPreviewCard
   const handleShare = () => {
     const count = list.matchIds.length;
     const url = `https://bookd-app.com/list/${list.id}`;
-    Share.share({ message: `"${list.name}", a list of ${count} ${count === 1 ? 'match' : 'matches'} by @${displayUsername} on bookd:\n${url}`, url });
+    const text = `"${list.name}", a list of ${count} ${count === 1 ? 'match' : 'matches'} by @${displayUsername} on bookd:`;
+    Share.share(Platform.OS === 'ios' ? { message: text, url } : { message: `${text}\n${url}` });
   };
 
   return (
