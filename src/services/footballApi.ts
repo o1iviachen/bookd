@@ -82,6 +82,9 @@ function docToMatch(data: Record<string, any>, docId: string): Match {
     avgRating: ratingCount > 0 ? ratingSum / ratingCount : undefined,
     reviewCount: data.reviewCount ?? undefined,
     ratingBuckets: data.ratingBuckets ?? undefined,
+    ratingBucketsHome: data.ratingBucketsHome ?? undefined,
+    ratingBucketsAway: data.ratingBucketsAway ?? undefined,
+    ratingBucketsNeutral: data.ratingBucketsNeutral ?? undefined,
     legacyId: data.legacyId ?? undefined,
   };
 }
@@ -192,27 +195,48 @@ export interface Standing {
   description: string | null;
 }
 
-export async function getCompetitionStandings(competitionCode: string): Promise<Standing[]> {
+export interface StandingsGroup {
+  name: string;
+  table: Standing[];
+}
+
+export interface StandingsResult {
+  table: Standing[];
+  groups?: StandingsGroup[];
+}
+
+function cleanStandingsTable(table: Standing[]): Standing[] {
+  return table.map((s) => ({
+    ...s,
+    team: {
+      ...s.team,
+      shortName: cleanShortName(s.team.name, s.team.shortName),
+    },
+  }));
+}
+
+export async function getCompetitionStandings(competitionCode: string, seasonOverride?: number): Promise<StandingsResult> {
   try {
     const now = new Date();
     const year = now.getFullYear();
     const month = now.getMonth() + 1;
-    const season = month >= 7 ? year : year - 1;
+    const season = seasonOverride ?? (month >= 7 ? year : year - 1);
 
     const docSnap = await getDoc(doc(db, STANDINGS, `${competitionCode}_${season}`));
-    if (!docSnap.exists()) return [];
+    if (!docSnap.exists()) return { table: [] };
 
     const data = docSnap.data();
-    return ((data.table || []) as Standing[]).map((s) => ({
-      ...s,
-      team: {
-        ...s.team,
-        shortName: cleanShortName(s.team.name, s.team.shortName),
-      },
-    }));
+    const table = cleanStandingsTable((data.table || []) as Standing[]);
+
+    const rawGroups = data.groups as { name: string; table: Standing[] }[] | undefined;
+    const groups = rawGroups?.length
+      ? rawGroups.map((g) => ({ name: g.name, table: cleanStandingsTable(g.table) }))
+      : undefined;
+
+    return { table, groups };
   } catch (err) {
     console.error('[getCompetitionStandings] Firestore query failed:', err);
-    return [];
+    return { table: [] };
   }
 }
 
@@ -244,13 +268,14 @@ export async function getCompetitionMatches(
 
 export async function getCompetitionMatchesByCode(
   competitionCode: string,
-  matchday?: number
+  matchday?: number,
+  seasonOverride?: number
 ): Promise<Match[]> {
   try {
     // Determine current season to avoid fetching all historical data
     const now = new Date();
     const month = now.getMonth() + 1;
-    const season = month >= 7 ? now.getFullYear() : now.getFullYear() - 1;
+    const season = seasonOverride ?? (month >= 7 ? now.getFullYear() : now.getFullYear() - 1);
 
     const q = query(
       collection(db, MATCHES),
@@ -273,6 +298,30 @@ export async function getCompetitionMatchesByCode(
     console.error('[getCompetitionMatchesByCode] Firestore query failed:', err);
     return [];
   }
+}
+
+/** Returns the season years (e.g. [2023, 2024, 2025]) that have matches for this competition. */
+export async function getCompetitionSeasons(competitionCode: string): Promise<number[]> {
+  const now = new Date();
+  const currentStart = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
+  const startYear = 2019;
+
+  const checks = [];
+  for (let y = startYear; y <= currentStart; y++) {
+    checks.push(
+      getDocs(
+        query(
+          collection(db, MATCHES),
+          where('competition.code', '==', competitionCode),
+          where('season', '==', y),
+          limit(1)
+        )
+      ).then((snap) => (snap.empty ? null : y))
+    );
+  }
+
+  const results = await Promise.all(checks);
+  return results.filter((y): y is number => y !== null).sort((a, b) => b - a);
 }
 
 // ─── Match Detail ───
@@ -433,7 +482,7 @@ export interface TeamDetail {
   country: string;
   clubColors: string | null;
   coach: Coach | null;
-  squad: { id: number; name: string; position: string; nationality: string }[];
+  squad: { id: number; name: string; position: string; nationality: string; shirtNumber?: number | null }[];
   activeCompetitions: { id: number; name: string; code: string; emblem: string }[];
   availableSeasons: number[];
 }

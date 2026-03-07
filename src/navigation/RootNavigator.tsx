@@ -15,18 +15,15 @@ const linking = {
   prefixes: [prefix, 'bookd://', 'https://bookd-app.com'],
   config: {
     screens: {
-      Main: {
+      FeedTab: {
         screens: {
-          FeedTab: {
-            screens: {
-              MatchDetail: {
-                path: 'match/:matchId',
-                parse: { matchId: Number },
-              },
-              ReviewDetail: 'review/:reviewId',
-              ListDetail: 'list/:listId',
-            },
+          MatchDetail: {
+            path: 'match/:matchId',
+            parse: { matchId: Number },
           },
+          ReviewDetail: 'review/:reviewId',
+          ListDetail: 'list/:listId',
+          UserProfile: 'profile/:userId',
         },
       },
     },

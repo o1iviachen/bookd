@@ -39,16 +39,6 @@ export function LeagueSection({
           paddingHorizontal: spacing.md,
         }}
       >
-        {/* Green indicator bar for followed leagues */}
-        <View
-          style={{
-            width: 3,
-            height: 20,
-            backgroundColor: colors.primary,
-            borderRadius: 2,
-            marginRight: spacing.sm,
-          }}
-        />
         <Pressable
           onPress={onLeaguePress}
           style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}

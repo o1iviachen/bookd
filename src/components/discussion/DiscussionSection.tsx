@@ -138,6 +138,7 @@ export function DiscussionInputBar({
   colors,
   spacing,
   borderRadius,
+  onFocus,
 }: {
   matchId: number;
   userId: string;
@@ -145,6 +146,7 @@ export function DiscussionInputBar({
   colors: any;
   spacing: any;
   borderRadius: any;
+  onFocus?: () => void;
 }) {
   const { t } = useTranslation();
   const { language } = usePreferredLanguage();
@@ -193,6 +195,7 @@ export function DiscussionInputBar({
           onChangeText={setText}
           placeholder={t('discussion.inputPlaceholder')}
           maxLength={500}
+          onFocus={onFocus}
           containerStyle={{ flex: 1 }}
           inputStyle={{
             backgroundColor: colors.muted,

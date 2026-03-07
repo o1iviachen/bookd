@@ -113,6 +113,48 @@ export async function getUserMotmVote(
 
 const ratingKey = (r: number) => String(Math.round(r * 10));
 
+type FanType = 'home' | 'away' | 'neutral';
+
+/** Determine if user is a home fan, away fan, or neutral for a given match. */
+async function determineFanType(userId: string, matchId: number): Promise<FanType> {
+  try {
+    const { POPULAR_TEAMS } = await import('../../utils/constants');
+    const [userSnap, matchSnap] = await Promise.all([
+      getDoc(doc(db, 'users', userId)),
+      getDoc(doc(db, 'matches', String(matchId))),
+    ]);
+    if (!userSnap.exists() || !matchSnap.exists()) return 'neutral';
+
+    const userData = userSnap.data();
+    const matchData = matchSnap.data();
+    const teamIds: string[] = (userData.favoriteTeams?.length ? userData.favoriteTeams : userData.followedTeamIds || []).map(String);
+    const teamNames = teamIds
+      .map((id) => POPULAR_TEAMS.find((t) => t.id === id)?.name)
+      .filter(Boolean) as string[];
+
+    if (teamNames.length === 0) return 'neutral';
+
+    const homeName = (matchData.homeTeam?.name || '').toLowerCase();
+    const awayName = (matchData.awayTeam?.name || '').toLowerCase();
+    const supportsHome = teamNames.some((n) => homeName.includes(n.toLowerCase()));
+    const supportsAway = teamNames.some((n) => awayName.includes(n.toLowerCase()));
+
+    if (supportsHome) return 'home';
+    if (supportsAway) return 'away';
+    return 'neutral';
+  } catch {
+    return 'neutral';
+  }
+}
+
+function fanBucketField(fanType: FanType): string {
+  switch (fanType) {
+    case 'home': return 'ratingBucketsHome';
+    case 'away': return 'ratingBucketsAway';
+    case 'neutral': return 'ratingBucketsNeutral';
+  }
+}
+
 // ─── Reviews ───
 
 export async function createReview(
@@ -129,6 +171,9 @@ export async function createReview(
   motmPlayerName?: string,
   language?: string,
 ): Promise<string> {
+  // Determine fan affiliation for fan-type rating buckets
+  const fanType = await determineFanType(userId, matchId);
+
   const reviewRef = await addDoc(collection(db, 'reviews'), {
     matchId,
     userId,
@@ -141,12 +186,13 @@ export async function createReview(
     isSpoiler,
     upvotes: 0,
     downvotes: 0,
+    fanType,
     createdAt: serverTimestamp(),
     ...(motmPlayerId !== undefined && { motmPlayerId }),
     ...(motmPlayerName !== undefined && { motmPlayerName }),
     ...(language && { language }),
   });
-  
+
   // Update match aggregate stats atomically
   const matchRef = doc(db, 'matches', String(matchId));
   const ratingUpdate: Record<string, any> = { reviewCount: increment(1) };
@@ -154,6 +200,7 @@ export async function createReview(
     ratingUpdate.ratingSum = increment(rating);
     ratingUpdate.ratingCount = increment(1);
     ratingUpdate[`ratingBuckets.${ratingKey(rating)}`] = increment(1);
+    ratingUpdate[`${fanBucketField(fanType)}.${ratingKey(rating)}`] = increment(1);
   }
   await updateDoc(matchRef, ratingUpdate);
 
@@ -404,12 +451,16 @@ export async function updateReview(
   oldRating?: number,
 ): Promise<void> {
   const reviewRef = doc(db, 'reviews', reviewId);
+  // Read existing review to get stored fanType
+  const reviewSnap = await getDoc(reviewRef);
+  const storedFanType: FanType = reviewSnap.exists() ? (reviewSnap.data().fanType || 'neutral') : 'neutral';
   await updateDoc(reviewRef, { ...data, editedAt: serverTimestamp() });
 
   // Update match rating stats if rating changed
   if (data.rating !== undefined && oldRating !== undefined && matchId && data.rating !== oldRating) {
     const newRating = data.rating;
     const matchRef = doc(db, 'matches', String(matchId));
+    const fanField = fanBucketField(storedFanType);
     const ratingUpdate: Record<string, any> = {};
 
     if (newRating > 0 && oldRating > 0) {
@@ -417,16 +468,20 @@ export async function updateReview(
       ratingUpdate.ratingSum = increment(newRating - oldRating);
       ratingUpdate[`ratingBuckets.${ratingKey(oldRating)}`] = increment(-1);
       ratingUpdate[`ratingBuckets.${ratingKey(newRating)}`] = increment(1);
+      ratingUpdate[`${fanField}.${ratingKey(oldRating)}`] = increment(-1);
+      ratingUpdate[`${fanField}.${ratingKey(newRating)}`] = increment(1);
     } else if (newRating > 0 && oldRating === 0) {
       // Unrated → rated
       ratingUpdate.ratingSum = increment(newRating);
       ratingUpdate.ratingCount = increment(1);
       ratingUpdate[`ratingBuckets.${ratingKey(newRating)}`] = increment(1);
+      ratingUpdate[`${fanField}.${ratingKey(newRating)}`] = increment(1);
     } else if (newRating === 0 && oldRating > 0) {
       // Rated → unrated
       ratingUpdate.ratingSum = increment(-oldRating);
       ratingUpdate.ratingCount = increment(-1);
       ratingUpdate[`ratingBuckets.${ratingKey(oldRating)}`] = increment(-1);
+      ratingUpdate[`${fanField}.${ratingKey(oldRating)}`] = increment(-1);
     }
 
     if (Object.keys(ratingUpdate).length > 0) {
@@ -452,6 +507,7 @@ export async function deleteReview(reviewId: string): Promise<void> {
     const userId = data.userId as string;
     const rating = (data.rating ?? 0) as number;
     const motmPlayerId = data.motmPlayerId as number | undefined;
+    const fanType: FanType = data.fanType || 'neutral';
 
     await deleteDoc(doc(db, 'reviews', reviewId));
 
@@ -463,6 +519,7 @@ export async function deleteReview(reviewId: string): Promise<void> {
         ratingUpdate.ratingSum = increment(-rating);
         ratingUpdate.ratingCount = increment(-1);
         ratingUpdate[`ratingBuckets.${ratingKey(rating)}`] = increment(-1);
+        ratingUpdate[`${fanBucketField(fanType)}.${ratingKey(rating)}`] = increment(-1);
       }
       await updateDoc(matchRef, ratingUpdate);
     }

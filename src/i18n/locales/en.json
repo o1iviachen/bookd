@@ -24,7 +24,9 @@
     "following": "Following",
     "followers": "Followers",
     "matches": "Matches",
+    "review": "Review",
     "reviews": "Reviews",
+    "list": "List",
     "lists": "Lists",
     "likes": "Likes",
     "tags": "Tags",
@@ -389,7 +391,9 @@
     "favouriteTeams": "Favourites",
     "searchAnyTeam": "Search any team...",
     "moreResults": "More results",
-    "countries": "Countries"
+    "countries": "Countries",
+    "selectedTeams": "SELECTED TEAMS",
+    "selectedCountry": "SELECTED COUNTRY"
   },
   "followedTeams": {
     "followTeams": "Follow Teams",

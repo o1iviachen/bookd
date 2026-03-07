@@ -47,6 +47,10 @@ export interface Match {
   reviewCount?: number;
   // Per-bucket rating counts: key = rating × 10 as string (e.g. 3.5 → "35")
   ratingBuckets?: Record<string, number>;
+  // Fan-type-specific rating buckets (same key format as ratingBuckets)
+  ratingBucketsHome?: Record<string, number>;
+  ratingBucketsAway?: Record<string, number>;
+  ratingBucketsNeutral?: Record<string, number>;
   // Legacy ID from football-data.org migration — reviews may reference this old ID
   legacyId?: number;
   motmVotes?: Record<string, number>;

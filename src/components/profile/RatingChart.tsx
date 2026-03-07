@@ -12,11 +12,17 @@ interface RatingChartProps {
   // Pre-aggregated bucket counts (key = rating × 10 as string, e.g. "35" for 3.5).
   // When provided, used instead of computing from reviews — O(1) read path.
   ratingBuckets?: Record<string, number>;
+  // Fan-type-specific pre-aggregated buckets (same key format)
+  ratingBucketsHome?: Record<string, number>;
+  ratingBucketsAway?: Record<string, number>;
+  ratingBucketsNeutral?: Record<string, number>;
   showStats?: boolean;
   homeTeamId?: number;
   awayTeamId?: number;
   homeTeamName?: string;
   awayTeamName?: string;
+  // For bucket-based fan filter on team pages (label: "[teamName] Fans")
+  teamName?: string;
   reviewerTeamMap?: Map<string, string[]>;
   season?: string;
   seasonOptions?: { value: string; label: string }[];
@@ -29,7 +35,7 @@ interface RatingChartProps {
 const BUCKETS = [0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5];
 const BAR_HEIGHT = 40;
 
-export function RatingChart({ reviews, ratingBuckets, showStats = false, homeTeamId, awayTeamId, homeTeamName, awayTeamName, reviewerTeamMap, season, seasonOptions, onSeasonChange, loading = false, onTouchStart, onTouchEnd }: RatingChartProps) {
+export function RatingChart({ reviews, ratingBuckets, ratingBucketsHome, ratingBucketsAway, ratingBucketsNeutral, showStats = false, homeTeamId, awayTeamId, homeTeamName, awayTeamName, teamName, reviewerTeamMap, season, seasonOptions, onSeasonChange, loading = false, onTouchStart, onTouchEnd }: RatingChartProps) {
   const { t } = useTranslation();
   const { theme } = useTheme();
   const { colors, spacing, borderRadius } = theme;
@@ -45,6 +51,7 @@ export function RatingChart({ reviews, ratingBuckets, showStats = false, homeTea
   onTouchEndRef.current = onTouchEnd;
 
   const hasTeamData = !!reviewerTeamMap && !!(homeTeamName || awayTeamName);
+  const hasFanBuckets = !!(ratingBucketsHome || ratingBucketsAway || ratingBucketsNeutral);
 
   const filteredReviews = useMemo(() => {
     if (ratingBuckets) return []; // not used when buckets are pre-aggregated
@@ -67,10 +74,22 @@ export function RatingChart({ reviews, ratingBuckets, showStats = false, homeTea
     });
   }, [reviews, ratingBuckets, filter, reviewerTeamMap, homeTeamName, awayTeamName, hasTeamData]);
 
+  // Select the appropriate bucket set based on filter and available data
+  const activeBuckets = useMemo(() => {
+    if (!ratingBuckets) return null; // no buckets — use reviews path
+    if (!hasFanBuckets || filter === 'everyone') return ratingBuckets;
+    switch (filter) {
+      case 'home': return ratingBucketsHome || {};
+      case 'away': return ratingBucketsAway || {};
+      case 'neutral': return ratingBucketsNeutral || {};
+      default: return ratingBuckets;
+    }
+  }, [ratingBuckets, hasFanBuckets, filter, ratingBucketsHome, ratingBucketsAway, ratingBucketsNeutral]);
+
   // When ratingBuckets provided (O(1) pre-aggregated path), read directly from them.
   // Otherwise compute from individual review ratings.
-  const counts = ratingBuckets
-    ? BUCKETS.map((b) => ratingBuckets[String(Math.round(b * 10))] || 0)
+  const counts = activeBuckets
+    ? BUCKETS.map((b) => activeBuckets[String(Math.round(b * 10))] || 0)
     : BUCKETS.map((b) => filteredReviews.filter((r) => r.rating === b).length);
   const maxCount = Math.max(...counts, 1);
   const totalRated = counts.reduce((sum, c) => sum + c, 0);
@@ -128,12 +147,24 @@ export function RatingChart({ reviews, ratingBuckets, showStats = false, homeTea
 
   // For default state (nothing selected): show 5 filled stars
 
-  const filterOptions: { key: RatingFilter; label: string }[] = [
-    { key: 'everyone', label: t('profile.fanEveryone') },
-    { key: 'neutral', label: awayTeamName ? t('profile.fanNeutral') : t('profile.fanOther') },
-    { key: 'home', label: awayTeamName ? t('profile.fanTeam', { teamName: homeTeamName || '' }) : t('profile.fanTeam', { teamName: homeTeamName || '' }) },
-    ...(awayTeamName ? [{ key: 'away' as RatingFilter, label: t('profile.fanAway') }] : []),
-  ];
+  const filterOptions: { key: RatingFilter; label: string }[] = useMemo(() => {
+    if (hasFanBuckets && teamName) {
+      // Bucket-based fan filter (team/person pages)
+      return [
+        { key: 'everyone' as RatingFilter, label: t('profile.fanEveryone') },
+        { key: 'home' as RatingFilter, label: t('profile.fanTeam', { teamName }) },
+        { key: 'away' as RatingFilter, label: t('profile.fanOpposition') },
+        { key: 'neutral' as RatingFilter, label: t('profile.fanNeutral') },
+      ];
+    }
+    // Review-based fan filter (match detail pages)
+    return [
+      { key: 'everyone' as RatingFilter, label: t('profile.fanEveryone') },
+      { key: 'neutral' as RatingFilter, label: awayTeamName ? t('profile.fanNeutral') : t('profile.fanOther') },
+      { key: 'home' as RatingFilter, label: t('profile.fanTeam', { teamName: homeTeamName || '' }) },
+      ...(awayTeamName ? [{ key: 'away' as RatingFilter, label: t('profile.fanAway') }] : []),
+    ];
+  }, [hasFanBuckets, teamName, homeTeamName, awayTeamName, t]);
 
   const activeFilterLabel = filterOptions.find((f) => f.key === filter)?.label || t('profile.fanEveryone');
 
@@ -164,7 +195,7 @@ export function RatingChart({ reviews, ratingBuckets, showStats = false, homeTea
               <Ionicons name={seasonDropdownOpen ? 'chevron-up' : 'chevron-down'} size={12} color={colors.textSecondary} />
             </Pressable>
           )}
-          {hasTeamData && (
+          {(hasTeamData || hasFanBuckets) && (
             <Pressable
               onPress={() => { setDropdownOpen(!dropdownOpen); setSeasonDropdownOpen(false); }}
               style={{
@@ -205,14 +236,14 @@ export function RatingChart({ reviews, ratingBuckets, showStats = false, homeTea
               <Text style={{ fontSize: 13, color: season === opt.value ? colors.primary : colors.foreground, fontWeight: season === opt.value ? '600' : '400' }}>
                 {opt.label}
               </Text>
-              {season === opt.value && <Ionicons name="checkmark" size={16} color={colors.star} />}
+              {season === opt.value && <Ionicons name="checkmark" size={16} color={colors.primary} />}
             </Pressable>
           ))}
         </View>
       )}
 
       {/* Filter dropdown */}
-      {dropdownOpen && hasTeamData && (
+      {dropdownOpen && (hasTeamData || hasFanBuckets) && (
         <View style={{ marginBottom: spacing.sm, backgroundColor: colors.card, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' }}>
           {filterOptions.map((opt, i) => (
             <Pressable
@@ -232,7 +263,7 @@ export function RatingChart({ reviews, ratingBuckets, showStats = false, homeTea
               <Text style={{ fontSize: 13, color: filter === opt.key ? colors.primary : colors.foreground, fontWeight: filter === opt.key ? '600' : '400' }}>
                 {opt.label}
               </Text>
-              {filter === opt.key && <Ionicons name="checkmark" size={16} color={colors.star} />}
+              {filter === opt.key && <Ionicons name="checkmark" size={16} color={colors.primary} />}
             </Pressable>
           ))}
         </View>
