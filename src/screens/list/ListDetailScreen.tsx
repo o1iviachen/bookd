@@ -37,10 +37,13 @@ import { useTranslation } from 'react-i18next';
 
 const NUM_COLUMNS = 3;
 
-type SortBy = 'list' | 'date' | 'competition';
+type SortBy = 'list' | 'date' | 'avg_rating_high' | 'avg_rating_low' | 'popular' | 'competition';
 const SORT_OPTION_KEYS: { value: SortBy; i18nKey: string }[] = [
   { value: 'list', i18nKey: 'list.sortListOrder' },
-  { value: 'date', i18nKey: 'list.sortDate' },
+  { value: 'date', i18nKey: 'profile.recentlyPlayed' },
+  { value: 'avg_rating_high', i18nKey: 'profile.averageRatingHigh' },
+  { value: 'avg_rating_low', i18nKey: 'profile.averageRatingLow' },
+  { value: 'popular', i18nKey: 'profile.mostLogged' },
   { value: 'competition', i18nKey: 'list.sortCompetition' },
 ];
 
@@ -147,10 +150,22 @@ export function ListDetailScreen({ route, navigation }: any) {
   const displayMatches = useMemo(() => {
     let result = applyMatchFilters(matches, filters);
 
-    if (sortBy === 'date') {
-      result = [...result].sort((a, b) => new Date(b.kickoff).getTime() - new Date(a.kickoff).getTime());
-    } else if (sortBy === 'competition') {
-      result = [...result].sort((a, b) => a.competition.name.localeCompare(b.competition.name));
+    switch (sortBy) {
+      case 'date':
+        result = [...result].sort((a, b) => new Date(b.kickoff).getTime() - new Date(a.kickoff).getTime());
+        break;
+      case 'avg_rating_high':
+        result = [...result].sort((a, b) => (b.avgRating || 0) - (a.avgRating || 0));
+        break;
+      case 'avg_rating_low':
+        result = [...result].sort((a, b) => (a.avgRating || 0) - (b.avgRating || 0));
+        break;
+      case 'popular':
+        result = [...result].sort((a, b) => (b.reviewCount || 0) - (a.reviewCount || 0));
+        break;
+      case 'competition':
+        result = [...result].sort((a, b) => a.competition.name.localeCompare(b.competition.name));
+        break;
     }
 
     return result;
