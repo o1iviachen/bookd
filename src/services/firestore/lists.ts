@@ -18,6 +18,7 @@ import {
 import { db } from '../../config/firebase';
 import { MatchList } from '../../types/list';
 import { createNotification } from './notifications';
+import { generateSearchPrefixes } from '../../utils/searchPrefixes';
 
 function docToList(docSnap: any): MatchList {
   const data = docSnap.data();
@@ -56,6 +57,7 @@ export async function createList(
     likes: 0,
     createdAt: serverTimestamp(),
     coverImage: coverImage || null,
+    searchPrefixes: generateSearchPrefixes(name),
     ...(language && { language }),
   });
   return ref.id;
@@ -311,7 +313,11 @@ export async function updateList(
   listId: string,
   data: { name?: string; description?: string; ranked?: boolean; language?: string; coverImage?: string | null }
 ): Promise<void> {
-  await updateDoc(doc(db, 'lists', listId), data);
+  const updateData: Record<string, any> = { ...data };
+  if (data.name) {
+    updateData.searchPrefixes = generateSearchPrefixes(data.name);
+  }
+  await updateDoc(doc(db, 'lists', listId), updateData);
 }
 
 export async function updateMatchOrder(listId: string, matchIds: number[]): Promise<void> {
@@ -322,31 +328,18 @@ export async function deleteList(listId: string): Promise<void> {
   await deleteDoc(doc(db, 'lists', listId));
 }
 
-// Search lists by name, description, or username
-// Uses client-side filtering since Firestore has no text search.
-let _listsCacheData: MatchList[] | null = null;
-let _listsCacheTs = 0;
-const LISTS_CACHE_TTL = 3 * 60 * 1000; // 3 minutes
-
+// Search lists by title using searchPrefixes array-contains query
 export async function searchLists(queryStr: string): Promise<MatchList[]> {
-  if (queryStr.length < 3) return [];
-  // Fetch lists once & cache in-memory to avoid re-fetching on every keystroke
-  if (!_listsCacheData || Date.now() - _listsCacheTs > LISTS_CACHE_TTL) {
-    const q = query(
-      collection(db, 'lists'),
-      orderBy('createdAt', 'desc'),
-      limit(100)
-    );
-    const snapshot = await getDocs(q);
-    _listsCacheData = snapshot.docs.map(docToList);
-    _listsCacheTs = Date.now();
-  }
-  const qLower = queryStr.toLowerCase();
-  return _listsCacheData
-    .filter((l) =>
-      l.name.toLowerCase().includes(qLower) ||
-      l.description.toLowerCase().includes(qLower) ||
-      l.username.toLowerCase().includes(qLower)
-    )
-    .slice(0, 20);
+  if (queryStr.length < 2) return [];
+  const prefix = queryStr.toLowerCase().trim().split(/\s+/)[0];
+  if (prefix.length < 2) return [];
+
+  const q = query(
+    collection(db, 'lists'),
+    where('searchPrefixes', 'array-contains', prefix),
+    orderBy('createdAt', 'desc'),
+    limit(20),
+  );
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map(docToList);
 }

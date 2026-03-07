@@ -9,7 +9,7 @@ import { syncMatchDetails } from './sync/syncDetails';
 import { syncLiveMatches } from './sync/syncLive';
 import { syncPreMatchLineups } from './sync/syncLineups';
 import { syncStaleMatchDetails } from './sync/syncStale';
-import { runBackfill, buildTeamsFromMatches, buildPlayersAndEnrichTeams, enrichTeamInfo, refreshSquadsOnly, backfillPlayerNameLower, generateSearchPrefixes, backfillMissingMatchDetails } from './sync/backfill';
+import { runBackfill, buildTeamsFromMatches, buildPlayersAndEnrichTeams, enrichTeamInfo, refreshSquadsOnly, backfillPlayerNameLower, generateSearchPrefixes, backfillMissingMatchDetails, rebuildTeamSearchIndex, backfillListSearchPrefixes } from './sync/backfill';
 import { getLeagueTier } from './leagueHelper';
 import { SYNC_LEAGUES, COLLECTIONS } from './config';
 
@@ -681,6 +681,53 @@ export const enrichTeams = functions
   });
 
 
+
+// ─── Search ───
+export { searchMatches } from './search';
+
+/**
+ * Rebuild the compact team search index document.
+ * Call after adding/updating teams.
+ *   GET /rebuildTeamIndex
+ */
+export const rebuildTeamIndex = functions
+  .runWith({ timeoutSeconds: 120, memory: '256MB' })
+  .https.onRequest(async (_req, res) => {
+    try {
+      const count = await rebuildTeamSearchIndex();
+      res.json({ success: true, teams: count });
+    } catch (err: any) {
+      console.error('[rebuildTeamIndex] Error:', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+/**
+ * Auto-rebuild team search index when any team doc changes.
+ * Debounced via the Cloud Function's instance reuse.
+ */
+export const onTeamWrite = functions
+  .runWith({ timeoutSeconds: 120, memory: '256MB' })
+  .firestore.document('teams/{teamId}')
+  .onWrite(async () => {
+    await rebuildTeamSearchIndex();
+  });
+
+/**
+ * Backfill searchPrefixes on all existing list documents.
+ *   GET /backfillListPrefixes
+ */
+export const backfillListPrefixes = functions
+  .runWith({ timeoutSeconds: 540, memory: '512MB' })
+  .https.onRequest(async (_req, res) => {
+    try {
+      const count = await backfillListSearchPrefixes();
+      res.json({ success: true, updated: count });
+    } catch (err: any) {
+      console.error('[backfillListPrefixes] Error:', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
 
 /**
  * Manual trigger for squad-only refresh (Phases 1-3).

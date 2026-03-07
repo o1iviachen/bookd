@@ -14,7 +14,6 @@ import {
   deleteReview,
   getReviewUpvoterIds,
   getReviewsUpvotedByUser,
-  searchReviews,
   getReviewsForMatches,
   getUserMotmVote,
 } from '../services/firestore/reviews';
@@ -286,13 +285,4 @@ export function useUserMotmVote(matchId: number, userId?: string) {
   });
 }
 
-export function useSearchReviews(queryStr: string, active = true, blockedUsers?: Set<string>) {
-  return useQuery({
-    queryKey: ['searchReviews', queryStr],
-    queryFn: () => searchReviews(queryStr),
-    enabled: queryStr.length >= 3 && active,
-    staleTime: 2 * 60 * 1000,
-    placeholderData: keepPreviousData,
-    select: (data) => blockedUsers?.size ? filterBlockedContent(data, blockedUsers, (r) => r.userId) : data,
-  });
-}
+

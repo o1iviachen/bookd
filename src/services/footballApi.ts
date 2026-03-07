@@ -28,23 +28,7 @@ const STANDINGS = 'standings';
 const TEAMS = 'teams';
 const PLAYERS = 'players';
 
-// ─── In-memory team cache for fast search ───
-let cachedTeams: { id: number; name: string; shortName: string }[] | null = null;
-let cachedTeamsTimestamp = 0;
-const TEAM_CACHE_TTL = 30 * 60 * 1000; // 30 minutes
-
-async function getCachedTeams(): Promise<{ id: number; name: string; shortName: string }[]> {
-  if (cachedTeams && Date.now() - cachedTeamsTimestamp < TEAM_CACHE_TTL) {
-    return cachedTeams;
-  }
-  const teamsSnap = await getDocs(collection(db, TEAMS));
-  cachedTeams = teamsSnap.docs.map((d) => {
-    const t = d.data();
-    return { id: t.id, name: t.name || '', shortName: t.shortName || '' };
-  });
-  cachedTeamsTimestamp = Date.now();
-  return cachedTeams;
-}
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 // ─── Helpers ───
 
@@ -750,21 +734,13 @@ export interface PlayerSearchPage {
 
 const PLAYER_PAGE_SIZE = 30;
 
-// Fetch all teams once — cached by React Query, filtered client-side
+// Fetch all teams from the compact search index (single doc read)
 export async function getAllTeams(): Promise<SearchableTeam[]> {
   try {
-    const snapshot = await getDocs(collection(db, TEAMS));
-    return snapshot.docs
-      .map((d) => d.data())
-      .filter((t) => t.id && t.name)
-      .map((t) => ({
-        id: t.id,
-        name: t.name,
-        shortName: t.shortName || '',
-        crest: t.crest || '',
-        country: t.country || '',
-        competitionCodes: t.competitionCodes || [],
-      }));
+    const snap = await getDoc(doc(db, 'searchIndexes', 'teams'));
+    if (!snap.exists()) return [];
+    const data = snap.data();
+    return (data.teams || []) as SearchableTeam[];
   } catch (err) {
     console.error('[getAllTeams] Firestore query failed:', err);
     return [];
@@ -888,139 +864,16 @@ export async function searchMatchesQuery(
   try {
     if (queryStr.length < 2) return { matches: [], nextCursor: null };
 
-    const allTeams = await getCachedTeams();
+    const fns = getFunctions();
+    const searchFn = httpsCallable<
+      { query: string; cursor?: string },
+      { matches: Match[]; nextCursor: string | null }
+    >(fns, 'searchMatches');
 
-    // Split query into individual search terms (by space, comma, or dash)
-    const terms = queryStr.toLowerCase().split(/[\s,\-]+/).filter((t) => t.length >= 2);
-    if (terms.length === 0) return { matches: [], nextCursor: null };
-
-    // For each term, find matching team IDs
-    const teamIdSets: Set<number>[] = [];
-    const allMatchingIds = new Set<number>();
-
-    for (const term of terms) {
-      const ids = new Set<number>();
-      for (const t of allTeams) {
-        if (t.name.toLowerCase().includes(term) || t.shortName.toLowerCase().includes(term)) {
-          ids.add(t.id);
-          allMatchingIds.add(t.id);
-        }
-      }
-      teamIdSets.push(ids);
-    }
-
-    // Cap at 30 teams (Firestore 'in' operator limit)
-    const teamIdsToQuery = [...allMatchingIds].slice(0, 30);
-    if (teamIdsToQuery.length === 0) return { matches: [], nextCursor: null };
-
-    // On first page, fetch head-to-head matches — only for multi-term searches
-    // where different terms match different teams (e.g., "manchester city liverpool")
-    const h2hMatches: Match[] = [];
-    const h2hIds = new Set<string>();
-
-    if (!cursor && teamIdSets.length >= 2) {
-      // Cross-pair: pick top team from each term, pair across terms
-      const pairQueries: ReturnType<typeof query>[] = [];
-      const pairs: [number, number][] = [];
-
-      for (let i = 0; i < teamIdSets.length && pairs.length < 4; i++) {
-        for (let j = i + 1; j < teamIdSets.length && pairs.length < 4; j++) {
-          // Pick top team per term (shortest name = most popular)
-          const pickBest = (ids: Set<number>) => [...ids]
-            .map((id) => allTeams.find((t) => t.id === id)!)
-            .filter(Boolean)
-            .sort((a, b) => a.name.length - b.name.length)[0];
-          const a = pickBest(teamIdSets[i]);
-          const b = pickBest(teamIdSets[j]);
-          if (a && b && a.id !== b.id) pairs.push([a.id, b.id]);
-        }
-      }
-
-      for (const [a, b] of pairs) {
-        pairQueries.push(
-          query(collection(db, MATCHES), where('homeTeam.id', '==', a), where('awayTeam.id', '==', b), orderBy('kickoff', 'desc'))
-        );
-        pairQueries.push(
-          query(collection(db, MATCHES), where('homeTeam.id', '==', b), where('awayTeam.id', '==', a), orderBy('kickoff', 'desc'))
-        );
-      }
-
-      if (pairQueries.length > 0) {
-        const h2hSnaps = await Promise.all(pairQueries.map((q) => getDocs(q)));
-        for (const snap of h2hSnaps) {
-          for (const d of snap.docs) {
-            if (h2hIds.has(d.id)) continue;
-            h2hIds.add(d.id);
-            const data = d.data() as Record<string, any>;
-            if (isValidMatch(data)) {
-              h2hMatches.push(docToMatch(data, d.id));
-            }
-          }
-        }
-        h2hMatches.sort((a, b) => new Date(b.kickoff).getTime() - new Date(a.kickoff).getTime());
-      }
-    }
-
-    // Build paginated queries for home/away
-    const homeQ = cursor
-      ? query(collection(db, MATCHES), where('homeTeam.id', 'in', teamIdsToQuery), orderBy('kickoff', 'desc'), startAfter(cursor), limit(MATCH_PAGE_SIZE))
-      : query(collection(db, MATCHES), where('homeTeam.id', 'in', teamIdsToQuery), orderBy('kickoff', 'desc'), limit(MATCH_PAGE_SIZE));
-    const awayQ = cursor
-      ? query(collection(db, MATCHES), where('awayTeam.id', 'in', teamIdsToQuery), orderBy('kickoff', 'desc'), startAfter(cursor), limit(MATCH_PAGE_SIZE))
-      : query(collection(db, MATCHES), where('awayTeam.id', 'in', teamIdsToQuery), orderBy('kickoff', 'desc'), limit(MATCH_PAGE_SIZE));
-
-    const snapshots = await Promise.all([getDocs(homeQ), getDocs(awayQ)]);
-
-    // Track the oldest kickoff from raw results for the next cursor
-    let oldestKickoff: string | null = null;
-    const seen = new Set<string>();
-    const allMatches: Match[] = [];
-
-    for (const snap of snapshots) {
-      for (const d of snap.docs) {
-        const data = d.data();
-        const kickoff = data.kickoff as string;
-        if (!oldestKickoff || kickoff < oldestKickoff) oldestKickoff = kickoff;
-
-        if (seen.has(d.id) || h2hIds.has(d.id)) continue;
-        seen.add(d.id);
-        if (isValidMatch(data)) {
-          allMatches.push(docToMatch(data, d.id));
-        }
-      }
-    }
-
-    // Score each match by how many search terms it matches (via its teams)
-    const matchScores = new Map<number, number>();
-    for (const m of allMatches) {
-      let score = 0;
-      for (const termIds of teamIdSets) {
-        if (termIds.has(m.homeTeam.id) || termIds.has(m.awayTeam.id)) score++;
-      }
-      matchScores.set(m.id, score);
-    }
-
-    // Sort: most matched terms first, then finished/live before upcoming, then by date
-    allMatches.sort((a, b) => {
-      const scoreA = matchScores.get(a.id) || 0;
-      const scoreB = matchScores.get(b.id) || 0;
-      if (scoreA !== scoreB) return scoreB - scoreA;
-      const aLocked = a.status !== 'FINISHED' && a.status !== 'IN_PLAY' && a.status !== 'PAUSED';
-      const bLocked = b.status !== 'FINISHED' && b.status !== 'IN_PLAY' && b.status !== 'PAUSED';
-      if (aLocked !== bLocked) return aLocked ? 1 : -1;
-      return new Date(b.kickoff).getTime() - new Date(a.kickoff).getTime();
-    });
-
-    // Prepend head-to-head matches on first page
-    const finalMatches = h2hMatches.length > 0 ? [...h2hMatches, ...allMatches] : allMatches;
-
-    // Determine if there are more pages
-    const hasMore = snapshots.some((s) => s.docs.length === MATCH_PAGE_SIZE);
-    const nextCursor = hasMore && oldestKickoff ? oldestKickoff : null;
-
-    return { matches: finalMatches, nextCursor };
+    const result = await searchFn({ query: queryStr, cursor });
+    return result.data;
   } catch (err) {
-    console.error('[searchMatchesQuery] Firestore query failed:', err);
+    console.error('[searchMatchesQuery] Cloud Function call failed:', err);
     return { matches: [], nextCursor: null };
   }
 }

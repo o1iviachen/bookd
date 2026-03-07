@@ -10,13 +10,11 @@ import { useAuth } from '../../context/AuthContext';
 import { useSearchUsers, useBlockedUsers } from '../../hooks/useUser';
 import { useSearchMatches } from '../../hooks/useMatches';
 import { useSearchTeams, useSearchPlayers } from '../../hooks/useTeams';
-import { useSearchReviews } from '../../hooks/useReviews';
 import { useSearchLists } from '../../hooks/useLists';
 import { useFollowableLeagues } from '../../hooks/useLeagues';
 import { Avatar } from '../../components/ui/Avatar';
 import { MatchPosterCard } from '../../components/match/MatchPosterCard';
 import { Match } from '../../types/match';
-import { ReviewCard } from '../../components/review/ReviewCard';
 import { ListPreviewCard } from '../../components/list/ListPreviewCard';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { SearchStackParamList } from '../../types/navigation';
@@ -28,7 +26,7 @@ const RECENT_SEARCHES_KEY = 'bookd_recent_searches';
 const MAX_RECENT_SEARCHES = 10;
 
 type Nav = NativeStackNavigationProp<SearchStackParamList, 'Search'>;
-type Category = 'matches' | 'teams' | 'leagues' | 'players' | 'members' | 'reviews' | 'lists';
+type Category = 'matches' | 'teams' | 'leagues' | 'players' | 'members' | 'lists';
 
 const NUM_COLUMNS = 3;
 
@@ -38,7 +36,6 @@ const CATEGORY_KEYS: { key: Category; i18nKey: string }[] = [
   { key: 'leagues', i18nKey: 'search.leaguesTab' },
   { key: 'players', i18nKey: 'search.playersAndManagers' },
   { key: 'members', i18nKey: 'search.members' },
-  { key: 'reviews', i18nKey: 'search.reviewsTab' },
   { key: 'lists', i18nKey: 'search.listsTab' },
 ];
 
@@ -54,7 +51,6 @@ const EMPTY_ICONS: Record<Category, keyof typeof Ionicons.glyphMap> = {
   leagues: 'trophy-outline',
   players: 'people-outline',
   members: 'person-outline',
-  reviews: 'chatbubble-outline',
   lists: 'list-outline',
 };
 
@@ -64,7 +60,6 @@ const EMPTY_LABEL_KEYS: Record<Category, string> = {
   leagues: 'common.noResultsFound',
   players: 'common.noResultsFound',
   members: 'common.noResultsFound',
-  reviews: 'common.noResultsFound',
   lists: 'common.noResultsFound',
 };
 
@@ -164,7 +159,6 @@ export function SearchScreen() {
     if (!playerPages?.pages) return [];
     return playerPages.pages.flatMap((p) => p.players);
   }, [playerPages]);
-  const { data: reviewResults, isLoading: reviewsLoading, isFetching: reviewsFetching } = useSearchReviews(debouncedQuery, activeCategory === 'reviews', blockedUsers);
   const { data: listResults, isLoading: listsLoading, isFetching: listsFetching } = useSearchLists(debouncedQuery, activeCategory === 'lists');
 
   const hasQuery = isSearching && debouncedQuery.length >= 2;
@@ -173,7 +167,6 @@ export function SearchScreen() {
     (activeCategory === 'teams' && teamsLoading) ||
     (activeCategory === 'players' && (playersLoading || playersFetching)) ||
     (activeCategory === 'members' && usersLoading) ||
-    (activeCategory === 'reviews' && (reviewsLoading || reviewsFetching)) ||
     (activeCategory === 'lists' && (listsLoading || listsFetching))
   );
 
@@ -186,11 +179,10 @@ export function SearchScreen() {
       case 'leagues': return leagueResults || [];
       case 'players': return playerResults || [];
       case 'members': return users || [];
-      case 'reviews': return reviewResults || [];
       case 'lists': return listResults || [];
       default: return [];
     }
-  }, [hasQuery, activeCategory, matchResults, teamResults, leagueResults, playerResults, users, reviewResults, listResults]);
+  }, [hasQuery, activeCategory, matchResults, teamResults, leagueResults, playerResults, users, listResults]);
 
   const renderItem = useCallback(({ item }: { item: any }) => {
     switch (activeCategory) {
@@ -287,13 +279,6 @@ export function SearchScreen() {
               </View>
             </View>
           </Pressable>
-        );
-      case 'reviews':
-        return (
-          <ReviewCard
-            review={item}
-            onPress={() => navigation.navigate('ReviewDetail', { reviewId: item.id })}
-          />
         );
       case 'lists':
         return (

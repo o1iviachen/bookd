@@ -57,7 +57,7 @@ export function useSearchTeams(query: string, active = true) {
   const { data: allTeams, isLoading } = useQuery({
     queryKey: ['allTeams'],
     queryFn: getAllTeams,
-    staleTime: 10 * 60 * 1000,
+    staleTime: Infinity,
     enabled,
   });
 

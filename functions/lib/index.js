@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.seedLeagues = exports.diagnoseTeams = exports.auditTeamIds = exports.migrateLegacyMatches = exports.backfillMatchStages = exports.backfillMatchRatings = exports.triggerAggregates = exports.computeAggregates = exports.backfillPlayerIds = exports.migratePlayerNames = exports.squadRefresh = exports.triggerSquadRefresh = exports.enrichTeams = exports.buildPlayers = exports.migrateLeagueTier = exports.migrateSearchPrefixes = exports.fixPlayerNames = exports.scheduledBackfillDetails = exports.backfillDetails = exports.migrateHasDetails = exports.syncDetailsForLeague = exports.manualSync = exports.buildTeams = exports.backfill = exports.staleSync = exports.liveSync = exports.lineupSync = exports.dailyPrepopulate = exports.backfillMatchDetailKickoffs = exports.translateText = exports.submitReport = exports.deleteAccount = exports.moderateReviewMedia = exports.onMatchStatusChange = exports.preMatchNotify = exports.sendPushNotification = void 0;
+exports.seedLeagues = exports.diagnoseTeams = exports.auditTeamIds = exports.migrateLegacyMatches = exports.backfillMatchStages = exports.backfillMatchRatings = exports.triggerAggregates = exports.computeAggregates = exports.backfillPlayerIds = exports.migratePlayerNames = exports.squadRefresh = exports.triggerSquadRefresh = exports.backfillListPrefixes = exports.onTeamWrite = exports.rebuildTeamIndex = exports.searchMatches = exports.enrichTeams = exports.buildPlayers = exports.migrateLeagueTier = exports.migrateSearchPrefixes = exports.fixPlayerNames = exports.scheduledBackfillDetails = exports.backfillDetails = exports.migrateHasDetails = exports.syncDetailsForLeague = exports.manualSync = exports.buildTeams = exports.backfill = exports.staleSync = exports.liveSync = exports.lineupSync = exports.dailyPrepopulate = exports.backfillMatchDetailKickoffs = exports.translateText = exports.submitReport = exports.deleteAccount = exports.moderateReviewMedia = exports.onMatchStatusChange = exports.preMatchNotify = exports.sendPushNotification = void 0;
 const functions = __importStar(require("firebase-functions"));
 const admin = __importStar(require("firebase-admin"));
 admin.initializeApp();
@@ -661,6 +661,52 @@ exports.enrichTeams = functions
     }
     catch (err) {
         console.error('[enrichTeams] Error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+// ─── Search ───
+var search_1 = require("./search");
+Object.defineProperty(exports, "searchMatches", { enumerable: true, get: function () { return search_1.searchMatches; } });
+/**
+ * Rebuild the compact team search index document.
+ * Call after adding/updating teams.
+ *   GET /rebuildTeamIndex
+ */
+exports.rebuildTeamIndex = functions
+    .runWith({ timeoutSeconds: 120, memory: '256MB' })
+    .https.onRequest(async (_req, res) => {
+    try {
+        const count = await (0, backfill_1.rebuildTeamSearchIndex)();
+        res.json({ success: true, teams: count });
+    }
+    catch (err) {
+        console.error('[rebuildTeamIndex] Error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+/**
+ * Auto-rebuild team search index when any team doc changes.
+ * Debounced via the Cloud Function's instance reuse.
+ */
+exports.onTeamWrite = functions
+    .runWith({ timeoutSeconds: 120, memory: '256MB' })
+    .firestore.document('teams/{teamId}')
+    .onWrite(async () => {
+    await (0, backfill_1.rebuildTeamSearchIndex)();
+});
+/**
+ * Backfill searchPrefixes on all existing list documents.
+ *   GET /backfillListPrefixes
+ */
+exports.backfillListPrefixes = functions
+    .runWith({ timeoutSeconds: 540, memory: '512MB' })
+    .https.onRequest(async (_req, res) => {
+    try {
+        const count = await (0, backfill_1.backfillListSearchPrefixes)();
+        res.json({ success: true, updated: count });
+    }
+    catch (err) {
+        console.error('[backfillListPrefixes] Error:', err);
         res.status(500).json({ error: err.message });
     }
 });

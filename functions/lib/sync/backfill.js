@@ -42,6 +42,8 @@ exports.buildPlayersAndEnrichTeams = buildPlayersAndEnrichTeams;
 exports.enrichTeamInfo = enrichTeamInfo;
 exports.refreshSquadsOnly = refreshSquadsOnly;
 exports.generateSearchPrefixes = generateSearchPrefixes;
+exports.rebuildTeamSearchIndex = rebuildTeamSearchIndex;
+exports.backfillListSearchPrefixes = backfillListSearchPrefixes;
 exports.backfillPlayerNameLower = backfillPlayerNameLower;
 exports.backfillMissingMatchDetails = backfillMissingMatchDetails;
 exports.backfillTeamCountry = backfillTeamCountry;
@@ -959,6 +961,75 @@ function generateSearchPrefixes(name) {
         }
     }
     return Array.from(prefixes);
+}
+/**
+ * Builds a compact team search index document at searchIndexes/teams.
+ * Contains all teams as a JSON array with only search-relevant fields.
+ * Replaces full-collection scans with a single doc read (~180 KB).
+ */
+async function rebuildTeamSearchIndex() {
+    const BATCH_SIZE = 500;
+    let lastDoc = null;
+    const teams = [];
+    while (true) {
+        let q = db.collection(config_1.COLLECTIONS.TEAMS).limit(BATCH_SIZE);
+        if (lastDoc)
+            q = q.startAfter(lastDoc);
+        const snap = await q.get();
+        if (snap.empty)
+            break;
+        for (const d of snap.docs) {
+            const data = d.data();
+            if (data.id && data.name) {
+                teams.push({
+                    id: data.id,
+                    name: data.name,
+                    shortName: data.shortName || '',
+                    crest: data.crest || '',
+                    country: data.country || '',
+                    competitionCodes: data.competitionCodes || [],
+                });
+            }
+        }
+        lastDoc = snap.docs[snap.docs.length - 1];
+    }
+    await db.collection('searchIndexes').doc('teams').set({
+        teams,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    console.log(`[rebuildTeamSearchIndex] Indexed ${teams.length} teams`);
+    return teams.length;
+}
+/**
+ * Backfills searchPrefixes for all existing list documents.
+ * Enables array-contains search on list titles.
+ */
+async function backfillListSearchPrefixes() {
+    const BATCH_SIZE = 500;
+    let lastDoc = null;
+    let updated = 0;
+    while (true) {
+        let q = db.collection('lists').limit(BATCH_SIZE);
+        if (lastDoc)
+            q = q.startAfter(lastDoc);
+        const snap = await q.get();
+        if (snap.empty)
+            break;
+        const batch = db.batch();
+        for (const d of snap.docs) {
+            const data = d.data();
+            if (data.name) {
+                batch.update(d.ref, {
+                    searchPrefixes: generateSearchPrefixes(data.name),
+                });
+                updated++;
+            }
+        }
+        await batch.commit();
+        lastDoc = snap.docs[snap.docs.length - 1];
+        console.log(`[backfillListSearchPrefixes] Processed ${updated} lists`);
+    }
+    return updated;
 }
 /**
  * Backfills nameLower and searchName fields for all existing player docs.
