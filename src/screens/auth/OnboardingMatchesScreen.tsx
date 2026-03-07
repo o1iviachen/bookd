@@ -13,7 +13,7 @@ import { MatchPickerModal } from '../../components/match/MatchPickerModal';
 import { Match } from '../../types/match';
 import { useQueries } from '@tanstack/react-query';
 
-const MAX_FAVOURITES = 4;
+const MAX_FAVOURITES = 3;
 const NUM_COLUMNS = 3;
 
 export function OnboardingMatchesScreen() {
