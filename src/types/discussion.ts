@@ -9,4 +9,6 @@ export interface DiscussionMessage {
   likedBy: string[];
   createdAt: Date;
   language?: string;
+  matchMinute?: number | null;
+  gifUrl?: string | null;
 }

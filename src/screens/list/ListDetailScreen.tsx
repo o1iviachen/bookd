@@ -632,8 +632,17 @@ function ListCommentRow({
     return team ? { id: team.id, crest: team.crest } : null;
   }).filter(Boolean) as { id: string; crest: string }[];
 
+  const handleLongPress = () => {
+    if (isOwn) {
+      onDelete(comment.id);
+    } else {
+      setShowReport(true);
+    }
+  };
+
   return (
-    <View
+    <Pressable
+      onLongPress={handleLongPress}
       style={{
         flexDirection: 'row',
         paddingHorizontal: spacing.md,
@@ -666,24 +675,8 @@ function ListCommentRow({
           <TranslateButton text={comment.text} fontSize={isReply ? 14 : 15} contentLanguage={comment.language} />
         </View>
 
-        {/* Like + Reply + Delete actions */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: 6 }}>
-          <Pressable
-            onPress={() => onLike(comment.id)}
-            style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}
-          >
-            <Ionicons
-              name={isLiked ? 'heart' : 'heart-outline'}
-              size={14}
-              color={isLiked ? '#ef4444' : colors.textSecondary}
-            />
-            {comment.likes > 0 && (
-              <Text style={{ fontSize: 11, color: isLiked ? '#ef4444' : colors.textSecondary }}>
-                {comment.likes}
-              </Text>
-            )}
-          </Pressable>
-
+        {/* Reply action */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6 }}>
           <Pressable
             onPress={() => onReply(comment.id, displayName)}
             style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}
@@ -691,32 +684,32 @@ function ListCommentRow({
             <Ionicons name="chatbubble-outline" size={13} color={colors.textSecondary} />
             <Text style={{ fontSize: 11, color: colors.textSecondary }}>{t('common.reply')}</Text>
           </Pressable>
-
-          {isOwn ? (
-            <Pressable
-              onPress={() => onDelete(comment.id)}
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}
-            >
-              <Ionicons name="trash-outline" size={13} color={colors.textSecondary} />
-              <Text style={{ fontSize: 11, color: colors.textSecondary }}>{t('common.delete')}</Text>
-            </Pressable>
-          ) : (
-            <Pressable
-              onPress={() => setShowReport(true)}
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}
-            >
-              <Ionicons name="flag-outline" size={13} color={colors.textSecondary} />
-              <Text style={{ fontSize: 11, color: colors.textSecondary }}>{t('common.report')}</Text>
-            </Pressable>
-          )}
         </View>
       </View>
+
+      {/* Like button — right side */}
+      <Pressable
+        onPress={() => onLike(comment.id)}
+        style={{ alignItems: 'center', justifyContent: 'center', paddingLeft: spacing.sm }}
+      >
+        <Ionicons
+          name={isLiked ? 'heart' : 'heart-outline'}
+          size={16}
+          color={isLiked ? '#ef4444' : colors.textSecondary}
+        />
+        {comment.likes > 0 && (
+          <Text style={{ fontSize: 11, color: isLiked ? '#ef4444' : colors.textSecondary, marginTop: 1 }}>
+            {comment.likes}
+          </Text>
+        )}
+      </Pressable>
+
       <ReportModal
         visible={showReport}
         onClose={() => setShowReport(false)}
         contentType="comment"
         contentId={comment.id}
       />
-    </View>
+    </Pressable>
   );
 }

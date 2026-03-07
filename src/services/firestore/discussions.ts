@@ -32,6 +32,8 @@ function docToMessage(docSnap: any): DiscussionMessage {
     likedBy: data.likedBy || [],
     createdAt: data.createdAt?.toDate() || new Date(),
     language: data.language || undefined,
+    matchMinute: data.matchMinute ?? null,
+    gifUrl: data.gifUrl || null,
   };
 }
 
@@ -66,6 +68,8 @@ export async function createDiscussionMessage(
   userAvatar: string | null,
   text: string,
   language?: string,
+  matchMinute?: number | null,
+  gifUrl?: string | null,
 ): Promise<string> {
   const ref = await addDoc(collection(db, COLLECTION), {
     matchId,
@@ -77,6 +81,8 @@ export async function createDiscussionMessage(
     likedBy: [],
     createdAt: serverTimestamp(),
     ...(language && { language }),
+    ...(matchMinute != null && { matchMinute }),
+    ...(gifUrl && { gifUrl }),
   });
   return ref.id;
 }

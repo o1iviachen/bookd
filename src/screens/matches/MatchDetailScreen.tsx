@@ -30,6 +30,7 @@ import { shortName, lastName } from '../../utils/formatName';
 import { nationalityFlag } from '../../utils/flagEmoji';
 import { MatchPosterCard } from '../../components/match/MatchPosterCard';
 import { MOTMBadge } from '../../components/review/MOTMBadge';
+
 import { PulsingDot } from '../../components/ui/PulsingDot';
 import { DiscussionSection, DiscussionInputBar } from '../../components/discussion/DiscussionSection';
 import { useDiscussion } from '../../hooks/useDiscussion';
@@ -611,6 +612,7 @@ export function MatchDetailScreen({ route, navigation }: Props) {
           spacing={spacing}
           borderRadius={borderRadius}
           onFocus={() => setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 300)}
+          matchMinute={match.elapsed}
         />
       )}
 

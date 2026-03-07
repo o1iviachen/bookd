@@ -1,6 +1,9 @@
 import React, { useState, useMemo, useRef, useCallback } from 'react';
 import { View, Text, Pressable, Alert, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
+import { GifPickerModal } from '../ui/GifPickerModal';
+import { TenorGif } from '../../services/tenor';
 import { useQueries } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { MentionText } from '../ui/MentionText';
@@ -12,12 +15,11 @@ import { LoadingSpinner } from '../ui/LoadingSpinner';
 import { getUserProfile } from '../../services/firestore/users';
 import { createDiscussionMessage, toggleDiscussionLike, deleteDiscussionMessage } from '../../services/firestore/discussions';
 import { isTextClean } from '../../utils/moderation';
-import { formatRelativeTime } from '../../utils/formatDate';
+
 import { POPULAR_TEAMS } from '../../utils/constants';
 import { TranslateButton } from '../ui/TranslateButton';
 import { usePreferredLanguage } from '../../hooks/usePreferredLanguage';
 import { DiscussionMessage } from '../../types/discussion';
-import { Match } from '../../types/match';
 
 // ─── Message Row ───
 
@@ -55,8 +57,16 @@ function DiscussionMessageRow({
     return team ? { id: team.id, crest: team.crest } : null;
   }).filter(Boolean) as { id: string; crest: string }[];
 
+  const handleLongPress = () => {
+    if (isOwn) {
+      onDelete(message.id);
+    } else {
+      setShowReport(true);
+    }
+  };
+
   return (
-    <View style={{ flexDirection: 'row', paddingHorizontal: spacing.md, paddingVertical: spacing.sm }}>
+    <Pressable onLongPress={handleLongPress} style={{ flexDirection: 'row', paddingHorizontal: spacing.md, paddingVertical: spacing.sm }}>
       <Pressable onPress={() => navigation.navigate('UserProfile', { userId: message.userId })}>
         <Avatar uri={displayAvatar} name={displayName} size={32} />
       </Pressable>
@@ -73,59 +83,53 @@ function DiscussionMessageRow({
           {teamCrests.map((t) => (
             <TeamLogo key={t.id} uri={t.crest} size={14} />
           ))}
-          <Text style={{ ...typography.small, color: colors.textSecondary }}>
-            {formatRelativeTime(message.createdAt)}
-          </Text>
         </View>
-        <View style={{ marginTop: 2 }}>
-          <MentionText text={message.text} fontSize={15} />
-          <TranslateButton text={message.text} fontSize={15} contentLanguage={message.language} />
-        </View>
+        {message.text ? (
+          <View style={{ marginTop: 2 }}>
+            <MentionText text={message.text} fontSize={15} />
+            <TranslateButton text={message.text} fontSize={15} contentLanguage={message.language} />
+          </View>
+        ) : null}
+        {message.gifUrl && (
+          <View style={{ marginTop: 4 }}>
+            <Image source={{ uri: message.gifUrl }} style={{ width: 200, height: 150, borderRadius: 8 }} contentFit="cover" autoplay />
+          </View>
+        )}
 
-        {/* Like + Delete/Report actions */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: 6 }}>
-          <Pressable
-            onPress={() => onLike(message.id)}
-            style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}
-          >
-            <Ionicons
-              name={isLiked ? 'heart' : 'heart-outline'}
-              size={14}
-              color={isLiked ? '#ef4444' : colors.textSecondary}
-            />
-            {message.likes > 0 && (
-              <Text style={{ fontSize: 11, color: isLiked ? '#ef4444' : colors.textSecondary }}>
-                {message.likes}
-              </Text>
-            )}
-          </Pressable>
-
-          {isOwn ? (
-            <Pressable
-              onPress={() => onDelete(message.id)}
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}
-            >
-              <Ionicons name="trash-outline" size={13} color={colors.textSecondary} />
-              <Text style={{ fontSize: 11, color: colors.textSecondary }}>{t('common.delete')}</Text>
-            </Pressable>
-          ) : (
-            <Pressable
-              onPress={() => setShowReport(true)}
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}
-            >
-              <Ionicons name="flag-outline" size={13} color={colors.textSecondary} />
-              <Text style={{ fontSize: 11, color: colors.textSecondary }}>{t('common.report')}</Text>
-            </Pressable>
-          )}
-        </View>
+        {/* Match minute pill */}
+        {message.matchMinute != null && (
+          <View style={{ flexDirection: 'row', marginTop: 6 }}>
+            <View style={{ backgroundColor: colors.primaryLight, paddingHorizontal: spacing.sm + 2, paddingVertical: spacing.xs, borderRadius: 999 }}>
+              <Text style={{ ...typography.small, color: colors.primary }}>{message.matchMinute}'</Text>
+            </View>
+          </View>
+        )}
       </View>
+
+      {/* Like button — right side */}
+      <Pressable
+        onPress={() => onLike(message.id)}
+        style={{ alignItems: 'center', justifyContent: 'center', paddingLeft: spacing.sm }}
+      >
+        <Ionicons
+          name={isLiked ? 'heart' : 'heart-outline'}
+          size={16}
+          color={isLiked ? '#ef4444' : colors.textSecondary}
+        />
+        {message.likes > 0 && (
+          <Text style={{ fontSize: 11, color: isLiked ? '#ef4444' : colors.textSecondary, marginTop: 1 }}>
+            {message.likes}
+          </Text>
+        )}
+      </Pressable>
+
       <ReportModal
         visible={showReport}
         onClose={() => setShowReport(false)}
         contentType="discussion_message"
         contentId={message.id}
       />
-    </View>
+    </Pressable>
   );
 }
 
@@ -139,6 +143,7 @@ export function DiscussionInputBar({
   spacing,
   borderRadius,
   onFocus,
+  matchMinute,
 }: {
   matchId: number;
   userId: string;
@@ -147,18 +152,24 @@ export function DiscussionInputBar({
   spacing: any;
   borderRadius: any;
   onFocus?: () => void;
+  matchMinute?: number | null;
 }) {
   const { t } = useTranslation();
   const { language } = usePreferredLanguage();
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
+  const [gif, setGif] = useState<TenorGif | null>(null);
+  const [showGifPicker, setShowGifPicker] = useState(false);
   const inputRef = useRef<TextInput>(null);
+
+  const canSend = (text.trim() || gif) && !sending;
 
   const handleSend = useCallback(async () => {
     const trimmed = text.trim();
-    if (!trimmed || sending) return;
+    if (!trimmed && !gif) return;
+    if (sending) return;
 
-    if (!isTextClean(trimmed)) {
+    if (trimmed && !isTextClean(trimmed)) {
       Alert.alert(t('discussion.moderationTitle'), t('discussion.moderationBody'));
       return;
     }
@@ -172,15 +183,32 @@ export function DiscussionInputBar({
         profile?.avatar || null,
         trimmed,
         language,
+        matchMinute,
+        gif?.url || null,
       );
       setText('');
+      setGif(null);
     } finally {
       setSending(false);
     }
-  }, [text, sending, matchId, userId, profile, language]);
+  }, [text, sending, gif, matchId, userId, profile, language, matchMinute]);
 
   return (
     <View style={{ borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.background, zIndex: 10 }}>
+      {/* GIF preview */}
+      {gif && (
+        <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.sm }}>
+          <View style={{ width: 80, height: 80, borderRadius: 8, overflow: 'hidden' }}>
+            <Image source={{ uri: gif.previewUrl }} style={{ width: 80, height: 80 }} contentFit="cover" autoplay />
+            <Pressable
+              onPress={() => setGif(null)}
+              style={{ position: 'absolute', top: 2, right: 2, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 8, width: 16, height: 16, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Ionicons name="close" size={10} color="#fff" />
+            </Pressable>
+          </View>
+        </View>
+      )}
       <View style={{
         flexDirection: 'row',
         alignItems: 'center',
@@ -189,33 +217,45 @@ export function DiscussionInputBar({
         gap: spacing.sm,
       }}>
         <Avatar uri={profile?.avatar || null} name={profile?.displayName || 'You'} size={28} />
-        <MentionInput
-          inputRef={inputRef}
-          value={text}
-          onChangeText={setText}
-          placeholder={t('discussion.inputPlaceholder')}
-          maxLength={500}
-          onFocus={onFocus}
-          containerStyle={{ flex: 1 }}
-          inputStyle={{
-            backgroundColor: colors.muted,
-            borderRadius: borderRadius.full,
-            paddingHorizontal: spacing.md,
-            paddingVertical: spacing.sm,
-          }}
-        />
+        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: colors.muted, borderRadius: borderRadius.full, paddingRight: spacing.sm }}>
+          <MentionInput
+            inputRef={inputRef}
+            value={text}
+            onChangeText={setText}
+            placeholder={t('discussion.inputPlaceholder')}
+            maxLength={500}
+            onFocus={onFocus}
+            containerStyle={{ flex: 1 }}
+            inputStyle={{
+              paddingHorizontal: spacing.md,
+              paddingVertical: spacing.sm,
+            }}
+          />
+          <Pressable
+            onPress={() => setShowGifPicker(true)}
+            style={{ opacity: gif ? 0.4 : 1, paddingLeft: 4 }}
+            disabled={!!gif}
+          >
+            <Text style={{ fontSize: 13, fontWeight: '800', color: colors.textSecondary }}>{t('common.gif')}</Text>
+          </Pressable>
+        </View>
         <Pressable
           onPress={handleSend}
-          disabled={!text.trim() || sending}
-          style={{ opacity: text.trim() ? 1 : 0.4 }}
+          disabled={!canSend}
+          style={{ opacity: canSend ? 1 : 0.4 }}
         >
           <Ionicons
             name="send"
             size={22}
-            color={text.trim() ? colors.primary : colors.textSecondary}
+            color={canSend ? colors.primary : colors.textSecondary}
           />
         </Pressable>
       </View>
+      <GifPickerModal
+        visible={showGifPicker}
+        onClose={() => setShowGifPicker(false)}
+        onSelect={(g) => { setGif(g); setShowGifPicker(false); }}
+      />
     </View>
   );
 }
