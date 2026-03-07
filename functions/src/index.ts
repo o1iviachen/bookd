@@ -9,7 +9,7 @@ import { syncMatchDetails } from './sync/syncDetails';
 import { syncLiveMatches } from './sync/syncLive';
 import { syncPreMatchLineups } from './sync/syncLineups';
 import { syncStaleMatchDetails } from './sync/syncStale';
-import { runBackfill, buildTeamsFromMatches, buildPlayersAndEnrichTeams, enrichTeamInfo, enrichPlayersFromSquads, refreshSquadsOnly, backfillPlayerNameLower, generateSearchPrefixes, backfillMissingMatchDetails } from './sync/backfill';
+import { runBackfill, buildTeamsFromMatches, buildPlayersAndEnrichTeams, enrichTeamInfo, refreshSquadsOnly, backfillPlayerNameLower, generateSearchPrefixes, backfillMissingMatchDetails } from './sync/backfill';
 import { getLeagueTier } from './leagueHelper';
 import { SYNC_LEAGUES, COLLECTIONS } from './config';
 
@@ -681,24 +681,6 @@ export const enrichTeams = functions
   });
 
 
-/**
- * Enrich player docs with photos from API-Football /players/squads endpoint.
- * Processes teams in batches. Call multiple times with offset to cover all teams.
- *   GET /enrichPlayers?limit=50&offset=0
- */
-export const enrichPlayers = functions
-  .runWith({ timeoutSeconds: 540, memory: '512MB' })
-  .https.onRequest(async (req, res) => {
-    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
-    const offset = req.query.offset ? parseInt(req.query.offset as string, 10) : 0;
-    try {
-      const result = await enrichPlayersFromSquads(limit, offset);
-      res.json({ success: true, ...result });
-    } catch (err: any) {
-      console.error('[enrichPlayers] Error:', err);
-      res.status(500).json({ error: err.message });
-    }
-  });
 
 /**
  * Manual trigger for squad-only refresh (Phases 1-3).
@@ -708,11 +690,18 @@ export const enrichPlayers = functions
 export const triggerSquadRefresh = functions
   .runWith({ timeoutSeconds: 540, memory: '512MB' })
   .https.onRequest(async (req, res) => {
-    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 200;
+    const body = req.body || {};
+    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : body.limit ? Number(body.limit) : 200;
+    const cursorOverride = (req.query.cursor as string) || body.cursor;
     try {
       const db = admin.firestore();
-      const cursorDoc = await db.collection('aggregates').doc('squadRefreshCursor').get();
-      const lastTeamId = cursorDoc.exists ? (cursorDoc.data()?.lastTeamId ?? 0) : 0;
+      let lastTeamId: number;
+      if (cursorOverride !== undefined) {
+        lastTeamId = Number(cursorOverride);
+      } else {
+        const cursorDoc = await db.collection('aggregates').doc('squadRefreshCursor').get();
+        lastTeamId = cursorDoc.exists ? (cursorDoc.data()?.lastTeamId ?? 0) : 0;
+      }
 
       const result = await refreshSquadsOnly(limit, lastTeamId);
 
