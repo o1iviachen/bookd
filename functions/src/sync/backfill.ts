@@ -734,7 +734,8 @@ async function processTeamSquad(
   const oldTeamPlayers = new Map<number, Set<number>>();
 
   if (allPlayers.length > 0) {
-    // Read existing player docs to detect team changes
+    // Read existing player docs to detect team changes + manual edits
+    const manualEditIds = new Set<number>();
     const playerIds = allPlayers.map((e) => e.player?.id).filter(Boolean);
     const playerRefs = playerIds.map((id: number) => db.collection(COLLECTIONS.PLAYERS).doc(String(id)));
     for (let i = 0; i < playerRefs.length; i += 100) {
@@ -742,8 +743,10 @@ async function processTeamSquad(
       const docs = await db.getAll(...chunk);
       for (const d of docs) {
         if (!d.exists) continue;
-        const prev = d.data()?.currentTeam;
+        const data = d.data();
         const playerId = Number(d.id);
+        if (data?.manualEdit) manualEditIds.add(playerId);
+        const prev = data?.currentTeam;
         if (prev?.id && prev.id !== teamId && currentSquadIds.has(playerId)) {
           if (!oldTeamPlayers.has(prev.id)) oldTeamPlayers.set(prev.id, new Set());
           oldTeamPlayers.get(prev.id)!.add(playerId);
@@ -768,13 +771,17 @@ async function processTeamSquad(
       const pos = entry.statistics?.[0]?.games?.position || null;
 
       const playerRef = db.collection(COLLECTIONS.PLAYERS).doc(String(p.id));
+      const isManual = manualEditIds.has(p.id);
       const searchName = extractSearchName(fullName);
       const playerData: Record<string, any> = {
         id: p.id,
-        name: fullName,
-        nameLower: fullName.toLowerCase(),
-        searchName,
-        searchPrefixes: generateSearchPrefixes(fullName),
+        // Skip name fields for manually edited players
+        ...(isManual ? {} : {
+          name: fullName,
+          nameLower: fullName.toLowerCase(),
+          searchName,
+          searchPrefixes: generateSearchPrefixes(fullName),
+        }),
         photo: p.photo || null,
         nationality: p.nationality || null,
         dateOfBirth: p.birth?.date || null,
