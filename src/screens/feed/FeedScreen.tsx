@@ -307,7 +307,7 @@ export function FeedScreen() {
           <ScrollView showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'}
             style={{ flex: 1 }}
             nestedScrollEnabled
-            contentContainerStyle={{ paddingTop: spacing.sm, paddingBottom: 0 }}
+            contentContainerStyle={{ paddingBottom: 0 }}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#fff" colors={['#fff']} />}
           >
             {matchesLoading && !matches ? (

@@ -107,7 +107,7 @@ const MatchDayPage = React.memo(function MatchDayPage({
       indicatorStyle={isDark ? 'white' : 'default'}
       style={{ flex: 1 }}
       nestedScrollEnabled
-      contentContainerStyle={{ paddingBottom: 40, paddingTop: spacing.sm }}
+      contentContainerStyle={{ paddingBottom: 40 }}
       refreshControl={
         <RefreshControl refreshing={manualRefreshing} onRefresh={handleRefresh} tintColor="#fff" colors={['#fff']} />
       }

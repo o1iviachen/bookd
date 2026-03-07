@@ -1548,9 +1548,19 @@ function InfoSection({ matchDetail, match, colors, spacing, typography, borderRa
       case 'penalty_goal': return '⚽';
       case 'own_goal': return '⚽';
       case 'missed_pen': return '❌';
-      case 'red_card': return '🟥';
+      case 'red_card': return null;
     }
   };
+
+  const RedCard = () => (
+    <View style={{ width: 10, height: 13, backgroundColor: '#ef4444', borderRadius: 1.5 }} />
+  );
+
+  const OwnGoalIcon = () => (
+    <View style={{ width: 17, height: 17, borderRadius: 9, backgroundColor: 'rgba(239, 68, 68, 0.45)', alignItems: 'center', justifyContent: 'center' }}>
+      <Text style={{ fontSize: 11 }}>⚽</Text>
+    </View>
+  );
 
   const eventSuffix = (type: TimelineEvent['type']) => {
     switch (type) {
@@ -1587,16 +1597,19 @@ function InfoSection({ matchDetail, match, colors, spacing, typography, borderRa
             const isHome = event.teamId === homeTeamId;
             const icon = eventIcon(event.type);
             const suffix = eventSuffix(event.type);
-            const nameColor = event.type === 'own_goal' ? '#ef4444' : event.type === 'red_card' ? '#ef4444' : colors.foreground;
+            const nameColor = colors.foreground;
 
             return (
               <View key={`${event.minute}-${event.playerName}-${idx}`} style={{ flexDirection: 'row', alignItems: 'center', minHeight: 36 }}>
                 {/* Home side */}
                 <View style={{ flex: 1, alignItems: 'flex-end', paddingRight: spacing.sm }}>
                   {isHome && (
-                    <Text style={{ ...typography.body, color: nameColor, fontSize: 13 }} numberOfLines={1}>
-                      {icon} {shortName(event.playerName)}{suffix}
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      {event.type === 'red_card' ? <RedCard /> : event.type === 'own_goal' ? <OwnGoalIcon /> : <Text style={{ fontSize: 13 }}>{icon}</Text>}
+                      <Text style={{ ...typography.body, color: nameColor, fontSize: 13 }} numberOfLines={1}>
+                        {shortName(event.playerName)}{suffix}
+                      </Text>
+                    </View>
                   )}
                 </View>
 
@@ -1618,9 +1631,12 @@ function InfoSection({ matchDetail, match, colors, spacing, typography, borderRa
                 {/* Away side */}
                 <View style={{ flex: 1, alignItems: 'flex-start', paddingLeft: spacing.sm }}>
                   {!isHome && (
-                    <Text style={{ ...typography.body, color: nameColor, fontSize: 13 }} numberOfLines={1}>
-                      {shortName(event.playerName)}{suffix} {icon}
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <Text style={{ ...typography.body, color: nameColor, fontSize: 13 }} numberOfLines={1}>
+                        {shortName(event.playerName)}{suffix}
+                      </Text>
+                      {event.type === 'red_card' ? <RedCard /> : event.type === 'own_goal' ? <OwnGoalIcon /> : <Text style={{ fontSize: 13 }}>{icon}</Text>}
+                    </View>
                   )}
                 </View>
               </View>
