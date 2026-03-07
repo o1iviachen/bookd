@@ -286,8 +286,8 @@ export function UserProfileScreen({ route, navigation }: any) {
       />
 
       <Animated.ScrollView showsVerticalScrollIndicator={false} indicatorStyle={isDark ? 'white' : 'default'} contentContainerStyle={{ paddingBottom: 60 }} onScroll={handleScroll} scrollEventThrottle={16} bounces>
-        {/* Header image */}
-        {profile.headerImage && (
+        {/* Header image or spacer */}
+        {profile.headerImage ? (
           <View style={{ height: headerHeight, overflow: 'visible' }}>
             <Animated.View
               pointerEvents="none"
@@ -310,9 +310,11 @@ export function UserProfileScreen({ route, navigation }: any) {
               />
             </Animated.View>
           </View>
+        ) : (
+          <View style={{ height: insets.top + 100 }} />
         )}
         {/* Avatar + name */}
-        <View style={{ alignItems: 'center', paddingTop: profile.headerImage ? 0 : spacing.lg, marginTop: profile.headerImage ? -48 : 0, paddingHorizontal: spacing.md }}>
+        <View style={{ alignItems: 'center', marginTop: -48, paddingHorizontal: spacing.md }}>
           <Avatar uri={profile.avatar} name={profile.displayName} size={96} />
           <Text style={{ ...typography.h3, color: colors.foreground, marginTop: spacing.sm }}>
             {profile.displayName}
@@ -392,7 +394,7 @@ export function UserProfileScreen({ route, navigation }: any) {
         )}
 
         {/* Stats row — Instagram-style */}
-        <View style={{ flexDirection: 'row', justifyContent: 'center', gap: spacing.xxl, marginTop: spacing.sm, paddingVertical: spacing.sm }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'center', gap: spacing.xxl, marginTop: spacing.sm, paddingTop: spacing.sm, paddingBottom: profile.headerImage ? spacing.sm : spacing.lg }}>
           <Pressable onPress={() => navigation.navigate('FollowList', { userIds: profile.following || [], title: t('common.following') })} style={{ alignItems: 'center' }}>
             <Text style={{ ...typography.h4, color: colors.foreground }}>{profile.following?.length || 0}</Text>
             <Text style={{ ...typography.small, color: colors.textSecondary }}>{t('common.following')}</Text>
