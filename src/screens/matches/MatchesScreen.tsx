@@ -86,9 +86,7 @@ const MatchDayPage = React.memo(function MatchDayPage({
   }, [filteredMatches, followedTeamIds, followedTeamNames]);
 
   const { followedLeagueEntries, otherLeagueEntries } = useMemo(() => {
-    const favIds = new Set(favouriteMatches.map((m) => m.id));
-    const remaining = filteredMatches.filter((m) => !favIds.has(m.id));
-    const grouped = groupMatchesByCompetition(remaining);
+    const grouped = groupMatchesByCompetition(filteredMatches);
     const entries = Array.from(grouped.entries());
 
     const followed = entries
@@ -100,7 +98,7 @@ const MatchDayPage = React.memo(function MatchDayPage({
       .sort((a, b) => (leagueMap.get(a[1][0]?.competition.code)?.displayOrder ?? 99) - (leagueMap.get(b[1][0]?.competition.code)?.displayOrder ?? 99));
 
     return { followedLeagueEntries: followed, otherLeagueEntries: other };
-  }, [filteredMatches, favouriteMatches, followedLeagues]);
+  }, [filteredMatches, followedLeagues]);
 
   return (
     <ScrollView showsVerticalScrollIndicator={false}
