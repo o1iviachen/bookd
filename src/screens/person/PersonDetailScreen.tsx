@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { View, Text, ScrollView, Pressable, useWindowDimensions, NativeScrollEvent, NativeSyntheticEvent, ActivityIndicator } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { usePersonDetail } from '../../hooks/usePeople';
@@ -8,6 +8,7 @@ import { usePersonMatches } from '../../hooks/useTeams';
 import { MatchPosterCard } from '../../components/match/MatchPosterCard';
 import { TeamLogo } from '../../components/match/TeamLogo';
 import { MatchFilters, MatchFilterState, applyMatchFilters } from '../../components/match/MatchFilters';
+import { Match } from '../../types/match';
 import { Select } from '../../components/ui/Select';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { Avatar } from '../../components/ui/Avatar';
@@ -16,11 +17,14 @@ import { nationalityFlag } from '../../utils/flagEmoji';
 import { useTranslation } from 'react-i18next';
 import { seasonOptions as buildSeasonOptions } from '../../utils/formatSeason';
 
-type SortKey = 'recent_played' | 'oldest';
+type SortKey = 'recent_played' | 'oldest' | 'avg_rating_high' | 'avg_rating_low' | 'popular';
 
 const SORT_OPTION_KEYS: { value: SortKey; i18nKey: string }[] = [
   { value: 'recent_played', i18nKey: 'person.mostRecent' },
   { value: 'oldest', i18nKey: 'person.oldestFirst' },
+  { value: 'avg_rating_high', i18nKey: 'person.averageRatingHigh' },
+  { value: 'avg_rating_low', i18nKey: 'person.averageRatingLow' },
+  { value: 'popular', i18nKey: 'person.mostLogged' },
 ];
 
 export function PersonDetailScreen({ route, navigation }: any) {
@@ -122,34 +126,44 @@ export function PersonDetailScreen({ route, navigation }: any) {
       .map((name) => ({ value: name, label: name }));
   }, [personMatches]);
 
+  const sortMatches = useCallback((arr: Match[]) => {
+    switch (sort) {
+      case 'recent_played':
+        arr.sort((a, b) => new Date(b.kickoff).getTime() - new Date(a.kickoff).getTime());
+        break;
+      case 'oldest':
+        arr.sort((a, b) => new Date(a.kickoff).getTime() - new Date(b.kickoff).getTime());
+        break;
+      case 'avg_rating_high':
+        arr.sort((a, b) => (b.avgRating || 0) - (a.avgRating || 0));
+        break;
+      case 'avg_rating_low':
+        arr.sort((a, b) => (a.avgRating || 0) - (b.avgRating || 0));
+        break;
+      case 'popular':
+        arr.sort((a, b) => (b.reviewCount || 0) - (a.reviewCount || 0));
+        break;
+    }
+    return arr;
+  }, [sort]);
+
   const filteredMatches = useMemo(() => {
     const result = applyMatchFilters(allMatches, filters);
-    if (sort === 'recent_played') {
-      result.sort((a, b) => new Date(b.kickoff).getTime() - new Date(a.kickoff).getTime());
-    } else {
-      result.sort((a, b) => new Date(a.kickoff).getTime() - new Date(b.kickoff).getTime());
-    }
-    return result;
+    return sortMatches(result);
   }, [allMatches, filters, sort]);
 
   // Filtered + sorted lists for dual-role sections
   const filteredCoachMatches = useMemo(() => {
     if (!isDualRole) return [];
     const result = applyMatchFilters(coachMatches, filters);
-    result.sort(sort === 'recent_played'
-      ? (a, b) => new Date(b.kickoff).getTime() - new Date(a.kickoff).getTime()
-      : (a, b) => new Date(a.kickoff).getTime() - new Date(b.kickoff).getTime());
-    return result;
-  }, [isDualRole, coachMatches, filters, sort]);
+    return sortMatches(result);
+  }, [isDualRole, coachMatches, filters, sortMatches]);
 
   const filteredPlayerMatches = useMemo(() => {
     if (!isDualRole) return [];
     const result = applyMatchFilters(playerOnlyMatches, filters);
-    result.sort(sort === 'recent_played'
-      ? (a, b) => new Date(b.kickoff).getTime() - new Date(a.kickoff).getTime()
-      : (a, b) => new Date(a.kickoff).getTime() - new Date(b.kickoff).getTime());
-    return result;
-  }, [isDualRole, playerOnlyMatches, filters, sort]);
+    return sortMatches(result);
+  }, [isDualRole, playerOnlyMatches, filters, sortMatches]);
 
   useEffect(() => { setDisplayedCount(PAGE_SIZE); }, [sort, filters]);
 
@@ -175,22 +189,19 @@ export function PersonDetailScreen({ route, navigation }: any) {
 
 
 
+  const insets = useSafeAreaInsets();
+
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
-      {/* Header */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      {/* Back button — always visible */}
+      <View style={{ position: 'absolute', top: insets.top + spacing.sm, left: spacing.md, zIndex: 10 }} pointerEvents="box-none">
         <Pressable onPress={() => navigation.goBack()} hitSlop={8}>
           <Ionicons name="arrow-back" size={22} color={colors.foreground} />
         </Pressable>
-        <Text style={{ ...typography.bodyBold, color: colors.foreground, flex: 1, textAlign: 'center', fontSize: 17 }} numberOfLines={1}>
-          {person?.name ? shortName(person.name) : personName}
-        </Text>
-        <View style={{ width: 22 }} />
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }} indicatorStyle={isDark ? 'white' : 'default'} onScroll={handleScroll} scrollEventThrottle={400}>
-        {/* Person info */}
-        <View style={{ padding: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+      {/* Person info — static, above scroll */}
+      <View style={{ paddingTop: insets.top + 48, paddingHorizontal: spacing.md, paddingBottom: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }}>
           {personLoading ? (
             <View style={{ paddingVertical: spacing.lg, alignItems: 'center' }}><LoadingSpinner fullScreen={false} /></View>
           ) : person ? (
@@ -233,6 +244,14 @@ export function PersonDetailScreen({ route, navigation }: any) {
                       <Text style={{ fontSize: 11, fontWeight: '500', color: colors.foreground }}>#{person.shirtNumber}</Text>
                     </View>
                   )}
+                  {person.dateOfBirth && (
+                    <View style={{ backgroundColor: colors.muted, paddingHorizontal: 10, paddingVertical: 3, borderRadius: borderRadius.full, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <Ionicons name="balloon-outline" size={11} color={colors.foreground} />
+                      <Text style={{ fontSize: 11, fontWeight: '500', color: colors.foreground }}>
+                        {new Date(person.dateOfBirth).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </Text>
+                    </View>
+                  )}
                 </View>
 
                 {/* Info rows */}
@@ -259,14 +278,6 @@ export function PersonDetailScreen({ route, navigation }: any) {
                       </Pressable>
                     );
                   })()}
-                  {person.dateOfBirth && (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-                      <Ionicons name="calendar-outline" size={14} color={colors.textSecondary} />
-                      <Text style={{ ...typography.caption, color: colors.textSecondary }}>
-                        {t('person.born', { date: new Date(person.dateOfBirth).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) })}
-                      </Text>
-                    </View>
-                  )}
                 </View>
               </View>
             </View>
@@ -275,39 +286,37 @@ export function PersonDetailScreen({ route, navigation }: any) {
           )}
         </View>
 
-        {/* Matches section */}
+      {/* Filters */}
+      {allMatches.length > 0 && (
+        <MatchFilters
+          filters={filters}
+          onFiltersChange={setFilters}
+          matches={allMatches}
+          showMinLogs={false}
+          teamOptions={playerTeamOptions}
+          seasonOptions={seasonOpts}
+        />
+      )}
+
+      {/* Sort + count row */}
+      {!matchesLoading && allMatches.length > 0 && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingVertical: spacing.sm }}>
+          <Text style={{ ...typography.caption, color: colors.textSecondary }}>
+            {t('common.matchCount', { count: isDualRole ? filteredCoachMatches.length + filteredPlayerMatches.length : filteredMatches.length })}
+          </Text>
+          <View style={{ width: 140 }}>
+            <Select
+              value={sort}
+              onValueChange={(v) => setSort(v as SortKey)}
+              title={t('person.sortBy')}
+              options={SORT_OPTIONS}
+            />
+          </View>
+        </View>
+      )}
+
+      <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }} indicatorStyle={isDark ? 'white' : 'default'} onScroll={handleScroll} scrollEventThrottle={400}>
         <View style={{ padding: spacing.md }}>
-          {/* Filters */}
-          {allMatches.length > 0 && (
-            <View style={{ marginBottom: spacing.sm, marginHorizontal: -spacing.md, marginTop: -spacing.md }}>
-              <MatchFilters
-                filters={filters}
-                onFiltersChange={setFilters}
-                matches={allMatches}
-                showMinLogs={false}
-                teamOptions={playerTeamOptions}
-                seasonOptions={seasonOpts}
-              />
-            </View>
-          )}
-
-          {/* Sort + count row */}
-          {!matchesLoading && allMatches.length > 0 && (
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm }}>
-              <Text style={{ ...typography.caption, color: colors.textSecondary }}>
-                {t('common.matchCount', { count: isDualRole ? filteredCoachMatches.length + filteredPlayerMatches.length : filteredMatches.length })}
-              </Text>
-              <View style={{ width: 140 }}>
-                <Select
-                  value={sort}
-                  onValueChange={(v) => setSort(v as SortKey)}
-                  title={t('person.sortBy')}
-                  options={SORT_OPTIONS}
-                />
-              </View>
-            </View>
-          )}
-
           {matchesLoading ? (
             <View style={{ paddingVertical: spacing.xxl }}><LoadingSpinner fullScreen={false} /></View>
           ) : allMatches.length === 0 ? (
@@ -392,6 +401,6 @@ export function PersonDetailScreen({ route, navigation }: any) {
           )}
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }

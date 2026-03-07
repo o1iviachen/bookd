@@ -48,6 +48,7 @@ export function ListDetailScreen({ route, navigation }: any) {
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
   const { t } = useTranslation();
+
   const SORT_OPTIONS = useMemo(() => SORT_OPTION_KEYS.map((o) => ({ value: o.value, label: t(o.i18nKey) })), [t]);
   const { width: screenWidth } = useWindowDimensions();
   const { listId } = route.params;
@@ -183,6 +184,9 @@ export function ListDetailScreen({ route, navigation }: any) {
 
   if (isLoading || !list) return <LoadingSpinner />;
 
+  const hasCover = !!list.coverImage;
+  const headerHeight = Math.round(screenWidth * 0.5);
+
   const handleShare = () => {
     const count = list.matchIds.length;
     const url = `https://bookd-app.com/list/${list.id}`;
@@ -275,7 +279,7 @@ export function ListDetailScreen({ route, navigation }: any) {
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={0}>
       <ScreenHeader
-        title={t('list.newList')}
+        title={t('common.list')}
         onBack={() => navigation.goBack()}
         rightElement={
           isOwner ? (
@@ -317,19 +321,23 @@ export function ListDetailScreen({ route, navigation }: any) {
         bounces
       >
         {/* Cover image */}
-        {list.coverImage && (
-          <View style={{ height: 180, overflow: 'visible' }}>
+        {hasCover && (
+          <View style={{ height: headerHeight, overflow: 'visible' }}>
             <Animated.View
               pointerEvents="none"
               style={{
-                position: 'absolute', top: 0, left: 0, right: 0, height: 180,
+                position: 'absolute', top: 0, left: 0, right: 0, height: headerHeight,
                 transform: [
-                  { translateY: scrollY.interpolate({ inputRange: [-180, 0], outputRange: [-90, 0], extrapolateRight: 'clamp' }) },
-                  { scale: scrollY.interpolate({ inputRange: [-180, 0], outputRange: [2, 1], extrapolateRight: 'clamp' }) },
+                  { translateY: scrollY.interpolate({ inputRange: [-headerHeight, 0], outputRange: [-headerHeight / 2, 0], extrapolateRight: 'clamp' }) },
+                  { scale: scrollY.interpolate({ inputRange: [-headerHeight, 0], outputRange: [2, 1], extrapolateRight: 'clamp' }) },
                 ],
               }}
             >
               <Image source={{ uri: list.coverImage }} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} contentFit="cover" />
+              <LinearGradient
+                colors={['rgba(0,0,0,0.4)', 'transparent']}
+                style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 80 }}
+              />
               <LinearGradient
                 colors={['transparent', colors.background]}
                 style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 80 }}

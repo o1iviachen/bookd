@@ -1,9 +1,12 @@
-import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { View, Text, ScrollView, Pressable, useWindowDimensions, NativeScrollEvent, NativeSyntheticEvent, ActivityIndicator } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { View, Text, ScrollView, Pressable, useWindowDimensions, NativeScrollEvent, NativeSyntheticEvent, ActivityIndicator, Alert } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
+import { useUserProfile } from '../../hooks/useUser';
+import { updateUserProfile } from '../../services/firestore/users';
 import { useTeamDetail, useTeamMatches } from '../../hooks/useTeams';
 import { MatchPosterCard } from '../../components/match/MatchPosterCard';
 import { MatchFilters, MatchFilterState, applyMatchFilters } from '../../components/match/MatchFilters';
@@ -16,11 +19,14 @@ import { RatingChart } from '../../components/profile/RatingChart';
 import { useTranslation } from 'react-i18next';
 import { seasonOptions as buildSeasonOptions, formatSeason } from '../../utils/formatSeason';
 
-type SortKey = 'recent_played' | 'oldest';
+type SortKey = 'recent_played' | 'oldest' | 'avg_rating_high' | 'avg_rating_low' | 'popular';
 
 const SORT_OPTION_KEYS: { value: SortKey; i18nKey: string }[] = [
   { value: 'recent_played', i18nKey: 'team.mostRecent' },
   { value: 'oldest', i18nKey: 'team.oldestFirst' },
+  { value: 'avg_rating_high', i18nKey: 'team.averageRatingHigh' },
+  { value: 'avg_rating_low', i18nKey: 'team.averageRatingLow' },
+  { value: 'popular', i18nKey: 'team.mostLogged' },
 ];
 
 const TAB_KEYS = [
@@ -32,14 +38,51 @@ const TAB_KEYS = [
 export function TeamDetailScreen({ route, navigation }: any) {
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
+  const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   const SORT_OPTIONS = useMemo(() => SORT_OPTION_KEYS.map((o) => ({ value: o.value, label: t(o.i18nKey) })), [t]);
+  const { user } = useAuth();
+  const { data: profile, refetch: refetchProfile } = useUserProfile(user?.uid || '');
   const { teamId, teamName, teamCrest } = route.params;
   const [activeTabIndex, setActiveTabIndex] = useState(0);
   const { width: screenWidth } = useWindowDimensions();
 
   const { data: teamDetail, isLoading: detailLoading } = useTeamDetail(teamId);
   const { data: matches, isLoading: matchesLoading } = useTeamMatches(teamId);
+
+  const MAX_CLUBS = 2;
+  const followedTeamIds = profile?.followedTeamIds || [];
+  const favoriteTeams = profile?.favoriteTeams || [];
+  const teamIdStr = String(teamId);
+  const isFollowing = followedTeamIds.includes(teamIdStr);
+  const isFavourite = favoriteTeams.includes(teamIdStr);
+  const canAddFavourite = favoriteTeams.length < MAX_CLUBS && !isFavourite;
+
+  const toggleFollow = async () => {
+    if (!user) return;
+    const updated = isFollowing
+      ? followedTeamIds.filter((id: string) => id !== teamIdStr)
+      : [...followedTeamIds, teamIdStr];
+    await updateUserProfile(user.uid, { followedTeamIds: updated });
+    refetchProfile();
+  };
+
+  const toggleFavourite = async () => {
+    if (!user) return;
+    if (isFavourite) {
+      const updated = favoriteTeams.filter((id: string) => id !== teamIdStr);
+      await updateUserProfile(user.uid, { favoriteTeams: updated });
+    } else if (favoriteTeams.length >= MAX_CLUBS) {
+      Alert.alert(t('team.limitReached', { defaultValue: 'Limit reached' }), t('team.limitReachedMessage', { defaultValue: `You can only have ${MAX_CLUBS} favourite teams.`, count: MAX_CLUBS }));
+      return;
+    } else {
+      const updatedFavs = [...favoriteTeams, teamIdStr];
+      const mergedFollowed = [...new Set([...followedTeamIds, teamIdStr])];
+      await updateUserProfile(user.uid, { favoriteTeams: updatedFavs, followedTeamIds: mergedFollowed });
+    }
+    refetchProfile();
+  };
+
 
   const PAGE_SIZE = 30;
   const [sort, setSort] = useState<SortKey>('recent_played');
@@ -87,8 +130,20 @@ export function TeamDetailScreen({ route, navigation }: any) {
 
   // O(1) path: aggregate ratingBuckets from already-loaded match docs — no extra reads.
   // Each match doc has per-bucket counts maintained by Cloud Function triggers.
-  const teamRatingBuckets = useMemo(() => {
+  // Also aggregate fan-type buckets, flipping home/away based on which side the team was on.
+  const { teamRatingBuckets, teamBucketsHome, teamBucketsAway, teamBucketsNeutral } = useMemo(() => {
     const buckets: Record<string, number> = {};
+    const home: Record<string, number> = {};
+    const away: Record<string, number> = {};
+    const neutral: Record<string, number> = {};
+
+    const addBuckets = (target: Record<string, number>, source: Record<string, number> | undefined) => {
+      if (!source) return;
+      for (const [key, count] of Object.entries(source)) {
+        target[key] = (target[key] || 0) + count;
+      }
+    };
+
     for (const m of allMatches) {
       if (!m.ratingBuckets) continue;
       if (chartSeason !== 'all') {
@@ -96,21 +151,36 @@ export function TeamDetailScreen({ route, navigation }: any) {
         const seasonStart = kickoff.getMonth() >= 7 ? kickoff.getFullYear() : kickoff.getFullYear() - 1;
         if (formatSeason(seasonStart) !== chartSeason) continue;
       }
-      for (const [key, count] of Object.entries(m.ratingBuckets)) {
-        buckets[key] = (buckets[key] || 0) + count;
-      }
+      addBuckets(buckets, m.ratingBuckets);
+      addBuckets(neutral, m.ratingBucketsNeutral);
+      // Flip home/away based on which side this team was on
+      const isHome = m.homeTeam.id === teamId;
+      addBuckets(home, isHome ? m.ratingBucketsHome : m.ratingBucketsAway);
+      addBuckets(away, isHome ? m.ratingBucketsAway : m.ratingBucketsHome);
     }
-    return buckets;
-  }, [allMatches, chartSeason]);
+    return { teamRatingBuckets: buckets, teamBucketsHome: home, teamBucketsAway: away, teamBucketsNeutral: neutral };
+  }, [allMatches, chartSeason, teamId]);
 
   // Apply filters and sort
   const filteredMatches = useMemo(() => {
     const result = applyMatchFilters(allMatches, filters);
 
-    if (sort === 'recent_played') {
-      result.sort((a, b) => new Date(b.kickoff).getTime() - new Date(a.kickoff).getTime());
-    } else {
-      result.sort((a, b) => new Date(a.kickoff).getTime() - new Date(b.kickoff).getTime());
+    switch (sort) {
+      case 'recent_played':
+        result.sort((a, b) => new Date(b.kickoff).getTime() - new Date(a.kickoff).getTime());
+        break;
+      case 'oldest':
+        result.sort((a, b) => new Date(a.kickoff).getTime() - new Date(b.kickoff).getTime());
+        break;
+      case 'avg_rating_high':
+        result.sort((a, b) => (b.avgRating || 0) - (a.avgRating || 0));
+        break;
+      case 'avg_rating_low':
+        result.sort((a, b) => (a.avgRating || 0) - (b.avgRating || 0));
+        break;
+      case 'popular':
+        result.sort((a, b) => (b.reviewCount || 0) - (a.reviewCount || 0));
+        break;
     }
 
     return result;
@@ -129,7 +199,7 @@ export function TeamDetailScreen({ route, navigation }: any) {
 
   // Group squad by position
   const squadByPosition = useMemo(() => {
-    type Squad = { id: number; name: string; position: string; nationality: string }[];
+    type Squad = { id: number; name: string; position: string; nationality: string; shirtNumber?: number | null }[];
     if (!teamDetail?.squad) return new Map<string, Squad>();
     const groups = new Map<string, Squad>();
     const order = ['Goalkeeper', 'Defender', 'Midfielder', 'Attacker', 'Unknown'];
@@ -152,39 +222,51 @@ export function TeamDetailScreen({ route, navigation }: any) {
 
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
-      {/* Header bar */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      {/* Buttons — always visible */}
+      <View style={{ position: 'absolute', top: insets.top + spacing.sm, left: spacing.md, right: spacing.md, zIndex: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }} pointerEvents="box-none">
         <Pressable onPress={() => navigation.goBack()} hitSlop={8}>
           <Ionicons name="arrow-back" size={22} color={colors.foreground} />
         </Pressable>
-        <Text style={{ ...typography.bodyBold, color: colors.foreground, flex: 1, textAlign: 'center', fontSize: 17 }} numberOfLines={1}>
-          {teamName}
-        </Text>
-        <View style={{ width: 22 }} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }} pointerEvents="box-none">
+          {(canAddFavourite || isFavourite) && (
+            <Pressable onPress={toggleFavourite} hitSlop={8}>
+              <Ionicons name={isFavourite ? 'heart' : 'heart-outline'} size={22} color={isFavourite ? '#ef4444' : colors.foreground} />
+            </Pressable>
+          )}
+          <Pressable onPress={toggleFollow} hitSlop={8}>
+            <Ionicons name={isFollowing ? 'checkmark' : 'add'} size={22} color={isFollowing ? colors.primary : colors.foreground} />
+          </Pressable>
+        </View>
       </View>
 
       {/* Hero — team crest + name */}
-      <View style={{ alignItems: 'center', paddingVertical: spacing.lg }}>
+      <View style={{ flexDirection: 'row', gap: spacing.md, paddingTop: insets.top + 48, paddingHorizontal: spacing.md, paddingBottom: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }}>
         <Image
           source={{ uri: teamCrest }}
-          style={{ width: 100, height: 100, marginBottom: spacing.md }}
+          style={{ width: 64, height: 64 }}
           contentFit="contain"
         />
-        <Text style={{ ...typography.h3, color: colors.foreground }}>
-          {teamName}
-        </Text>
-        {teamDetail?.country ? (
-          <Text style={{ ...typography.caption, color: colors.textSecondary, marginTop: 4 }}>
-            {teamDetail.country}
+        <View style={{ flex: 1, justifyContent: 'center' }}>
+          <Text style={{ ...typography.h3, color: colors.foreground }}>
+            {teamName}
           </Text>
-        ) : null}
+          {teamDetail?.country ? (
+            <Text style={{ ...typography.caption, color: colors.textSecondary, marginTop: 4 }}>
+              {teamDetail.country}
+            </Text>
+          ) : null}
+        </View>
       </View>
 
       {/* Ratings section — O(1): reads from pre-computed ratingBuckets on match docs */}
       <RatingChart
         reviews={[]}
         ratingBuckets={teamRatingBuckets}
+        ratingBucketsHome={teamBucketsHome}
+        ratingBucketsAway={teamBucketsAway}
+        ratingBucketsNeutral={teamBucketsNeutral}
+        teamName={teamName}
         showStats
         season={chartSeason}
         seasonOptions={[
@@ -295,9 +377,10 @@ export function TeamDetailScreen({ route, navigation }: any) {
               ) : squadByPosition.size === 0 ? (
                 <EmptyState icon="people-outline" title={t('team.noSquadDataAvailable')} />
               ) : (
-                Array.from(squadByPosition.entries()).map(([position, players], idx, arr) => (
-                  <View key={position} style={{ marginBottom: idx < arr.length - 1 ? spacing.lg : 0 }}>
-                    <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: spacing.sm }}>
+                Array.from(squadByPosition.entries()).map(([position, players], idx) => (
+                  <View key={position}>
+                    {idx > 0 && <View style={{ height: 1, backgroundColor: colors.border, marginTop: spacing.xs, marginBottom: spacing.md, marginHorizontal: -spacing.md }} />}
+                    <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: spacing.xs }}>
                       {positionLabel(position)}
                     </Text>
                     {players.map((player) => (
@@ -308,11 +391,12 @@ export function TeamDetailScreen({ route, navigation }: any) {
                           flexDirection: 'row',
                           alignItems: 'center',
                           paddingVertical: spacing.sm,
-                          borderBottomWidth: 1,
-                          borderBottomColor: colors.border,
                           opacity: pressed ? 0.7 : 1,
                         })}
                       >
+                        {player.shirtNumber != null && (
+                          <Text style={{ ...typography.caption, color: colors.textSecondary, width: 28, textAlign: 'right', marginRight: spacing.sm }}>{player.shirtNumber}</Text>
+                        )}
                         <Text style={{ ...typography.body, color: colors.foreground, flex: 1 }}>{shortName(player.name)}</Text>
                         {player.nationality ? (
                           <Text style={{ ...typography.caption, color: colors.textSecondary }}>
@@ -391,12 +475,17 @@ export function TeamDetailScreen({ route, navigation }: any) {
                     <View style={{ borderTopWidth: 1, borderTopColor: colors.border, paddingHorizontal: spacing.md, paddingVertical: spacing.sm }}>
                       <Text style={{ ...typography.body, color: colors.textSecondary, fontSize: 14, marginBottom: spacing.xs }}>{t('team.competitions')}</Text>
                       {currentSeasonCompetitions.map((comp) => (
-                        <View key={comp.id} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 6, paddingHorizontal: spacing.sm, backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)', borderRadius: borderRadius.sm, marginTop: 4 }}>
+                        <Pressable
+                          key={comp.id}
+                          onPress={() => navigation.navigate('LeagueDetail', { leagueCode: comp.code, leagueName: comp.name, leagueEmblem: comp.emblem })}
+                          style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 6, paddingHorizontal: spacing.sm, backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)', borderRadius: borderRadius.sm, marginTop: 4, opacity: pressed ? 0.7 : 1 })}
+                        >
                           <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: '#ffffff', alignItems: 'center', justifyContent: 'center' }}>
                             <Image source={{ uri: comp.emblem }} style={{ width: 16, height: 16 }} contentFit="contain" />
                           </View>
-                          <Text style={{ ...typography.body, color: colors.foreground, fontSize: 14, fontWeight: '500' }}>{comp.name}</Text>
-                        </View>
+                          <Text style={{ ...typography.body, color: colors.foreground, fontSize: 14, fontWeight: '500', flex: 1 }}>{comp.name}</Text>
+                          <Ionicons name="chevron-forward" size={14} color={colors.textSecondary} />
+                        </Pressable>
                       ))}
                     </View>
                   )}
@@ -405,6 +494,6 @@ export function TeamDetailScreen({ route, navigation }: any) {
             </View>
         )}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }

@@ -1,15 +1,20 @@
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { View, Text, ScrollView, Pressable, LayoutChangeEvent, Animated, Dimensions, InteractionManager } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
-import { getCompetitionStandings, getCompetitionMatchesByCode } from '../../services/footballApi';
+import { useAuth } from '../../context/AuthContext';
+import { useUserProfile } from '../../hooks/useUser';
+import { updateUserProfile } from '../../services/firestore/users';
+import { getCompetitionStandings, getCompetitionMatchesByCode, getCompetitionSeasons, Standing } from '../../services/footballApi';
 import { TeamLogo } from '../../components/match/TeamLogo';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
+import { Select } from '../../components/ui/Select';
 import { formatFullDate } from '../../utils/formatDate';
+import { formatSeason } from '../../utils/formatSeason';
 import { Match } from '../../types/match';
 import { useLeagueMap } from '../../hooks/useLeagues';
 
@@ -33,6 +38,8 @@ const KNOCKOUT_STAGES = [
   'PLAYOFF_ROUND_1',
   'PLAYOFF_ROUND_2',
   'PLAYOFFS',
+  'LAST_128',
+  'LAST_64',
   'LAST_32',
   'LAST_16',
   'QUARTER_FINALS',
@@ -46,6 +53,8 @@ const STAGE_LABELS: Record<string, string> = {
   PLAYOFF_ROUND_1: 'Playoff Round 1',
   PLAYOFF_ROUND_2: 'Playoff Round 2',
   PLAYOFFS: 'Knockout Playoffs',
+  LAST_128: 'Round of 128',
+  LAST_64: 'Round of 64',
   LAST_32: 'Round of 32',
   LAST_16: 'Round of 16',
   QUARTER_FINALS: 'Quarter-Finals',
@@ -89,9 +98,25 @@ export function LeagueDetailScreen({ route, navigation }: any) {
   const { t } = useTranslation();
   const { theme, isDark } = useTheme();
   const { colors, spacing, typography, borderRadius } = theme;
+  const insets = useSafeAreaInsets();
   const { competitionCode, competitionName, competitionEmblem, initialTab } = route.params;
   const { data: leagueMap } = useLeagueMap();
+  const { user } = useAuth();
+  const { data: profile, refetch: refetchProfile } = useUserProfile(user?.uid || '');
   const [activeTabIndex, setActiveTabIndex] = useState(initialTab === 'fixtures' ? 1 : 0);
+
+  const followedLeagues = profile?.followedLeagues || [];
+  const isFollowing = followedLeagues.includes(competitionCode);
+
+  const toggleFollow = async () => {
+    if (!user) return;
+    const updated = isFollowing
+      ? followedLeagues.filter((id: string) => id !== competitionCode)
+      : [...followedLeagues, competitionCode];
+    await updateUserProfile(user.uid, { followedLeagues: updated });
+    refetchProfile();
+  };
+
 
   // Defer queries until after navigation animation to prevent search page from freezing
   const [animationDone, setAnimationDone] = useState(false);
@@ -100,16 +125,45 @@ export function LeagueDetailScreen({ route, navigation }: any) {
     return () => task.cancel();
   }, []);
 
-  const { data: standings, isLoading: standingsLoading } = useQuery({
-    queryKey: ['standings', competitionCode],
-    queryFn: () => getCompetitionStandings(competitionCode),
-    staleTime: 15 * 60 * 1000,
+  // Fetch available seasons for this competition
+  const { data: availableSeasons } = useQuery({
+    queryKey: ['competitionSeasons', competitionCode],
+    queryFn: () => getCompetitionSeasons(competitionCode),
+    staleTime: Infinity,
     enabled: animationDone,
   });
 
+  // Season filter — default to the most recent available season (or current season as fallback)
+  const defaultSeasonYear = useMemo(() => {
+    if (availableSeasons?.length) return availableSeasons[0]; // sorted descending
+    const now = new Date();
+    return now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
+  }, [availableSeasons]);
+
+  const [seasonYear, setSeasonYear] = useState<number | null>(null);
+  const activeSeasonYear = seasonYear ?? defaultSeasonYear;
+  const CALENDAR_YEAR_CODES = new Set(['WC', 'EURO', 'CA', 'MLS', 'BSA', 'ARG', 'JPL', 'AUS']);
+  const isCalendarYear = leagueMap?.get(competitionCode)?.seasonType === 'calendar-year' || CALENDAR_YEAR_CODES.has(competitionCode);
+  const fmtSeason = (y: number) => isCalendarYear ? String(y) : formatSeason(y);
+  const selectedSeason = fmtSeason(activeSeasonYear);
+
+  const seasonOptions = useMemo(() => {
+    if (!availableSeasons?.length) return [];
+    return availableSeasons.map((y) => ({ value: fmtSeason(y), label: fmtSeason(y) }));
+  }, [availableSeasons, isCalendarYear]);
+
+  const { data: standingsResult, isLoading: standingsLoading } = useQuery({
+    queryKey: ['standings', competitionCode, activeSeasonYear],
+    queryFn: () => getCompetitionStandings(competitionCode, activeSeasonYear),
+    staleTime: 15 * 60 * 1000,
+    enabled: animationDone,
+  });
+  const standings = standingsResult?.table ?? [];
+  const standingsGroups = standingsResult?.groups;
+
   const { data: allFixtures, isLoading: fixturesLoading } = useQuery({
-    queryKey: ['leagueFixtures', competitionCode],
-    queryFn: () => getCompetitionMatchesByCode(competitionCode),
+    queryKey: ['leagueFixtures', competitionCode, activeSeasonYear],
+    queryFn: () => getCompetitionMatchesByCode(competitionCode, undefined, activeSeasonYear),
     staleTime: 15 * 60 * 1000,
     enabled: animationDone,
   });
@@ -162,7 +216,7 @@ export function LeagueDetailScreen({ route, navigation }: any) {
   const { bracketTopHalf, bracketCenter, bracketBottomHalf, bracketThirdPlace } = useMemo(() => {
     // Expected total ties per standard round
     const EXPECTED_TOTAL: Record<string, number> = {
-      LAST_16: 8, QUARTER_FINALS: 4, SEMI_FINALS: 2,
+      LAST_32: 16, LAST_16: 8, QUARTER_FINALS: 4, SEMI_FINALS: 2,
     };
 
     const stagesWithData = BRACKET_ORDER.filter((s) => knockoutByStage.has(s));
@@ -250,11 +304,7 @@ export function LeagueDetailScreen({ route, navigation }: any) {
 
   useEffect(() => {
     const activeKey = tabs[activeTabIndex]?.key;
-    if (activeKey !== 'fixtures') {
-      hasScrolled.current = false;
-      setFixturesReady(false);
-    } else if (!fixturesReady) {
-      // Let the tab switch paint with a spinner first, then render fixtures
+    if ((activeKey === 'fixtures' || activeKey === 'knockout') && !fixturesReady) {
       const id = requestAnimationFrame(() => setFixturesReady(true));
       return () => cancelAnimationFrame(id);
     }
@@ -331,43 +381,30 @@ export function LeagueDetailScreen({ route, navigation }: any) {
   ), [colors, spacing, typography, navigation]);
 
   // Memoize heavy page content so tab-switch re-renders don't rebuild them
-  const tableContent = useMemo(() => {
-    if (standingsLoading) return <View style={{ paddingTop: spacing.xl }}><LoadingSpinner /></View>;
-    if (!standings || standings.length === 0) {
-      return (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: spacing.xxl }}>
-          <Ionicons name="podium-outline" size={40} color={colors.textSecondary} />
-          <Text style={{ ...typography.body, color: colors.textSecondary, marginTop: spacing.sm }}>{t('league.noStandingsAvailable')}</Text>
-        </View>
-      );
-    }
-    return (
-      <View>
-        {/* Table header */}
-        <View style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          paddingHorizontal: spacing.md,
-          paddingVertical: spacing.sm,
-          borderBottomWidth: 1,
-          borderBottomColor: colors.border,
-        }}>
-          <Text style={{ width: 28, ...typography.small, color: colors.textSecondary, fontWeight: '600' }}>{t('league.rank')}</Text>
-          <Text style={{ flex: 1, ...typography.small, color: colors.textSecondary, fontWeight: '600' }}>{t('league.teamHeader')}</Text>
-          <Text style={{ width: 30, textAlign: 'center', ...typography.small, color: colors.textSecondary, fontWeight: '600' }}>{t('league.played')}</Text>
-          <Text style={{ width: 30, textAlign: 'center', ...typography.small, color: colors.textSecondary, fontWeight: '600' }}>{t('league.won')}</Text>
-          <Text style={{ width: 30, textAlign: 'center', ...typography.small, color: colors.textSecondary, fontWeight: '600' }}>{t('league.draw')}</Text>
-          <Text style={{ width: 30, textAlign: 'center', ...typography.small, color: colors.textSecondary, fontWeight: '600' }}>{t('league.lost')}</Text>
-          <Text style={{ width: 34, textAlign: 'center', ...typography.small, color: colors.textSecondary, fontWeight: '600' }}>{t('league.goalDifference')}</Text>
-          <Text style={{ width: 34, textAlign: 'center', ...typography.small, color: colors.textSecondary, fontWeight: '600' }}>{t('league.points')}</Text>
-        </View>
-
-        {/* Table rows */}
-        {standings.map((row) => {
-          const accentColor = getDescriptionAccentColor(row.description);
-          return (
+  const renderStandingsTable = useCallback((rows: Standing[]) => (
+    <View>
+      <View style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: spacing.md,
+        paddingVertical: spacing.sm,
+        borderBottomWidth: 1,
+        borderBottomColor: colors.border,
+      }}>
+        <Text style={{ width: 28, ...typography.small, color: colors.textSecondary, fontWeight: '600' }}>{t('league.rank')}</Text>
+        <Text style={{ flex: 1, ...typography.small, color: colors.textSecondary, fontWeight: '600' }}>{t('league.teamHeader')}</Text>
+        <Text style={{ width: 30, textAlign: 'center', ...typography.small, color: colors.textSecondary, fontWeight: '600' }}>{t('league.played')}</Text>
+        <Text style={{ width: 30, textAlign: 'center', ...typography.small, color: colors.textSecondary, fontWeight: '600' }}>{t('league.won')}</Text>
+        <Text style={{ width: 30, textAlign: 'center', ...typography.small, color: colors.textSecondary, fontWeight: '600' }}>{t('league.draw')}</Text>
+        <Text style={{ width: 30, textAlign: 'center', ...typography.small, color: colors.textSecondary, fontWeight: '600' }}>{t('league.lost')}</Text>
+        <Text style={{ width: 34, textAlign: 'center', ...typography.small, color: colors.textSecondary, fontWeight: '600' }}>{t('league.goalDifference')}</Text>
+        <Text style={{ width: 34, textAlign: 'center', ...typography.small, color: colors.textSecondary, fontWeight: '600' }}>{t('league.points')}</Text>
+      </View>
+      {rows.map((row) => {
+        const accentColor = getDescriptionAccentColor(row.description);
+        return (
           <Pressable
-            key={row.position}
+            key={row.team.id}
             onPress={() => navigation.navigate('TeamDetail', { teamId: row.team.id, teamName: row.team.name, teamCrest: row.team.crest })}
             style={({ pressed }) => ({
               flexDirection: 'row',
@@ -414,10 +451,44 @@ export function LeagueDetailScreen({ route, navigation }: any) {
             </Text>
           </Pressable>
         );
-        })}
-      </View>
-    );
-  }, [standingsLoading, standings, colors, spacing, typography, borderRadius, navigation]);
+      })}
+    </View>
+  ), [colors, spacing, typography, navigation, t]);
+
+  const tableContent = useMemo(() => {
+    if (standingsLoading) return <View style={{ paddingTop: spacing.xl }}><LoadingSpinner /></View>;
+    if (standings.length === 0 && !standingsGroups?.length) {
+      return (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: spacing.xxl }}>
+          <Ionicons name="podium-outline" size={40} color={colors.textSecondary} />
+          <Text style={{ ...typography.body, color: colors.textSecondary, marginTop: spacing.sm }}>{t('league.noStandingsAvailable')}</Text>
+        </View>
+      );
+    }
+
+    if (standingsGroups && standingsGroups.length > 0) {
+      return (
+        <View>
+          {standingsGroups.map((group, idx) => (
+            <View key={`${group.name}-${idx}`}>
+              <Text style={{
+                ...typography.bodyBold,
+                color: colors.foreground,
+                paddingHorizontal: spacing.md,
+                paddingTop: spacing.lg,
+                paddingBottom: spacing.xs,
+              }}>
+                {group.name}
+              </Text>
+              {renderStandingsTable(group.table)}
+            </View>
+          ))}
+        </View>
+      );
+    }
+
+    return renderStandingsTable(standings);
+  }, [standingsLoading, standings, standingsGroups, colors, spacing, typography, borderRadius, navigation, renderStandingsTable]);
 
   const fixturesContent = useMemo(() => {
     if (fixturesLoading || !allFixtures || !fixturesReady) return <View style={{ paddingTop: spacing.xl }}><LoadingSpinner /></View>;
@@ -474,26 +545,41 @@ export function LeagueDetailScreen({ route, navigation }: any) {
   }, [fixturesLoading, allFixtures, fixturesReady, leagueFixtures, knockoutFixtures, sortedMatchdays, fixturesByMatchday, knockoutByStage, colors, spacing, typography, handleMatchdayLayout, renderFixtureRow, t]);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
-      {/* Header bar */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      {/* Buttons — always visible */}
+      <View style={{ position: 'absolute', top: insets.top + spacing.sm, left: spacing.md, right: spacing.md, zIndex: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }} pointerEvents="box-none">
         <Pressable onPress={() => navigation.goBack()} hitSlop={8}>
           <Ionicons name="arrow-back" size={22} color={colors.foreground} />
         </Pressable>
-        <Text style={{ ...typography.bodyBold, color: colors.foreground, flex: 1, textAlign: 'center', fontSize: 17 }} numberOfLines={1}>
-          {competitionName}
-        </Text>
-        <View style={{ width: 22 }} />
+        <Pressable onPress={toggleFollow} hitSlop={8}>
+          <Ionicons name={isFollowing ? 'checkmark' : 'add'} size={22} color={isFollowing ? colors.primary : colors.foreground} />
+        </Pressable>
       </View>
 
       {/* Hero — league emblem + name */}
-      <View style={{ alignItems: 'center', paddingVertical: spacing.lg }}>
-        <View style={{ backgroundColor: '#fff', borderRadius: borderRadius.md, padding: 6, marginBottom: spacing.sm }}>
-          <Image source={{ uri: competitionEmblem }} style={{ width: 80, height: 80 }} contentFit="contain" />
+      <View style={{ flexDirection: 'row', gap: spacing.md, paddingTop: insets.top + 48, paddingHorizontal: spacing.md, paddingBottom: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+        <View style={{ backgroundColor: '#fff', borderRadius: borderRadius.md, padding: 6 }}>
+          <Image source={{ uri: competitionEmblem }} style={{ width: 52, height: 52 }} contentFit="contain" />
         </View>
-        <Text style={{ ...typography.h3, color: colors.foreground, textAlign: 'center' }}>
-          {competitionName}
-        </Text>
+        <View style={{ flex: 1, justifyContent: 'center' }}>
+          <Text style={{ ...typography.h3, color: colors.foreground }}>
+            {competitionName}
+          </Text>
+          {seasonOptions.length > 0 && (
+            <View style={{ marginTop: spacing.xs, width: 140 }}>
+              <Select
+                value={selectedSeason}
+                onValueChange={(v) => {
+                  setSeasonYear(parseInt(v, 10));
+                  hasScrolled.current = false;
+                  setFixturesReady(false);
+                }}
+                title={t('league.selectSeason')}
+                options={seasonOptions}
+              />
+            </View>
+          )}
+        </View>
       </View>
 
       {/* Tab bar */}
@@ -503,7 +589,11 @@ export function LeagueDetailScreen({ route, navigation }: any) {
           return (
             <Pressable
               key={tab.key}
-              onPress={() => setActiveTabIndex(i)}
+              onPress={() => {
+                setFixturesReady(false);
+                hasScrolled.current = false;
+                setActiveTabIndex(i);
+              }}
               style={{
                 flex: 1,
                 alignItems: 'center',
@@ -538,7 +628,7 @@ export function LeagueDetailScreen({ route, navigation }: any) {
         {activeTabIndex === tabs.findIndex((t) => t.key === 'fixtures') && fixturesContent}
 
         {activeTabIndex === tabs.findIndex((t) => t.key === 'knockout') && (
-          !isCup ? null : fixturesLoading ? (
+          !isCup ? null : (fixturesLoading || !fixturesReady) ? (
             <View style={{ paddingTop: spacing.xl }}><LoadingSpinner /></View>
           ) : knockoutFixtures.length === 0 ? (
             <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: spacing.xxl }}>
@@ -664,8 +754,8 @@ export function LeagueDetailScreen({ route, navigation }: any) {
                         </View>
 
                         {/* Score or VS */}
-                        <View style={{ alignItems: 'center', minWidth: 40 }}>
-                          {isFinished && hasTeams ? (
+                        {isFinished && hasTeams && (
+                          <View style={{ alignItems: 'center', minWidth: 40 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                               <Text style={{ fontSize: 20, fontWeight: '800', color: (finalMatch.homeScore ?? 0) >= (finalMatch.awayScore ?? 0) ? colors.foreground : colors.textSecondary }}>
                                 {finalMatch.homeScore}
@@ -675,10 +765,8 @@ export function LeagueDetailScreen({ route, navigation }: any) {
                                 {finalMatch.awayScore}
                               </Text>
                             </View>
-                          ) : (
-                            <Text style={{ fontSize: 14, fontWeight: '600', color: colors.textSecondary }}>{t('common.vs')}</Text>
-                          )}
-                        </View>
+                          </View>
+                        )}
 
                         {/* Away / Right team */}
                         <View style={{ alignItems: 'center', width: 56 }}>
@@ -756,7 +844,7 @@ export function LeagueDetailScreen({ route, navigation }: any) {
           })()
         )}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -839,6 +927,8 @@ function BracketRoundLabel({ stage, isFinal, colors, typography }: { stage: stri
     PLAYOFF_ROUND_1: t('league.playoffRound1'),
     PLAYOFF_ROUND_2: t('league.playoffRound2'),
     PLAYOFFS: t('league.knockoutPlayoffs'),
+    LAST_128: t('league.roundOf128'),
+    LAST_64: t('league.roundOf64'),
     LAST_32: t('league.roundOf32'),
     LAST_16: t('league.roundOf16'),
     QUARTER_FINALS: t('league.quarterFinals'),
@@ -1022,12 +1112,10 @@ function BracketTieCard({
         }} numberOfLines={1}>
           {awayTeam.shortName}
         </Text>
-        {isFinished ? (
+        {isFinished && (
           <Text style={{ fontSize: 13, fontWeight: '700', color: awayWon ? colors.primary : colors.textSecondary, minWidth: 14, textAlign: 'right' }}>
             {awayScore}
           </Text>
-        ) : (
-          <Text style={{ fontSize: 9, color: colors.textSecondary }}>{t('common.vs')}</Text>
         )}
       </View>
 
